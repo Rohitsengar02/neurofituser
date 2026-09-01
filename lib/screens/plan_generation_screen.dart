@@ -1,3 +1,4 @@
+import '../services/user_backend_service.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -574,8 +575,34 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
         return Transform.scale(
           scale: scale,
           child: GestureDetector(
-            onTap: () {
+            onTap: () async {
               HapticFeedback.heavyImpact();
+
+              // Save all questionnaire data and AI scan metrics to Firestore users collection
+              final questionnairePayload = {
+                'gender': widget.gender,
+                'age': widget.age,
+                'currentWeight': widget.currentWeight,
+                'targetWeight': widget.targetWeight,
+                'height': widget.height,
+                'goals': widget.goals,
+                'activityLevel': widget.activityLevel,
+                'aiScanMetrics': {
+                  'bmr': 1680,
+                  'idealCalories': 2150,
+                  'proteinTarget': 140,
+                  'bodyFatEstimate': '15.8%',
+                  'planId': 'NF-AI-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
+                },
+                'completedAt': DateTime.now().toIso8601String(),
+              };
+
+              await UserBackendService.instance.saveQuestionnaireAndPlan(
+                questionnaireData: questionnairePayload,
+              );
+
+              if (!mounted) return;
+
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (context) => const DashboardScreen()),
                 (route) => false,

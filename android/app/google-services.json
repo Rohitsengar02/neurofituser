@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "838057054608",
+    "project_id": "neurofit-63189",
+    "storage_bucket": "neurofit-63189.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:838057054608:android:e03b138a9f60dedf9b6315",
+        "android_client_info": {
+          "package_name": "com.neurofit.athlete.pro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "838057054608-m5sdofsgh9jvu63u2a4vg0o6svnmchuk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.neurofit.athlete.pro",
+            "certificate_hash": "c556d337f7aad1cf11c8025ad2a24c8a8b4719e2"
+          }
+        },
+        {
+          "client_id": "838057054608-c556d337f7aad1cf11c8025ad2a24c8a8b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.neurofit.athlete.pro",
+            "certificate_hash": "c556d337f7aad1cf11c8025ad2a24c8a8b4719e2"
+          }
+        },
+        {
+          "client_id": "838057054608-ed9f2586c1b5125e2147ebbfe27bc64be.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.neurofit.athlete.pro",
+            "certificate_hash": "ed9f2586c1b5125e2147ebbfe27bc64be9a69716"
+          }
+        },
+        {
+          "client_id": "838057054608-puaa3gka8fdapu6mv3lvoh5tk2csqltp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnAURqIrlk9We9LHsKyMoewPqea-OxuDg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "838057054608-puaa3gka8fdapu6mv3lvoh5tk2csqltp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

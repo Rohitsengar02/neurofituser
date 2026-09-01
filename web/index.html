@@ -1,14 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NeuroFit - AI-Powered Athletic Training & Health Command Platform</title>
-  <meta name="description" content="NeuroFit is the next-generation AI workout tracker, personalized nutrition planner, and certified coach network. Transform your performance today.">
+  <title>NeuroFit - AI Performance & Athletic Platform</title>
+  <meta name="description" content="NeuroFit is the next-generation AI workout tracker, personalized nutrition planner, and certified coach network.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="NeuroFit">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="manifest" href="manifest.json">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script>
+    const serviceWorkerVersion = null;
+  </script>
+  <script src="flutter.js" defer></script>
+
   <style>
     :root {
       --primary: #10B981;
@@ -21,14 +37,9 @@
       --surface-border: rgba(255, 255, 255, 0.08);
       --text: #F8FAFC;
       --text-muted: #94A3B8;
-      --text-sub: #64748B;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -38,7 +49,57 @@
       overflow-x: hidden;
     }
 
-    /* Ambient Lighting */
+    /* Flutter App Loading Screen */
+    #flutter-loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #030712;
+      z-index: 10000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-logo {
+      width: 70px;
+      height: 70px;
+      background: linear-gradient(135deg, #6366F1, #10B981);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+      margin-bottom: 20px;
+      animation: pulse 2s infinite;
+    }
+    .loading-logo svg {
+      width: 36px;
+      height: 36px;
+      fill: white;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(99, 102, 241, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 45px rgba(16, 185, 129, 0.6); }
+    }
+    .loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #10B981;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-top: 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Landing Page Wrapper */
+    #landing-page {
+      display: block;
+    }
+
+    /* Ambient Glow */
     .ambient-glow {
       position: fixed;
       width: 500px;
@@ -49,27 +110,18 @@
       filter: blur(140px);
       opacity: 0.45;
     }
-    .glow-1 {
-      top: -100px;
-      left: 15%;
-      background: radial-gradient(circle, var(--indigo) 0%, transparent 70%);
-    }
-    .glow-2 {
-      top: 40%;
-      right: -100px;
-      background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
-    }
+    .glow-1 { top: -100px; left: 15%; background: radial-gradient(circle, var(--indigo) 0%, transparent 70%); }
+    .glow-2 { top: 40%; right: -100px; background: radial-gradient(circle, var(--primary) 0%, transparent 70%); }
 
-    /* Navigation Header */
+    /* Navigation */
     nav {
       position: sticky;
       top: 0;
       z-index: 100;
       backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
       background: rgba(8, 12, 20, 0.8);
       border-bottom: 1px solid var(--surface-border);
-      padding: 18px 24px;
+      padding: 16px 24px;
     }
     .nav-container {
       max-width: 1200px;
@@ -94,11 +146,7 @@
       justify-content: center;
       box-shadow: 0 0 20px var(--indigo-glow);
     }
-    .brand-icon svg {
-      width: 22px;
-      height: 22px;
-      fill: white;
-    }
+    .brand-icon svg { width: 22px; height: 22px; fill: white; }
     .brand-name {
       font-size: 18px;
       font-weight: 900;
@@ -121,7 +169,7 @@
     .nav-links {
       display: flex;
       align-items: center;
-      gap: 28px;
+      gap: 20px;
     }
     .nav-links a {
       color: var(--text-muted);
@@ -130,34 +178,31 @@
       font-weight: 600;
       transition: color 0.2s;
     }
-    .nav-links a:hover {
-      color: white;
-    }
-    .btn-cta {
-      background: linear-gradient(135deg, var(--primary), #059669);
+    .nav-links a:hover { color: white; }
+
+    .btn-app-nav {
+      background: linear-gradient(135deg, #10B981, #059669);
       color: white !important;
-      padding: 10px 20px;
+      padding: 9px 18px;
       border-radius: 12px;
       font-weight: 800;
       font-size: 13px;
-      box-shadow: 0 4px 20px var(--primary-glow);
-      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      text-decoration: none;
+      cursor: pointer;
     }
-    .btn-cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 26px rgba(16, 185, 129, 0.5);
-    }
+    .btn-app-nav:hover { transform: translateY(-2px); }
 
-    /* Hero Section */
+    /* Hero */
     .hero {
       position: relative;
       z-index: 1;
       max-width: 1100px;
       margin: 0 auto;
-      padding: 100px 24px 70px;
+      padding: 90px 24px 70px;
       text-align: center;
     }
     .hero-badge {
@@ -179,35 +224,26 @@
       background: #10B981;
       border-radius: 50%;
       box-shadow: 0 0 10px #10B981;
-      animation: blink 1.8s infinite;
     }
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
     .hero-title {
-      font-size: 56px;
+      font-size: 54px;
       font-weight: 900;
       line-height: 1.15;
       letter-spacing: -1.5px;
-      margin-bottom: 22px;
+      margin-bottom: 20px;
     }
     .hero-title span {
       background: linear-gradient(135deg, #FFFFFF 30%, #A5B4FC 70%, #10B981 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-
     .hero-desc {
-      font-size: 18px;
+      font-size: 17px;
       color: var(--text-muted);
       max-width: 680px;
       margin: 0 auto 36px;
       font-weight: 500;
-      line-height: 1.6;
     }
-
     .hero-buttons {
       display: flex;
       justify-content: center;
@@ -215,11 +251,28 @@
       flex-wrap: wrap;
       margin-bottom: 50px;
     }
-    .btn-secondary {
+    .btn-hero-launch {
+      background: linear-gradient(135deg, #10B981, #059669);
+      color: white !important;
+      padding: 14px 30px;
+      border-radius: 14px;
+      font-weight: 900;
+      font-size: 15px;
+      box-shadow: 0 6px 26px rgba(16, 185, 129, 0.45);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn-hero-launch:hover { transform: translateY(-2px); }
+
+    .btn-hero-secondary {
       background: rgba(255, 255, 255, 0.06);
       color: white;
       border: 1px solid var(--surface-border);
-      padding: 12px 24px;
+      padding: 14px 24px;
       border-radius: 14px;
       font-weight: 700;
       font-size: 14px;
@@ -227,14 +280,8 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      transition: background 0.2s, transform 0.2s;
-    }
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.12);
-      transform: translateY(-2px);
     }
 
-    /* Metric Highlight Bar */
     .metric-strip {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -246,289 +293,134 @@
       border-radius: 20px;
       margin-top: 40px;
     }
-    .metric-item h3 {
-      font-size: 28px;
-      font-weight: 900;
-      color: white;
-      margin-bottom: 2px;
-    }
-    .metric-item p {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* Core Features Grid */
-    .features {
-      max-width: 1200px;
-      margin: 80px auto;
-      padding: 0 24px;
-    }
-    .section-header {
-      text-align: center;
-      margin-bottom: 50px;
-    }
-    .section-tag {
-      color: var(--primary);
-      font-size: 12px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 1.2px;
-      margin-bottom: 8px;
-    }
-    .section-title {
-      font-size: 34px;
-      font-weight: 900;
-      letter-spacing: -0.8px;
-      color: white;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-    }
-    .feature-card {
-      background: var(--surface-card);
-      backdrop-filter: blur(14px);
-      border: 1px solid var(--surface-border);
-      padding: 30px 24px;
-      border-radius: 24px;
-      transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
-    }
-    .feature-card:hover {
-      transform: translateY(-6px);
-      border-color: rgba(99, 102, 241, 0.4);
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
-    }
-    .feature-icon {
-      width: 52px;
-      height: 52px;
-      border-radius: 16px;
-      background: rgba(99, 102, 241, 0.12);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 20px;
-      font-size: 24px;
-    }
-    .feature-card h4 {
-      font-size: 18px;
-      font-weight: 800;
-      color: white;
-      margin-bottom: 8px;
-    }
-    .feature-card p {
-      font-size: 13.5px;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    /* Privacy Banner Callout */
-    .privacy-banner {
-      max-width: 1200px;
-      margin: 40px auto 80px;
-      padding: 32px;
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(16, 185, 129, 0.08));
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      border-radius: 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-    .privacy-info h3 {
-      font-size: 20px;
-      font-weight: 800;
-      color: white;
-      margin-bottom: 4px;
-    }
-    .privacy-info p {
-      font-size: 13.5px;
-      color: var(--text-muted);
-    }
-
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--surface-border);
-      background: #05080E;
-      padding: 60px 24px 40px;
-      color: var(--text-muted);
-    }
-    .footer-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 24px;
-    }
-    .footer-links {
-      display: flex;
-      gap: 24px;
-    }
-    .footer-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 600;
-      transition: color 0.2s;
-    }
-    .footer-links a:hover {
-      color: var(--primary);
-    }
+    .metric-item h3 { font-size: 26px; font-weight: 900; color: white; }
+    .metric-item p { font-size: 11.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
 
     @media (max-width: 768px) {
-      .hero-title { font-size: 38px; }
+      .hero-title { font-size: 36px; }
       .metric-strip { grid-template-columns: repeat(2, 1fr); }
-      .features-grid { grid-template-columns: 1fr; }
       .nav-links { display: none; }
     }
   </style>
 </head>
 <body>
-  <div class="ambient-glow glow-1"></div>
-  <div class="ambient-glow glow-2"></div>
 
-  <!-- Navigation Bar -->
-  <nav>
-    <div class="nav-container">
-      <a href="/" class="brand">
-        <div class="brand-icon">
-          <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43L20.57 12L17 15.57L8.43 7L12 3.43L10.57 2L9.14 3.43L7.71 2L5.57 4.14L4.14 2.71L2.71 4.14L4.14 5.57L2 7.71L3.43 9.14L2 10.57L3.43 12L7 8.43L15.57 17L12 20.57L13.43 22L14.86 20.57L16.29 22L18.43 19.86L19.86 21.29L21.29 19.86L19.86 18.43L22 16.29L20.57 14.86Z"/></svg>
+  <!-- 1. Flutter Engine Loading Screen (Active on Localhost or when Launching App) -->
+  <div id="flutter-loading">
+    <div class="loading-logo">
+      <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43L20.57 12L17 15.57L8.43 7L12 3.43L10.57 2L9.14 3.43L7.71 2L5.57 4.14L4.14 2.71L2.71 4.14L4.14 5.57L2 7.71L3.43 9.14L2 10.57L3.43 12L7 8.43L15.57 17L12 20.57L13.43 22L14.86 20.57L16.29 22L18.43 19.86L19.86 21.29L21.29 19.86L19.86 18.43L22 16.29L20.57 14.86Z"/></svg>
+    </div>
+    <div style="font-size: 18px; font-weight: 900; color: white; letter-spacing: 0.5px;">NEUROFIT</div>
+    <div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">Loading Real App UI...</div>
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- 2. Public Marketing Landing Page (Shown only on external web domains) -->
+  <div id="landing-page">
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <nav>
+      <div class="nav-container">
+        <a href="/" class="brand">
+          <div class="brand-icon">
+            <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43L20.57 12L17 15.57L8.43 7L12 3.43L10.57 2L9.14 3.43L7.71 2L5.57 4.14L4.14 2.71L2.71 4.14L4.14 5.57L2 7.71L3.43 9.14L2 10.57L3.43 12L7 8.43L15.57 17L12 20.57L13.43 22L14.86 20.57L16.29 22L18.43 19.86L19.86 21.29L21.29 19.86L19.86 18.43L22 16.29L20.57 14.86Z"/></svg>
+          </div>
+          <div class="brand-name">
+            NEUROFIT <span class="brand-badge">PRO</span>
+          </div>
+        </a>
+        <div class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#analytics">Analytics</a>
+          <a href="#trainers">Coaches</a>
+          <a href="javascript:void(0)" onclick="launchFlutterApp()" class="btn-app-nav">📱 Launch Real App UI</a>
+          <a href="/privacy" style="font-size: 12px;">Privacy</a>
         </div>
-        <div class="brand-name">
-          NEUROFIT <span class="brand-badge">PRO</span>
-        </div>
-      </a>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#analytics">Analytics</a>
-        <a href="#trainers">Coaches</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/privacy" class="btn-cta">Download App</a>
       </div>
-    </div>
-  </nav>
+    </nav>
 
-  <!-- Hero Section -->
-  <header class="hero">
-    <div class="hero-badge">
-      <span class="hero-badge-dot"></span>
-      Next-Gen AI Performance & Athletic Training Platform
-    </div>
-    <h1 class="hero-title">
-      Master Your Physiology.<br>
-      <span>Transform Every Workout.</span>
-    </h1>
-    <p class="hero-desc">
-      Intelligent strength programming, FDA-precision nutrition tracking, real-time heart rate bio-analytics, and direct access to elite certified personal trainers.
-    </p>
-
-    <div class="hero-buttons">
-      <a href="/privacy" class="btn-cta" style="padding: 14px 28px; font-size: 15px;">
-        Get NeuroFit for Android & iOS
-      </a>
-      <a href="/privacy" class="btn-secondary">
-        Read Privacy Policy →
-      </a>
-    </div>
-
-    <!-- Live Performance Metrics -->
-    <div class="metric-strip">
-      <div class="metric-item">
-        <h3>99.4%</h3>
-        <p>Macro Precision</p>
+    <header class="hero">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        Next-Gen AI Performance & Athletic Training Platform
       </div>
-      <div class="metric-item">
-        <h3>500+</h3>
-        <p>Certified Coaches</p>
-      </div>
-      <div class="metric-item">
-        <h3>1.4M+</h3>
-        <p>Workouts Logged</p>
-      </div>
-      <div class="metric-item">
-        <h3>4.9 ★</h3>
-        <p>App Store Rating</p>
-      </div>
-    </div>
-  </header>
+      <h1 class="hero-title">
+        Master Your Physiology.<br>
+        <span>Transform Every Workout.</span>
+      </h1>
+      <p class="hero-desc">
+        Intelligent strength programming, FDA-precision nutrition tracking, real-time heart rate bio-analytics, and direct access to elite certified personal trainers.
+      </p>
 
-  <!-- Core Features Grid -->
-  <section class="features" id="features">
-    <div class="section-header">
-      <div class="section-tag">ENGINEERED FOR ELITE RESULTS</div>
-      <h2 class="section-title">Everything You Need to Dominate Your Goals</h2>
-    </div>
-
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">🏋️‍♂️</div>
-        <h4>AI Strength & Split Workouts</h4>
-        <p>Dynamic volume auto-regulation, progressive overload calculations, and technique video libraries for every muscle group.</p>
+      <div class="hero-buttons">
+        <a href="javascript:void(0)" onclick="launchFlutterApp()" class="btn-hero-launch">
+          📱 Launch Real App UI →
+        </a>
+        <a href="/privacy" class="btn-hero-secondary">
+          Read Privacy Policy →
+        </a>
       </div>
 
-      <div class="feature-card">
-        <div class="feature-icon">🥗</div>
-        <h4>FDA Nutrition & Meal Plans</h4>
-        <p>Complete USDA/FDA nutrition database, instant macro breakdowns, custom keto/high-protein diet plans and recipe creator.</p>
+      <div class="metric-strip">
+        <div class="metric-item"><h3>99.4%</h3><p>Macro Precision</p></div>
+        <div class="metric-item"><h3>500+</h3><p>Certified Coaches</p></div>
+        <div class="metric-item"><h3>1.4M+</h3><p>Workouts Logged</p></div>
+        <div class="metric-item"><h3>4.9 ★</h3><p>App Store Rating</p></div>
       </div>
+    </header>
+  </div>
 
-      <div class="feature-card">
-        <div class="feature-icon">🏆</div>
-        <h4>Certified Coach Network</h4>
-        <p>1-on-1 private mentoring with ACE & CSCS verified coaches. Real-time form checks, custom plans, and chat check-ins.</p>
-      </div>
+  <script>
+    let isFlutterStarted = false;
 
-      <div class="feature-card">
-        <div class="feature-icon">🛍️</div>
-        <h4>Verified Marketplace</h4>
-        <p>Lab-tested whey proteins, clean supplements, lifting gear, and accessories with express order dispatch and tracking.</p>
-      </div>
+    function launchFlutterApp() {
+      if (isFlutterStarted) return;
+      isFlutterStarted = true;
 
-      <div class="feature-card">
-        <div class="feature-icon">📊</div>
-        <h4>Real-Time Bio-Metrics</h4>
-        <p>Comprehensive step tracking, sleep recovery analysis, active calorie expenditure, and automated health insights.</p>
-      </div>
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('flutter-loading').style.display = 'flex';
 
-      <div class="feature-card">
-        <div class="feature-icon">🛡️</div>
-        <h4>Enterprise-Grade Privacy</h4>
-        <p>256-bit AES encryption for all biometric and medical fitness data. You own your health data with full export control.</p>
-      </div>
-    </div>
-  </section>
+      if (window._flutter && window._flutter.loader) {
+        window._flutter.loader.loadEntrypoint({
+          serviceWorker: {
+            serviceWorkerVersion: serviceWorkerVersion,
+          },
+          onEntrypointLoaded: function(engineInitializer) {
+            engineInitializer.initializeEngine().then(function(appRunner) {
+              document.getElementById('flutter-loading').style.display = 'none';
+              appRunner.runApp();
+            });
+          }
+        });
+      } else {
+        // Fallback if flutter.js is still loading
+        window.addEventListener('load', function () {
+          if (window._flutter && window._flutter.loader) {
+            window._flutter.loader.loadEntrypoint({
+              onEntrypointLoaded: function(engineInitializer) {
+                engineInitializer.initializeEngine().then(function(appRunner) {
+                  document.getElementById('flutter-loading').style.display = 'none';
+                  appRunner.runApp();
+                });
+              }
+            });
+          }
+        });
+      }
+    }
 
-  <!-- Privacy Policy Callout Banner -->
-  <section class="privacy-banner">
-    <div class="privacy-info">
-      <h3>Your Health Data Is 100% Private & Protected</h3>
-      <p>We adhere to strict global GDPR and CCPA standards. Learn how we protect your biometric records.</p>
-    </div>
-    <a href="/privacy" class="btn-cta" style="background: white; color: #0F172A !important;">
-      View Official Privacy Policy
-    </a>
-  </section>
+    // AUTOMATIC DETECTION: If running on localhost or 127.0.0.1, immediately launch the Real Flutter App!
+    const host = window.location.hostname;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || window.location.search.includes('app=true');
 
-  <!-- Footer -->
-  <footer>
-    <div class="footer-container">
-      <div>
-        <div style="font-weight: 900; color: white; margin-bottom: 4px;">NEUROFIT INC.</div>
-        <p style="font-size: 12px;">© 2026 NeuroFit Inc. All rights reserved. Built with precision for athletes worldwide.</p>
-      </div>
-      <div class="footer-links">
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/privacy">Terms of Service</a>
-        <a href="mailto:support@neurofit.app">Contact Support</a>
-      </div>
-    </div>
-  </footer>
+    if (isLocalhost) {
+      window.addEventListener('DOMContentLoaded', () => {
+        launchFlutterApp();
+      });
+      // Also execute immediately in case DOM is already parsed
+      launchFlutterApp();
+    }
+  </script>
 </body>
 </html>

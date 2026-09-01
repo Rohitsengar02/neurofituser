@@ -2,11 +2,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../services/user_backend_service.dart';
 import '../widgets/animated_icon_marquee.dart';
 import '../widgets/fitness_staggered_headline.dart';
 import 'privacy_policy_screen.dart';
 import 'dashboard_screen.dart';
 import 'register_screen.dart';
+import 'questionnaire_screen.dart';
 import 'terms_of_service_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -16,7 +19,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _buttonsController;
 
   @override
@@ -27,7 +31,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       duration: const Duration(milliseconds: 800),
     );
 
-    // Start button reveal shortly after text starts revealing
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _buttonsController.forward();
     });
@@ -39,13 +42,109 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  void _onOAuthSuccess(String provider) {
+  void _onAppleSignIn() {
     HapticFeedback.mediumImpact();
-    Navigator.of(context).push(
+    _signInWithRealGoogle();
+  }
+
+  // -------------------------------------------------------------
+  // REAL GOOGLE AUTHENTICATION & DIRECT FIRESTORE NAVIGATION
+  // -------------------------------------------------------------
+  void _signInWithRealGoogle() async {
+    HapticFeedback.heavyImpact();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 20,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xFF22C55E),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'Connecting to Google...',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    UserModel? user;
+    try {
+      user = await UserBackendService.instance.signInWithRealGoogle();
+    } catch (e) {
+      debugPrint('Google Sign-In Error: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).pop(); // Dismiss connecting loader
+
+    if (user == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Color(0xFF22C55E),
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Welcome, ${user.name} (${user.email})',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF0F172A),
+        duration: const Duration(milliseconds: 1500),
+      ),
+    );
+
+    final Widget nextScreen = user.hasCompletedOnboarding
+        ? const DashboardScreen()
+        : const QuestionnaireScreen();
+
+    Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const DashboardScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -58,12 +157,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     required double startInterval,
     required double endInterval,
   }) {
-    final slideAnim = Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _buttonsController,
-        curve: Interval(startInterval, endInterval, curve: Curves.easeOutCubic),
-      ),
-    );
+    final slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _buttonsController,
+            curve: Interval(
+              startInterval,
+              endInterval,
+              curve: Curves.easeOutCubic,
+            ),
+          ),
+        );
     final fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _buttonsController,
@@ -73,10 +177,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     return SlideTransition(
       position: slideAnim,
-      child: FadeTransition(
-        opacity: fadeAnim,
-        child: child,
-      ),
+      child: FadeTransition(opacity: fadeAnim, child: child),
     );
   }
 
@@ -86,20 +187,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // 1:1 Aspect Ratio Animated Marquee at the top (edge-to-edge)
           AspectRatio(
             aspectRatio: 1.0,
             child: Stack(
               fit: StackFit.expand,
               children: [
                 const AnimatedIconMarquee(),
-                // Back Arrow overlay
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 12,
                   left: 20,
                   child: GestureDetector(
                     onTap: () => Navigator.of(context).pop(),
-                    behavior: HitTestBehavior.opaque,
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -118,8 +216,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ],
             ),
           ),
-          
-          // Bottom area: Text and Staggered Buttons
+
           Expanded(
             child: SingleChildScrollView(
               child: Padding(
@@ -128,112 +225,152 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Staggered Fitness Headline (just above buttons)
                     const FitnessStaggeredHeadline(isLogin: true),
                     const SizedBox(height: 28),
 
-                    // Staggered Buttons
+                    // 1. Sign in with Apple
                     _buildStaggeredButton(
                       startInterval: 0.0,
                       endInterval: 0.5,
                       child: _buildAuthButton(
                         text: 'Sign in with Apple',
-                        icon: const Icon(Icons.apple, color: Colors.white, size: 22),
+                        icon: const Icon(
+                          Icons.apple,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                         backgroundColor: const Color(0xFF1C1D22),
                         textColor: Colors.white,
-                        onTap: () => _onOAuthSuccess('Apple'),
+                        onTap: _onAppleSignIn,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
+                    // 2. Continue with Google
                     _buildStaggeredButton(
-                      startInterval: 0.15,
-                      endInterval: 0.65,
+                      startInterval: 0.18,
+                      endInterval: 0.68,
                       child: _buildAuthButton(
                         text: 'Continue with Google',
                         icon: _buildGoogleIcon(),
                         backgroundColor: Colors.white,
                         textColor: const Color(0xFF141518),
                         borderColor: const Color(0xFFE5E7EB),
-                        onTap: () => _onOAuthSuccess('Google'),
+                        onTap: _signInWithRealGoogle,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 18),
 
+                    // 3. Don't have an account? Sign up
                     _buildStaggeredButton(
-                      startInterval: 0.30,
-                      endInterval: 0.80,
-                      child: _buildAuthButton(
-                        text: 'Create an account',
-                        backgroundColor: const Color(0xFFF1F3F6),
-                        textColor: const Color(0xFF141518),
-                        onTap: () {
-                          Navigator.of(context).pushReplacement(
-                            PageRouteBuilder(
-                              transitionDuration: const Duration(milliseconds: 400),
-                              pageBuilder: (context, animation, secondaryAnimation) =>
-                                  const RegisterScreen(),
-                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(opacity: animation, child: child);
-                              },
+                      startInterval: 0.36,
+                      endInterval: 0.86,
+                      child: Center(
+                        child: Text.rich(
+                          TextSpan(
+                            text: 'Don\'t have an account? ',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: const Color(0xFF6B7280),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
                             ),
-                          );
-                        },
+                            children: [
+                              TextSpan(
+                                text: 'Sign up',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF22C55E),
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = () {
+                                    HapticFeedback.lightImpact();
+                                    Navigator.of(context).pushReplacement(
+                                      PageRouteBuilder(
+                                        transitionDuration: const Duration(
+                                          milliseconds: 300,
+                                        ),
+                                        pageBuilder: (
+                                          context,
+                                          animation,
+                                          secondaryAnimation,
+                                        ) => const RegisterScreen(),
+                                        transitionsBuilder:
+                                            (
+                                              context,
+                                              animation,
+                                              secondaryAnimation,
+                                              child,
+                                            ) {
+                                              return FadeTransition(
+                                                opacity: animation,
+                                                child: child,
+                                              );
+                                            },
+                                      ),
+                                    );
+                                  },
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // Terms and conditions
+                    // 4. Terms & Privacy Policy
                     _buildStaggeredButton(
-                      startInterval: 0.45,
+                      startInterval: 0.50,
                       endInterval: 1.0,
-                      child: Text.rich(
-                        TextSpan(
-                          text: 'By continuing you confirm that you agree to our ',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            color: const Color(0xFF9CA3AF),
-                            height: 1.4,
+                      child: Center(
+                        child: Text.rich(
+                          textAlign: TextAlign.center,
+                          TextSpan(
+                            text: 'By signing in you agree to our ',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: const Color(0xFF9CA3AF),
+                              fontSize: 11,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: 'Terms of Service',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF6B7280),
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const TermsOfServiceScreen(),
+                                      ),
+                                    );
+                                  },
+                              ),
+                              const TextSpan(text: ' and '),
+                              TextSpan(
+                                text: 'Privacy Policy',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF6B7280),
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const PrivacyPolicyScreen(),
+                                      ),
+                                    );
+                                  },
+                              ),
+                            ],
                           ),
-                          children: [
-                            TextSpan(
-                              text: 'Terms of Service',
-                              style: const TextStyle(
-                                decoration: TextDecoration.underline,
-                                color: Color(0xFF6B7280),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              recognizer: TapGestureRecognizer()
-                                ..onTap = () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const TermsOfServiceScreen(),
-                                    ),
-                                  );
-                                },
-                            ),
-                            const TextSpan(text: ', '),
-                            TextSpan(
-                              text: 'Privacy Policy',
-                              style: const TextStyle(
-                                decoration: TextDecoration.underline,
-                                color: Color(0xFF6B7280),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              recognizer: TapGestureRecognizer()
-                                ..onTap = () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const PrivacyPolicyScreen(),
-                                    ),
-                                  );
-                                },
-                            ),
-                            const TextSpan(text: ' and fitness safety guidelines.'),
-                          ],
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                   ],
@@ -248,65 +385,109 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   Widget _buildAuthButton({
     required String text,
-    Widget? icon,
+    required Widget icon,
     required Color backgroundColor,
     required Color textColor,
     Color? borderColor,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 54,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(28),
-          border: borderColor != null ? Border.all(color: borderColor, width: 1.2) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+    return Container(
+      width: double.infinity,
+      height: 48,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        border: borderColor != null
+            ? Border.all(color: borderColor, width: 1.2)
+            : null,
+        boxShadow: backgroundColor == Colors.white
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: backgroundColor.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                icon,
+                const SizedBox(width: 12),
+                Text(
+                  text,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (icon != null) ...[
-              icon,
-              const SizedBox(width: 10),
-            ],
-            Text(
-              text,
-              style: GoogleFonts.plusJakartaSans(
-                color: textColor,
-                fontSize: 15.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildGoogleIcon() {
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: Center(
-        child: Text(
-          'G',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFFEA4335),
-          ),
-        ),
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
       ),
+      child: CustomPaint(painter: _GoogleLogoPainter()),
     );
   }
+}
+
+class _GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+    final center = Offset(w / 2, h / 2);
+
+    final Paint bluePaint = Paint()..color = const Color(0xFF4285F4);
+    final Paint greenPaint = Paint()..color = const Color(0xFF34A853);
+    final Paint yellowPaint = Paint()..color = const Color(0xFFFBBC05);
+    final Paint redPaint = Paint()..color = const Color(0xFFEA4335);
+
+    canvas.drawCircle(center, w / 2, bluePaint);
+    canvas.drawCircle(center, w / 2.8, Paint()..color = Colors.white);
+
+    final rect = Rect.fromCircle(center: center, radius: w / 2);
+    canvas.drawArc(rect, 0.7, 1.6, true, greenPaint);
+    canvas.drawArc(rect, 2.3, 1.6, true, yellowPaint);
+    canvas.drawArc(rect, 3.9, 1.5, true, redPaint);
+
+    canvas.drawCircle(center, w / 3.4, Paint()..color = Colors.white);
+    canvas.drawRect(
+      Rect.fromLTWH(center.dx - 1, center.dy - 2.5, w / 2.1, 5),
+      bluePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -1,9 +1,17 @@
+import '../services/products_backend_service.dart';
+import '../services/banners_backend_service.dart';
+import '../services/category_backend_service.dart';
+import '../services/marketplace_home_layout_service.dart';
+import '../services/user_backend_service.dart';
+
 import 'dart:async';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
+
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/dashboard_workout_sections.dart';
@@ -35,7 +43,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
-  int _selectedCategoryIndex = 0; // 0: Overview, 1: Workouts, 2: Nutrition, 3: Mental Health, 4: Shop
+  int _selectedCategoryIndex =
+      0; // 0: Overview, 1: Workouts, 2: Nutrition, 3: Mental Health, 4: Shop
   int _selectedOverviewCardIndex = 0;
   int _selectedBottomNavIndex = 0;
 
@@ -83,6 +92,53 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _isOverviewLoading = true;
   late AnimationController _shimmerController;
 
+  // First-Time Registration & Interactive Demo State
+  bool _isDemoActive = false;
+  bool _showAppTour = false;
+  int _tourStep = 0;
+  int _demoStep = 0;
+  int _demoSecondsRemaining = 5;
+  Timer? _demoCountdownTimer;
+  late AnimationController _demoPulseController;
+
+  final List<Map<String, dynamic>> _tourSteps = [
+    {
+      'title': 'Overview & Daily Health',
+      'desc': 'Track your daily wellness score, steps, active calories, water intake, and habit streaks in one unified place.',
+      'categoryIndex': 0,
+      'icon': Icons.space_dashboard_rounded,
+      'color': Color(0xFF16A34A),
+    },
+    {
+      'title': 'AI Workouts & Training',
+      'desc': 'Discover custom AI workout splits, guided exercise videos, rep counters, and recovery schedules tailored to your goals.',
+      'categoryIndex': 1,
+      'icon': Icons.fitness_center_rounded,
+      'color': Color(0xFF9333EA),
+    },
+    {
+      'title': 'Nutrition & Meal Tracking',
+      'desc': 'Log your daily meals, track macronutrients (protein, carbs, fats), and follow lab-formulated nutrition plans.',
+      'categoryIndex': 2,
+      'icon': Icons.restaurant_rounded,
+      'color': Color(0xFFD97706),
+    },
+    {
+      'title': 'Mental Health & Mindfulness',
+      'desc': 'Practice guided breathwork, stress-relief meditations, sleep stories, and nervous system recovery routines.',
+      'categoryIndex': 3,
+      'icon': Icons.spa_rounded,
+      'color': Color(0xFFE11D48),
+    },
+    {
+      'title': 'Shop & Lab Certified Gear',
+      'desc': 'Order authentic supplements, high-performance athletic apparel, and certified fitness gear with doorstep delivery.',
+      'categoryIndex': 4,
+      'icon': Icons.shopping_bag_rounded,
+      'color': Color(0xFF0284C7),
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -91,24 +147,34 @@ class _DashboardScreenState extends State<DashboardScreen>
       duration: const Duration(milliseconds: 1400),
     )..repeat();
 
+    _demoPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     );
 
-    // Initial skeleton loading simulation, then smooth staggered entrance
+    // Initial skeleton loading simulation, then check for first-time user tour
     Future.delayed(const Duration(milliseconds: 850), () {
       if (mounted) {
         setState(() {
           _isOverviewLoading = false;
         });
         _entranceController.forward(from: 0.0);
+
+        // Eagerly preload all Shop Products, Banners, and Images in the background
+        _preloadShopDataAndImages();
       }
     });
   }
 
   @override
   void dispose() {
+    _demoCountdownTimer?.cancel();
+    _demoPulseController.dispose();
     _shimmerController.dispose();
     _entranceController.dispose();
     super.dispose();
@@ -119,7 +185,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     final activeCategory = _categories[_selectedCategoryIndex];
 
     return Scaffold(
-      backgroundColor: Colors.transparent, // Background handled by AnimatedContainer
+      backgroundColor:
+          Colors.transparent, // Background handled by AnimatedContainer
       body: AnimatedContainer(
         duration: const Duration(milliseconds: 350),
         decoration: BoxDecoration(
@@ -138,121 +205,124 @@ class _DashboardScreenState extends State<DashboardScreen>
           bottom: false,
           child: Stack(
             children: [
-            // Swappable Body based on bottom nav
-            _selectedBottomNavIndex == 1
-                ? const StepsScreen()
-                : _selectedBottomNavIndex == 2
-                    ? const TrainersScreen()
-                    : _selectedBottomNavIndex == 3
-                        ? const SocialScreen()
-                        : _selectedBottomNavIndex == 4
-                            ? const ProfileScreen()
-                            : SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 110), // Space for floating bottom nav
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                  const SizedBox(height: 8),
+              // Swappable Body based on bottom nav
+              _selectedBottomNavIndex == 1
+                  ? const StepsScreen()
+                  : _selectedBottomNavIndex == 2
+                  ? const TrainersScreen()
+                  : _selectedBottomNavIndex == 3
+                  ? const SocialScreen()
+                  : _selectedBottomNavIndex == 4
+                  ? const ProfileScreen()
+                  : SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(
+                        bottom: 110,
+                      ), // Space for floating bottom nav
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
 
-                  // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
-                  _buildAnimatedHeader(),
+                          // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
+                          _buildAnimatedHeader(),
 
-                  const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                  // 2. Fixed Top Category Tabs
-                  _buildTopCategoryTabs(activeCategory),
+                          // 2. Fixed Top Category Tabs
+                          _buildTopCategoryTabs(activeCategory),
 
-                  // 3. Smooth Animated Switcher for Tab Content
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 350),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0.04, 0.0),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: KeyedSubtree(
-                      key: ValueKey<int>(_selectedCategoryIndex),
-                      child: _selectedCategoryIndex == 1
-                          ? const DashboardWorkoutTabContent()
-                          : _selectedCategoryIndex == 2
-                              ? const DashboardNutritionTabContent()
-                              : _selectedCategoryIndex == 3
+                          // 3. Smooth Animated Switcher for Tab Content
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0.04, 0.0),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: KeyedSubtree(
+                              key: ValueKey<int>(_selectedCategoryIndex),
+                              child: _selectedCategoryIndex == 1
+                                  ? const DashboardWorkoutTabContent()
+                                  : _selectedCategoryIndex == 2
+                                  ? const DashboardNutritionTabContent()
+                                  : _selectedCategoryIndex == 3
                                   ? const DashboardMentalHealthTabContent()
                                   : _selectedCategoryIndex == 4
-                                      ? const DashboardShopTabContent()
-                                      : Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const SizedBox(height: 18),
+                                  ? const DashboardShopTabContent()
+                                  : Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 18),
 
-                                    // Search Bar & "Transform Yourself" Card
-                                    _buildAnimatedSearchAndTransformRow(),
+                                        // Search Bar & "Transform Yourself" Card
+                                        _buildAnimatedSearchAndTransformRow(),
 
-                                    const SizedBox(height: 18),
+                                        const SizedBox(height: 18),
 
-                                    // Hero Banner Card ("Stay Consistent, See Results!")
-                                    _buildAnimatedHeroBanner(),
+                                        // Hero Banner Card ("Stay Consistent, See Results!")
+                                        _buildAnimatedHeroBanner(),
 
-                                    const SizedBox(height: 16),
+                                        const SizedBox(height: 16),
 
-                                    // Overview Image Carousel Cards (Image Only, No Text)
-                                    _buildOverviewCategoryCardsCarousel(),
+                                        // Overview Image Carousel Cards (Image Only, No Text)
+                                        _buildOverviewCategoryCardsCarousel(),
 
-                                    const SizedBox(height: 20),
+                                        const SizedBox(height: 20),
 
-                                    // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
-                                    _buildAnimatedOverviewBentoGrid(),
+                                        // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
+                                        _buildAnimatedOverviewBentoGrid(),
 
-                                    const SizedBox(height: 24),
+                                        const SizedBox(height: 24),
 
-                                    // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
-                                    _buildAnimatedProgressCarousel(),
+                                        // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
+                                        _buildAnimatedProgressCarousel(),
 
-                                    // Show extended sections only on Overview Tab (Index 0)
-                                    if (_selectedCategoryIndex == 0) ...[
-                                      const SizedBox(height: 24),
-                                      const TodaysPlanSection(),
-                                      const SizedBox(height: 24),
-                                      const NutritionSummarySection(),
-                                      const SizedBox(height: 24),
-                                      const WaterIntakeSection(),
-                                      const SizedBox(height: 24),
-                                      const MindMoodSection(),
-                                      const SizedBox(height: 24),
-                                      const AchievementsSection(),
-                                      const SizedBox(height: 24),
-                                      const ArticlesTipsSection(),
-                                    ],
+                                        // Show extended sections only on Overview Tab (Index 0)
+                                        if (_selectedCategoryIndex == 0) ...[
+                                          const SizedBox(height: 24),
+                                          const TodaysPlanSection(),
+                                          const SizedBox(height: 24),
+                                          const NutritionSummarySection(),
+                                          const SizedBox(height: 24),
+                                          const WaterIntakeSection(),
+                                          const SizedBox(height: 24),
+                                          const MindMoodSection(),
+                                          const SizedBox(height: 24),
+                                          const AchievementsSection(),
+                                          const SizedBox(height: 24),
+                                          const ArticlesTipsSection(),
+                                        ],
 
-                                    const SizedBox(height: 20),
-                                  ],
-                                ),
+                                        const SizedBox(height: 20),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
 
-            // Bottom Floating Navigation Bar
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 24,
-              child: _buildFloatingBottomNav(),
-            ),
-          ],
+              // Bottom Floating Navigation Bar
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 24,
+                child: _buildFloatingBottomNav(),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -271,6 +341,283 @@ class _DashboardScreenState extends State<DashboardScreen>
   // -------------------------------------------------------------
   // 1. TOP HEADER WITH BLUR STAGGERED GREETING & ANIMATED ICON
   // -------------------------------------------------------------
+
+  // -------------------------------------------------------------
+  // FIRST-TIME REGISTRATION INTERACTIVE TABS TOUR OVERLAY
+  // -------------------------------------------------------------
+
+  // -------------------------------------------------------------
+  // "SEE DEMO" INTERACTIVE BANNER / BUTTON BELOW MAIN TABS
+  // -------------------------------------------------------------
+
+  // -------------------------------------------------------------
+  // EAGER SHOP DATA & IMAGES PRELOADER (LOADED ON OVERVIEW TAB)
+  // -------------------------------------------------------------
+  void _preloadShopDataAndImages() async {
+    try {
+      debugPrint(
+        'Eagerly preloading all Shop products, banners, and categories on Overview...',
+      );
+      await Future.wait([
+        ProductsBackendService.instance.fetchProducts(),
+        BannersBackendService.instance.fetchBanners(),
+        CategoryBackendService.instance.fetchCategories(),
+        MarketplaceHomeLayoutService.instance.fetchLayout(),
+      ]);
+
+      if (!mounted) return;
+
+      // Pre-cache banner images
+      for (final banner in BannersBackendService.instance.banners) {
+        if (banner.imageUrl.isNotEmpty) {
+          precacheImage(
+            NetworkImage(banner.imageUrl),
+            context,
+          ).catchError((_) {});
+        }
+      }
+
+      // Pre-cache top product images
+      for (final product in ProductsBackendService.instance.products.take(10)) {
+        if (product.images.isNotEmpty && product.images.first.isNotEmpty) {
+          precacheImage(
+            NetworkImage(product.images.first),
+            context,
+          ).catchError((_) {});
+        }
+      }
+      debugPrint(
+        'Shop data & images preloaded successfully! Ready for instant display on Shop tab.',
+      );
+    } catch (e) {
+      debugPrint('Background shop preloading notice: $e');
+    }
+  }
+
+  Widget _buildSeeDemoBanner(_CategoryItem activeCategory) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: GestureDetector(
+        onTap: _startAppDemo,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFF22C55E).withValues(alpha: 0.45),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF22C55E).withValues(alpha: 0.2),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF22C55E).withValues(alpha: 0.5),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'See App Demo',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF22C55E)
+                                .withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'INTERACTIVE',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: const Color(0xFF22C55E),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Highlights each tab & auto-cycles every 5 seconds',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Start',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                      size: 13,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // DEMO CONTROLLER LOGIC (5-SECOND COUNTDOWN & ADVANCE)
+  // -------------------------------------------------------------
+  void _startAppDemo() {
+    HapticFeedback.heavyImpact();
+    _demoCountdownTimer?.cancel();
+
+    setState(() {
+      _isDemoActive = true;
+      _demoStep = 0;
+      _selectedCategoryIndex = 0;
+      _demoSecondsRemaining = 5;
+    });
+
+    _startDemoStepTimer();
+  }
+
+  void _startDemoStepTimer() {
+    _demoCountdownTimer?.cancel();
+    _demoCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_demoSecondsRemaining > 1) {
+        setState(() {
+          _demoSecondsRemaining--;
+        });
+      } else {
+        // 5 seconds elapsed -> advance to next tab
+        _nextDemoStep();
+      }
+    });
+  }
+
+  void _nextDemoStep() {
+    HapticFeedback.mediumImpact();
+    _demoCountdownTimer?.cancel();
+
+    if (_demoStep < _tourSteps.length - 1) {
+      setState(() {
+        _demoStep++;
+        _selectedCategoryIndex = _tourSteps[_demoStep]['categoryIndex'] as int;
+        _demoSecondsRemaining = 5;
+      });
+      _startDemoStepTimer();
+    } else {
+      // Demo completed
+      _stopAppDemo();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.celebration_rounded,
+                color: Color(0xFF22C55E),
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Demo Complete 🎉 You\'re ready to crush your goals!',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0F172A),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _stopAppDemo() {
+    HapticFeedback.lightImpact();
+    _demoCountdownTimer?.cancel();
+    setState(() {
+      _isDemoActive = false;
+      _selectedCategoryIndex = 0;
+    });
+  }
+
   Widget _buildAnimatedHeader() {
     return AnimatedBuilder(
       animation: _entranceController,
@@ -356,11 +703,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFFBEB),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFFEF3C7), width: 1.2),
+                    border: Border.all(
+                      color: const Color(0xFFFEF3C7),
+                      width: 1.2,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0xFFD97706).withValues(alpha: 0.1),
@@ -433,7 +786,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               final endInterval = (startInterval + 0.35).clamp(0.0, 1.0);
               final anim = CurvedAnimation(
                 parent: _entranceController,
-                curve: Interval(startInterval, endInterval, curve: Curves.easeOutCubic),
+                curve: Interval(
+                  startInterval,
+                  endInterval,
+                  curve: Curves.easeOutCubic,
+                ),
               ).value;
               final slideY = (1.0 - anim) * 20.0;
 
@@ -450,67 +807,170 @@ class _DashboardScreenState extends State<DashboardScreen>
                       child: GestureDetector(
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          setState(() {
-                            _selectedCategoryIndex = index;
-                          });
+                          if (_isDemoActive) {
+                            // If demo is active and user taps the tab, advance demo immediately
+                            _nextDemoStep();
+                          } else {
+                            setState(() {
+                              _selectedCategoryIndex = index;
+                            });
+                          }
                         },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOutCubic,
-                          height: isSelected ? 86 : 76,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? activeCategory.subBgColor
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: isSelected
-                                  ? activeCategory.activeColor.withValues(alpha: 0.35)
-                                  : const Color(0xFFF1F5F9),
-                              width: isSelected ? 1.5 : 1.0,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: activeCategory.activeColor.withValues(alpha: 0.12),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: Center(
-                                  child: Image.asset(
-                                    item.imagePath,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) => Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.dashboard_rounded, size: 24, color: item.activeColor),
-                                        const SizedBox(height: 2),
-                                        Text(item.title, style: const TextStyle(fontSize: 9)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Horizontal indicator line at bottom of tab when selected
-                              if (isSelected)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 3),
-                                  width: 22,
-                                  height: 3,
+                        child: AnimatedBuilder(
+                          animation: _demoPulseController,
+                          builder: (context, child) {
+                            final isDemoHighlighted =
+                                _isDemoActive && _demoStep == index;
+                            final pulseGlow = isDemoHighlighted
+                                ? _demoPulseController.value
+                                : 0.0;
+
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOutCubic,
+                                  height: (isSelected || isDemoHighlighted)
+                                      ? 88
+                                      : 76,
                                   decoration: BoxDecoration(
-                                    color: activeCategory.activeColor,
-                                    borderRadius: BorderRadius.circular(2),
+                                    color: isSelected
+                                        ? activeCategory.subBgColor
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: isDemoHighlighted
+                                          ? item.activeColor
+                                          : (isSelected
+                                                ? activeCategory.activeColor
+                                                      .withValues(alpha: 0.35)
+                                                : const Color(0xFFF1F5F9)),
+                                      width: isDemoHighlighted
+                                          ? 2.5
+                                          : (isSelected ? 1.5 : 1.0),
+                                    ),
+                                    boxShadow: isDemoHighlighted
+                                        ? [
+                                            BoxShadow(
+                                              color: item.activeColor
+                                                  .withValues(
+                                                    alpha:
+                                                        0.35 +
+                                                        (pulseGlow * 0.35),
+                                                  ),
+                                              blurRadius: 16 + (pulseGlow * 8),
+                                              spreadRadius: 2,
+                                            ),
+                                          ]
+                                        : (isSelected
+                                              ? [
+                                                  BoxShadow(
+                                                    color: activeCategory
+                                                        .activeColor
+                                                        .withValues(
+                                                          alpha: 0.12,
+                                                        ),
+                                                    blurRadius: 10,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ]
+                                              : null),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8.0,
+                                    vertical: 8.0,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Expanded(
+                                        child: Center(
+                                          child: Image.asset(
+                                            item.imagePath,
+                                            fit: BoxFit.contain,
+                                            errorBuilder:
+                                                (
+                                                  context,
+                                                  error,
+                                                  stackTrace,
+                                                ) => Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.dashboard_rounded,
+                                                      size: 24,
+                                                      color: item.activeColor,
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      item.title,
+                                                      style: const TextStyle(
+                                                        fontSize: 9,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                      if (isSelected || isDemoHighlighted)
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 3),
+                                          width: 24,
+                                          height: 3,
+                                          decoration: BoxDecoration(
+                                            color: isDemoHighlighted
+                                                ? item.activeColor
+                                                : activeCategory.activeColor,
+                                            borderRadius: BorderRadius.circular(
+                                              2,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
-                            ],
-                          ),
+
+                                // Bouncing "TAP HERE" Badge on the Highlighted Demo Tab
+                                if (isDemoHighlighted)
+                                  Positioned(
+                                    top: -10,
+                                    left: 0,
+                                    right: 0,
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: item.activeColor,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: item.activeColor
+                                                  .withValues(alpha: 0.6),
+                                              blurRadius: 8,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          'TAP 👆',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: Colors.white,
+                                            fontSize: 8.5,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -552,7 +1012,9 @@ class _DashboardScreenState extends State<DashboardScreen>
               ],
               stops: const [0.0, 0.5, 1.0],
             ),
-            border: Border.all(color: const Color(0xFFE2E8F0).withValues(alpha: 0.6)),
+            border: Border.all(
+              color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+            ),
           ),
         );
       },
@@ -627,7 +1089,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                        border: Border.all(
+                          color: const Color(0xFFF1F5F9),
+                          width: 1.5,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -667,7 +1132,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                     },
                     child: Container(
                       height: 50,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           begin: Alignment.topLeft,
@@ -680,7 +1148,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF22C55E).withValues(alpha: 0.38),
+                            color: const Color(0xFF22C55E)
+                                .withValues(alpha: 0.38),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -777,7 +1246,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0FDF4), // Soft Mint Green
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: const Color(0xFFDCFCE7), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFDCFCE7),
+                    width: 1.5,
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -809,7 +1281,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       stops: const [0.0, 0.45, 1.0],
                                       colors: [
                                         const Color(0xFFF0FDF4),
-                                        const Color(0xFFF0FDF4).withValues(alpha: 0.5),
+                                        const Color(0xFFF0FDF4)
+                                            .withValues(alpha: 0.5),
                                         Colors.transparent,
                                       ],
                                     ),
@@ -869,13 +1342,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     HapticFeedback.selectionClick();
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 8,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF16A34A),
                                       borderRadius: BorderRadius.circular(20),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF16A34A).withValues(alpha: 0.3),
+                                          color: const Color(0xFF16A34A)
+                                              .withValues(alpha: 0.3),
                                           blurRadius: 8,
                                           offset: const Offset(0, 3),
                                         ),
@@ -924,11 +1401,17 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildOverviewCategoryCardsCarousel() {
     final List<Map<String, String>> overviewCards = [
       {'icon': 'assets/images/top tabs/overview/all.png', 'label': 'All'},
-      {'icon': 'assets/images/top tabs/overview/strenth.png', 'label': 'Strength'},
+      {
+        'icon': 'assets/images/top tabs/overview/strenth.png',
+        'label': 'Strength',
+      },
       {'icon': 'assets/images/top tabs/overview/cardio.png', 'label': 'Cardio'},
       {'icon': 'assets/images/top tabs/overview/yoga.png', 'label': 'Yoga'},
       {'icon': 'assets/images/top tabs/overview/hit.png', 'label': 'HIIT'},
-      {'icon': 'assets/images/top tabs/overview/mobility.png', 'label': 'Mobility'},
+      {
+        'icon': 'assets/images/top tabs/overview/mobility.png',
+        'label': 'Mobility',
+      },
     ];
 
     return LayoutBuilder(
@@ -936,7 +1419,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         // Calculate width so exactly 5 cards fit in one screen view with 8px gaps
         const double horizontalPadding = 40.0; // 20px left + 20px right
         const double gap = 8.0;
-        final double cardWidth = (constraints.maxWidth - horizontalPadding - (4 * gap)) / 5;
+        final double cardWidth =
+            (constraints.maxWidth - horizontalPadding - (4 * gap)) / 5;
         final double cardHeight = cardWidth + 22.0;
 
         if (_isOverviewLoading) {
@@ -969,7 +1453,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 itemCount: overviewCards.length,
-                separatorBuilder: (context, index) => const SizedBox(width: gap),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(width: gap),
                 itemBuilder: (context, index) {
                   final card = overviewCards[index];
                   final iconPath = card['icon']!;
@@ -977,11 +1462,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                   final isSelected = _selectedOverviewCardIndex == index;
 
                   // Sequential staggered entrance for each carousel card
-                  final startInterval = (0.35 + (index * 0.05)).clamp(0.0, 0.85);
+                  final startInterval = (0.35 + (index * 0.05)).clamp(
+                    0.0,
+                    0.85,
+                  );
                   final endInterval = (startInterval + 0.30).clamp(0.0, 1.0);
                   final anim = CurvedAnimation(
                     parent: _entranceController,
-                    curve: Interval(startInterval, endInterval, curve: Curves.easeOutCubic),
+                    curve: Interval(
+                      startInterval,
+                      endInterval,
+                      curve: Curves.easeOutCubic,
+                    ),
                   ).value;
                   final slideX = (1.0 - anim) * 24.0;
 
@@ -1019,14 +1511,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                             boxShadow: [
                               BoxShadow(
                                 color: isSelected
-                                    ? const Color(0xFF16A34A).withValues(alpha: 0.18)
-                                    : const Color(0xFF0F172A).withValues(alpha: 0.03),
+                                    ? const Color(0xFF16A34A)
+                                          .withValues(alpha: 0.18)
+                                    : const Color(0xFF0F172A)
+                                          .withValues(alpha: 0.03),
                                 blurRadius: isSelected ? 12 : 6,
                                 offset: const Offset(0, 3),
                               ),
                             ],
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 6.0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4.0,
+                            vertical: 6.0,
+                          ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -1034,14 +1531,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 child: Image.asset(
                                   iconPath,
                                   fit: BoxFit.contain,
-                                  errorBuilder: (context, error, stackTrace) => Center(
-                                    child: SubCategory3DIcon(
-                                      index: index,
-                                      themeColor: const Color(0xFF16A34A),
-                                      isSelected: isSelected,
-                                      size: 24,
-                                    ),
-                                  ),
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Center(
+                                        child: SubCategory3DIcon(
+                                          index: index,
+                                          themeColor: const Color(0xFF16A34A),
+                                          isSelected: isSelected,
+                                          size: 24,
+                                        ),
+                                      ),
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -1049,8 +1547,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 label,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 9.5,
-                                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                  fontWeight: isSelected
+                                      ? FontWeight.w900
+                                      : FontWeight.w700,
+                                  color: isSelected
+                                      ? const Color(0xFF16A34A)
+                                      : const Color(0xFF64748B),
                                   letterSpacing: -0.2,
                                 ),
                                 maxLines: 1,
@@ -1104,7 +1606,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                            color: const Color(0xFF0F172A)
+                                .withValues(alpha: 0.08),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -1131,7 +1634,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                             border: Border.all(color: const Color(0xFFE2E8F0)),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                                color: const Color(0xFF0F172A)
+                                    .withValues(alpha: 0.06),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -1147,7 +1651,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                               return Container(
                                 color: const Color(0xFF1E293B),
                                 child: const Center(
-                                  child: Icon(Icons.fitness_center_rounded, color: Color(0xFF22C55E), size: 36),
+                                  child: Icon(
+                                    Icons.fitness_center_rounded,
+                                    color: Color(0xFF22C55E),
+                                    size: 36,
+                                  ),
                                 ),
                               );
                             },
@@ -1165,7 +1673,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                             border: Border.all(color: const Color(0xFFE2E8F0)),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                                color: const Color(0xFF0F172A)
+                                    .withValues(alpha: 0.06),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -1181,7 +1690,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                               return Container(
                                 color: const Color(0xFF1E293B),
                                 child: const Center(
-                                  child: Icon(Icons.psychology_rounded, color: Color(0xFFF59E0B), size: 36),
+                                  child: Icon(
+                                    Icons.psychology_rounded,
+                                    color: Color(0xFFF59E0B),
+                                    size: 36,
+                                  ),
                                 ),
                               );
                             },
@@ -1415,7 +1928,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const RewardsScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const RewardsScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1428,7 +1943,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const AiCoachScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const AiCoachScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1441,7 +1958,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const ProfileScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1492,7 +2011,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ChallengesScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const ChallengesScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1525,7 +2046,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ShopScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const ShopScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1538,7 +2061,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const OrdersScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const OrdersScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1551,7 +2076,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const WishlistScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const WishlistScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1564,7 +2091,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const OffersScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const OffersScreen(),
+                            ),
                           );
                         },
                       ),
@@ -1589,7 +2118,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const VendorRegistrationScreen()),
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const VendorRegistrationScreen(),
+                              ),
                             );
                           },
                         ),
@@ -1732,9 +2264,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(color: subColor.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: subColor.withValues(alpha: 0.3),
+                      ),
                     ),
-                    child: Icon(Icons.arrow_forward_rounded, color: subColor, size: 14),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      color: subColor,
+                      size: 14,
+                    ),
                   ),
                 ],
               ),
@@ -1769,7 +2307,8 @@ class _AnimatedHeaderIconBadge extends StatefulWidget {
   const _AnimatedHeaderIconBadge();
 
   @override
-  State<_AnimatedHeaderIconBadge> createState() => _AnimatedHeaderIconBadgeState();
+  State<_AnimatedHeaderIconBadge> createState() =>
+      _AnimatedHeaderIconBadgeState();
 }
 
 class _AnimatedHeaderIconBadgeState extends State<_AnimatedHeaderIconBadge> {
@@ -1954,10 +2493,7 @@ class _AnimatedProgressCardState extends State<_AnimatedProgressCard>
               ],
             ),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: const Color(0xFFF1F5F9),
-              width: 1.5,
-            ),
+            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
             boxShadow: [
               BoxShadow(
                 color: widget.lineColor.withValues(alpha: 0.06),
@@ -1999,7 +2535,10 @@ class _AnimatedProgressCardState extends State<_AnimatedProgressCard>
 
                   // Percentage Pill
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3.5,
+                    ),
                     decoration: BoxDecoration(
                       color: widget.isUp
                           ? const Color(0xFFDCFCE7) // Soft mint green
@@ -2091,10 +2630,13 @@ class _AnimatedProgressCardState extends State<_AnimatedProgressCard>
                       return ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
-                          value: (widget.progressRatio * _barProgress.value).clamp(0.0, 1.0),
+                          value: (widget.progressRatio * _barProgress.value)
+                              .clamp(0.0, 1.0),
                           minHeight: 5,
                           backgroundColor: const Color(0xFFF1F5F9),
-                          valueColor: AlwaysStoppedAnimation<Color>(widget.lineColor),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            widget.lineColor,
+                          ),
                         ),
                       );
                     },
@@ -2116,7 +2658,8 @@ class _OverviewBentoVideoPlayer extends StatefulWidget {
   const _OverviewBentoVideoPlayer();
 
   @override
-  State<_OverviewBentoVideoPlayer> createState() => _OverviewBentoVideoPlayerState();
+  State<_OverviewBentoVideoPlayer> createState() =>
+      _OverviewBentoVideoPlayerState();
 }
 
 class _OverviewBentoVideoPlayerState extends State<_OverviewBentoVideoPlayer> {
@@ -2130,19 +2673,22 @@ class _OverviewBentoVideoPlayerState extends State<_OverviewBentoVideoPlayer> {
   }
 
   void _initializeVideo() {
-    _controller = VideoPlayerController.asset('assets/videos/overview_fitness_loop.mp4')
-      ..initialize().then((_) {
-        if (mounted) {
-          _controller?.setVolume(0.0);
-          _controller?.setLooping(true);
-          _controller?.play();
-          setState(() {
-            _isInitialized = true;
-          });
-        }
-      }).catchError((e) {
-        debugPrint('Error loading overview video asset: $e');
-      });
+    _controller =
+        VideoPlayerController.asset('assets/videos/overview_fitness_loop.mp4')
+          ..initialize()
+              .then((_) {
+                if (mounted) {
+                  _controller?.setVolume(0.0);
+                  _controller?.setLooping(true);
+                  _controller?.play();
+                  setState(() {
+                    _isInitialized = true;
+                  });
+                }
+              })
+              .catchError((e) {
+                debugPrint('Error loading overview video asset: $e');
+              });
   }
 
   @override
@@ -2174,12 +2720,15 @@ class _OverviewBentoVideoPlayerState extends State<_OverviewBentoVideoPlayer> {
         fit: BoxFit.cover,
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
-          width: _controller!.value.size.width > 0 ? _controller!.value.size.width : 300,
-          height: _controller!.value.size.height > 0 ? _controller!.value.size.height : 400,
+          width: _controller!.value.size.width > 0
+              ? _controller!.value.size.width
+              : 300,
+          height: _controller!.value.size.height > 0
+              ? _controller!.value.size.height
+              : 400,
           child: VideoPlayer(_controller!),
         ),
       ),
     );
   }
 }
-

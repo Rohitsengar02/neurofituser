@@ -1,3 +1,5 @@
+import '../services/user_backend_service.dart';
+import 'dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -62,23 +64,33 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (mounted) _fadeController.forward();
     });
 
-    // Navigate to Onboarding / Main Screen after 2.6 seconds
-    Future.delayed(const Duration(milliseconds: 2600), () {
-      if (mounted) {
+    // Check User Authentication: If user is registered / logged in -> go DIRECTLY to Dashboard
+    UserBackendService.instance.checkAuthStatus().then((_) {
+      Future.delayed(const Duration(milliseconds: 1600), () {
+        if (!mounted) return;
+
+        Widget targetScreen = const OnboardingScreen();
+        final userService = UserBackendService.instance;
+
+        if (userService.isLoggedIn) {
+          debugPrint('Logged in athlete session detected (${userService.currentUser?.email}). Bypassing onboarding & auth -> Opening Dashboard directly!');
+          targetScreen = const DashboardScreen();
+        } else {
+          debugPrint('No active user session. Showing Onboarding.');
+          targetScreen = const OnboardingScreen();
+        }
+
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 700),
-            pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
+            transitionDuration: const Duration(milliseconds: 450),
+            pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
+              return FadeTransition(opacity: animation, child: child);
             },
           ),
         );
-      }
+      });
     });
   }
 

@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Open access rule for seamless development across Admin Panel & Mobile App
+    // Allows full read and write access to all collections (categories, products, orders, users, workouts, etc.)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

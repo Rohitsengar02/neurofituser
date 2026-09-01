@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/orders_backend_service.dart';
+import '../services/user_backend_service.dart';
 import '../widgets/staggered_slide_fade.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -25,54 +27,8 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
 
   final List<String> _filters = [
     'All Orders',
-    'In Transit 🚚',
+    'Placed 📦',
     'Delivered ✅',
-    'Cancelled',
-  ];
-
-  final List<Map<String, dynamic>> _orders = [
-    {
-      'id': 'NF-89241',
-      'date': 'Today, 2:45 PM',
-      'status': 'Out for Delivery',
-      'statusColor': const Color(0xFF0284C7),
-      'statusBg': const Color(0xFFE0F2FE),
-      'title': 'Pro Runner Neon X1',
-      'variant': 'Size: US 9.5 • Color: Neon Lime',
-      'price': 110.00,
-      'items': 1,
-      'image': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&auto=format&fit=crop&q=80',
-      'eta': 'Arriving by 6:00 PM',
-      'step': 3, // 1: Placed, 2: Shipped, 3: Out for delivery, 4: Delivered
-    },
-    {
-      'id': 'NF-87102',
-      'date': '24 Aug 2026',
-      'status': 'Delivered',
-      'statusColor': const Color(0xFF16A34A),
-      'statusBg': const Color(0xFFDCFCE7),
-      'title': 'Casual Hoodie Black + Shaker',
-      'variant': 'Size: L • 2 Items',
-      'price': 92.00,
-      'items': 2,
-      'image': 'https://images.unsplash.com/photo-1509967419530-da38b4704bc6?w=400&auto=format&fit=crop&q=80',
-      'eta': 'Delivered on Mon, 24 Aug',
-      'step': 4,
-    },
-    {
-      'id': 'NF-84910',
-      'date': '12 Aug 2026',
-      'status': 'Delivered',
-      'statusColor': const Color(0xFF16A34A),
-      'statusBg': const Color(0xFFDCFCE7),
-      'title': 'Seamless Gym Top & Leggings',
-      'variant': 'Size: M • Color: Lavender',
-      'price': 48.00,
-      'items': 1,
-      'image': 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&auto=format&fit=crop&q=80',
-      'eta': 'Delivered on Wed, 12 Aug',
-      'step': 4,
-    },
   ];
 
   @override
@@ -85,6 +41,11 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
         });
       }
     });
+
+    final user = UserBackendService.instance.currentUser;
+    if (user != null && user.uid.isNotEmpty) {
+      OrdersBackendService.instance.fetchUserOrders(user.uid);
+    }
   }
 
   @override
@@ -99,47 +60,46 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
       backgroundColor: const Color(0xFFFBFBFD),
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 110),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              // 1. Top Header with Back Button
-              StaggeredSlideFade(
-                index: 0,
-                child: _buildHeader(),
+        child: AnimatedBuilder(
+          animation: OrdersBackendService.instance,
+          builder: (context, _) {
+            final ordersService = OrdersBackendService.instance;
+            final userOrders = ordersService.userOrders;
+            final isLoading = ordersService.isLoadingOrders;
+
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 110),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  StaggeredSlideFade(index: 0, child: _buildHeader()),
+                  const SizedBox(height: 18),
+                  StaggeredSlideFade(index: 1, child: _buildFilterChips()),
+                  const SizedBox(height: 16),
+
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Center(child: CircularProgressIndicator(color: Color(0xFF16A34A))),
+                    )
+                  else if (userOrders.isEmpty)
+                    _buildEmptyOrdersState()
+                  else
+                    ...List.generate(userOrders.length, (index) {
+                      final order = userOrders[index];
+                      return StaggeredSlideFade(
+                        index: index + 2,
+                        child: _buildOrderCard(order),
+                      );
+                    }),
+
+                  const SizedBox(height: 20),
+                ],
               ),
-
-              const SizedBox(height: 16),
-
-              // 2. Filter Pills
-              StaggeredSlideFade(
-                index: 1,
-                child: _buildFilterPills(),
-              ),
-
-              const SizedBox(height: 20),
-
-              // 3. Orders List
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: _orders.length,
-                itemBuilder: (context, index) {
-                  final order = _orders[index];
-                  return StaggeredSlideFade(
-                    index: 2 + index,
-                    child: _buildOrderCard(order),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 10),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -149,7 +109,6 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           GestureDetector(
             onTap: () {
@@ -164,49 +123,41 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
                 color: Colors.white,
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Color(0xFF0F172A),
-                size: 16,
-              ),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 16),
             ),
           ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'My Orders',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF0F172A),
-                        letterSpacing: -0.8,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _buildAnimatedBadge(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(_badgeIcons[_badgeIconIndex], color: const Color(0xFF16A34A), size: 14),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 3),
                 Text(
-                  'Track & manage your orders 📦',
+                  'Root Collection: orders',
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11.5,
+                    fontSize: 11,
+                    color: const Color(0xFF16A34A),
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -217,38 +168,15 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
     );
   }
 
-  Widget _buildAnimatedBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFFDCFCE7)],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
-      ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        child: Icon(
-          _badgeIcons[_badgeIconIndex],
-          key: ValueKey<int>(_badgeIconIndex),
-          color: const Color(0xFF0284C7),
-          size: 16,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterPills() {
+  Widget _buildFilterChips() {
     return SizedBox(
       height: 36,
       child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: _filters.length,
         itemBuilder: (context, index) {
-          final bool isSelected = _selectedFilterIndex == index;
+          final isSelected = _selectedFilterIndex == index;
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
@@ -256,7 +184,7 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
             },
             child: Container(
               margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected ? const Color(0xFF0F172A) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
@@ -267,9 +195,9 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
               child: Text(
                 _filters[index],
                 style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11.5,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  color: isSelected ? Colors.white : const Color(0xFF475569),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : const Color(0xFF64748B),
                 ),
               ),
             ),
@@ -279,18 +207,61 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
     );
   }
 
+  Widget _buildEmptyOrdersState() {
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        children: [
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.shopping_bag_outlined, size: 48, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Orders Placed Yet',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Your orders will appear here in real-time.',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOrderCard(Map<String, dynamic> order) {
+    final orderId = order['id'] ?? 'NF-ORD';
+    final date = order['date'] ?? 'Recent';
+    final status = order['status'] ?? 'Placed';
+    final totalAmount = (order['totalAmount'] as num?)?.toDouble() ?? 0.0;
+    final title = order['title'] ?? 'Order Item';
+    final image = order['image'] ?? 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-            blurRadius: 12,
+            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -298,63 +269,55 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: ID + Status
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    order['id'] as String,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                  Text(
-                    order['date'] as String,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF94A3B8),
-                    ),
-                  ),
-                ],
+              Text(
+                'Order #$orderId',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: order['statusBg'] as Color,
-                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  order['status'] as String,
+                  status.toUpperCase(),
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    color: order['statusColor'] as Color,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF16A34A),
                   ),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 14),
-
-          // Product Thumbnail & Info
+          const SizedBox(height: 4),
+          Text(
+            date,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.network(
-                  order['image'] as String,
-                  width: 65,
-                  height: 65,
-                  fit: BoxFit.cover,
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  image: DecorationImage(
+                    image: NetworkImage(image.isNotEmpty ? image : 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400'),
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -363,7 +326,7 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order['title'] as String,
+                      title,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -374,68 +337,21 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      order['variant'] as String,
+                      '${order['items'] ?? 1} item(s)',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
                         color: const Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '\$${(order['price'] as double).toStringAsFixed(2)}',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0F172A),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // Actions
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Track Order',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF16A34A),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Buy Again',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
+              Text(
+                '₹${totalAmount.toStringAsFixed(0)}',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
                 ),
               ),
             ],
