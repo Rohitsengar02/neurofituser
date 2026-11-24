@@ -2,6 +2,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'constants/api_constants.dart';
+import 'demo/demo_backend.dart';
 import 'screens/splash_screen.dart';
 import 'screens/privacy_policy_screen.dart';
 import 'screens/terms_of_service_screen.dart';
@@ -10,11 +13,21 @@ import 'theme/app_theme.dart';
 
 import 'services/fcm_notification_service.dart';
 
-void main() async {
+void main() {
+  if (ApiConstants.demoMode) {
+    // Answer every backend call on the device with demo data.
+    final realClient = http.Client();
+    http.runWithClient(_startApp, () => DemoBackendClient(realClient));
+  } else {
+    _startApp();
+  }
+}
+
+Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    // Firebase has no web config yet, so the web preview runs without it.
-    if (kIsWeb) throw Exception('Firebase skipped on web');
+    // No Firebase in demo mode. Firebase also has no web config yet.
+    if (ApiConstants.demoMode || kIsWeb) throw Exception('Firebase skipped');
     await Firebase.initializeApp();
     await FcmNotificationService.instance.initialize();
   } catch (e) {

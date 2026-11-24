@@ -16,13 +16,14 @@ class FcmNotificationService {
   FcmNotificationService._internal();
   static final FcmNotificationService instance = FcmNotificationService._internal();
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  FirebaseMessaging get _fcm => FirebaseMessaging.instance;
   bool _initialized = false;
   String? _token;
 
   String? get fcmToken => _token;
 
   Future<void> initialize() async {
+    if (ApiConstants.demoMode) return;
     if (_initialized) return;
     _initialized = true;
 
@@ -98,6 +99,7 @@ class FcmNotificationService {
   }
 
   Future<void> subscribeUserTopic(String uid) async {
+    if (ApiConstants.demoMode) return;
     if (uid.isEmpty) return;
     try {
       await _fcm.subscribeToTopic('user_$uid');

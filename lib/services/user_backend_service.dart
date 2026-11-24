@@ -129,6 +129,7 @@ class UserBackendService extends ChangeNotifier {
   // REAL-TIME SOCKET.IO
   // -------------------------------------------------------------
   void initSocket() {
+    if (ApiConstants.demoMode) return;
     if (_socket != null && _socket!.connected) return;
 
     try {
@@ -305,6 +306,19 @@ class UserBackendService extends ChangeNotifier {
   // 2. AUTHENTICATION (GOOGLE & EMAIL)
   // -------------------------------------------------------------
   Future<UserModel?> signInWithRealGoogle() async {
+    if (ApiConstants.demoMode) {
+      final user = UserModel(
+        uid: 'demo',
+        name: 'Demo Athlete',
+        email: 'demo@neurofit.app',
+        authProvider: 'google',
+        hasCompletedOnboarding: false,
+      );
+      _currentUser = user;
+      await _saveSessionLocally(user);
+      notifyListeners();
+      return user;
+    }
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
@@ -427,12 +441,14 @@ class UserBackendService extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
-      try {
-        await _googleSignIn.signOut();
-      } catch (_) {}
-      try {
-        await FirebaseAuth.instance.signOut();
-      } catch (_) {}
+      if (!ApiConstants.demoMode) {
+        try {
+          await _googleSignIn.signOut();
+        } catch (_) {}
+        try {
+          await FirebaseAuth.instance.signOut();
+        } catch (_) {}
+      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       _currentUser = null;
@@ -447,6 +463,20 @@ class UserBackendService extends ChangeNotifier {
   }
 
   Future<void> checkAuthStatus() async {
+    if (ApiConstants.demoMode) {
+      // Demo: the signed-in profile lives only on this device.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final saved = prefs.getString('user_session_json');
+        _currentUser = (saved != null && saved.isNotEmpty)
+            ? UserModel.fromJson(jsonDecode(saved) as Map<String, dynamic>)
+            : null;
+      } catch (_) {
+        _currentUser = null;
+      }
+      notifyListeners();
+      return;
+    }
     try {
       final fbUser = FirebaseAuth.instance.currentUser;
 

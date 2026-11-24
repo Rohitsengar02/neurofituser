@@ -3,6 +3,11 @@ import 'package:flutter/foundation.dart';
 
 /// Centralized API & Server Configuration with instant Local vs Live Render toggle
 class ApiConstants {
+  /// UI-only demo: every backend call is answered on the device with demo data
+  /// (see lib/demo/demo_backend.dart). Build with --dart-define=DEMO_MODE=false
+  /// to talk to the real backend again.
+  static const bool demoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: true);
+
   /// 🔘 SWITCH HERE: Set to `true` for Local Backend, or `false` for Live Render Backend
   static const bool useLocalBackend = false;
 

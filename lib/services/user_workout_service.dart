@@ -109,6 +109,7 @@ class UserWorkoutService extends ChangeNotifier {
       '${uid}_${workoutId}_$dayNumber';
 
   void _initSocket() {
+    if (ApiConstants.demoMode) return;
     try {
       _socket = IO.io(
         ApiConstants.socketUrl,

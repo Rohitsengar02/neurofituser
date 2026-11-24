@@ -76,6 +76,7 @@ class DiscountsBackendService extends ChangeNotifier {
   IO.Socket? _socket;
 
   void _initSocket() {
+    if (ApiConstants.demoMode) return;
     try {
       final socketUri = ApiConstants.socketUrl;
       _socket = IO.io(
