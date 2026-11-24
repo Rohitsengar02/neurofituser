@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 /// Centralized API & Server Configuration with instant Local vs Live Render toggle
 class ApiConstants {
   /// 🔘 SWITCH HERE: Set to `true` for Local Backend, or `false` for Live Render Backend
-  static const bool useLocalBackend = true;
+  static const bool useLocalBackend = false;
 
   /// Live Render Production Base URL
   static const String liveRenderUrl = 'https://neurofit-full.onrender.com';
