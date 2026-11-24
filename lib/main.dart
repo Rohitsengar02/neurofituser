@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
@@ -12,6 +13,8 @@ import 'services/fcm_notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    // Firebase has no web config yet, so the web preview runs without it.
+    if (kIsWeb) throw Exception('Firebase skipped on web');
     await Firebase.initializeApp();
     await FcmNotificationService.instance.initialize();
   } catch (e) {

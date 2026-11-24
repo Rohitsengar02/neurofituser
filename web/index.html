@@ -416,7 +416,7 @@
 
     // AUTOMATIC DETECTION: If running on localhost or 127.0.0.1, immediately launch the Real Flutter App!
     const host = window.location.hostname;
-    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || window.location.search.includes('app=true');
+    const isLocalhost = true || host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || window.location.search.includes('app=true');
 
     if (isLocalhost) {
       window.addEventListener('DOMContentLoaded', () => {
