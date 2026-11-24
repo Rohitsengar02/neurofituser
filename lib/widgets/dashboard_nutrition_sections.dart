@@ -4,6 +4,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import '../services/user_nutrition_service.dart';
+import '../screens/log_meal_screen.dart';
+import '../screens/date_nutrition_detail_screen.dart';
 
 class DashboardNutritionTabContent extends StatefulWidget {
   const DashboardNutritionTabContent({super.key});
@@ -18,15 +22,67 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
   late AnimationController _staggerController;
   late AnimationController _shimmerController;
   late AnimationController _calorieRingController;
+  late ScrollController _calendarScrollController;
+  late List<DateTime> _carouselDates;
 
   // Interactive states
-  int _waterGlasses = 6;
-  final Set<int> _loggedMeals = {0, 1}; // Breakfast & Lunch logged
   int _selectedRecipeCategory = 0;
+  DateTime _selectedDate = DateTime.now();
+  UserDailyNutritionModel? _selectedDateNutrition;
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  UserDailyNutritionModel get _activeNutrition {
+    if (_isSameDay(_selectedDate, DateTime.now())) {
+      return UserNutritionService.instance.currentNutrition;
+    }
+    return _selectedDateNutrition ?? UserDailyNutritionModel.empty();
+  }
+
+  Future<void> _selectDate(DateTime date) async {
+    final newDate = DateTime(date.year, date.month, date.day);
+    final isToday = _isSameDay(newDate, DateTime.now());
+
+    setState(() {
+      _selectedDate = newDate;
+    });
+
+    if (!isToday) {
+      final dateKey = _formatDateKey(newDate);
+      final model = await UserNutritionService.instance.fetchNutritionForDate(dateKey);
+      if (mounted && _formatDateKey(_selectedDate) == dateKey) {
+        setState(() {
+          _selectedDateNutrition = model;
+        });
+      }
+    } else {
+      setState(() {
+        _selectedDateNutrition = null;
+      });
+    }
+
+    if (_calorieRingController.status == AnimationStatus.completed) {
+      _calorieRingController.reset();
+      _calorieRingController.forward();
+    }
+  }
+
+  String _formatFriendlyDate(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${dt.day} ${months[dt.month - 1]} ${dt.year}";
+  }
 
   @override
   void initState() {
     super.initState();
+
+    final today = DateTime.now();
+    _carouselDates = List.generate(28, (index) {
+      return DateTime(today.year, today.month, today.day).subtract(Duration(days: 20 - index));
+    });
+    _calendarScrollController = ScrollController();
 
     // 1. Shimmer Controller for Skeleton
     _shimmerController = AnimationController(
@@ -46,6 +102,24 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
       duration: const Duration(milliseconds: 1500),
     );
 
+    // Connect to UserNutritionService
+    UserNutritionService.instance.addListener(_onNutritionUpdate);
+    UserNutritionService.instance.fetchTodayNutrition();
+    UserNutritionService.instance.fetchNutritionHistory();
+    UserNutritionService.instance.fetchDailyFeaturedRecipes();
+    UserNutritionService.instance.fetchMealSuggestions();
+
+    // Center calendar on today
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_calendarScrollController.hasClients) {
+        final screenW = MediaQuery.of(context).size.width;
+        final targetOffset = (20 * 74.0) - (screenW / 2) + 32.0;
+        _calendarScrollController.jumpTo(
+          targetOffset.clamp(0.0, _calendarScrollController.position.maxScrollExtent),
+        );
+      }
+    });
+
     // Simulate skeleton loading -> Stagger Blur Reveal
     Timer(const Duration(milliseconds: 650), () {
       if (mounted) {
@@ -56,34 +130,73 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
     });
   }
 
+  void _onNutritionUpdate() {
+    if (mounted) {
+      setState(() {});
+      if (_calorieRingController.status == AnimationStatus.completed) {
+        _calorieRingController.reset();
+        _calorieRingController.forward();
+      }
+    }
+  }
+
   @override
   void dispose() {
+    UserNutritionService.instance.removeListener(_onNutritionUpdate);
+    _calendarScrollController.dispose();
     _shimmerController.dispose();
     _staggerController.dispose();
     _calorieRingController.dispose();
     super.dispose();
   }
 
-  void _toggleWaterGlass(int index) {
-    HapticFeedback.lightImpact();
-    setState(() {
-      if (_waterGlasses == index + 1) {
-        _waterGlasses = index;
-      } else {
-        _waterGlasses = index + 1;
-      }
-    });
+  String _formatDateKey(DateTime dt) {
+    final year = dt.year.toString().padLeft(4, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    final day = dt.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
   }
 
-  void _toggleMeal(int index) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      if (_loggedMeals.contains(index)) {
-        _loggedMeals.remove(index);
-      } else {
-        _loggedMeals.add(index);
-      }
-    });
+  void _toggleWaterGlass(int index) {
+    HapticFeedback.lightImpact();
+    final current = UserNutritionService.instance.currentNutrition.waterGlasses;
+    final newGlasses = (current == index + 1) ? index : index + 1;
+    UserNutritionService.instance.updateWater(glasses: newGlasses);
+  }
+
+  String _getTodayFormattedDate() {
+    final now = DateTime.now();
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}";
+  }
+
+  IconData _getMealCategoryIcon(String category, String name) {
+    final c = category.toLowerCase();
+    final n = name.toLowerCase();
+    if (n.contains('egg') || c.contains('egg')) return Icons.egg_alt_rounded;
+    if (n.contains('chicken') || n.contains('turkey') || c.contains('poultry')) return Icons.lunch_dining_rounded;
+    if (n.contains('beef') || n.contains('steak') || n.contains('meat')) return Icons.restaurant_rounded;
+    if (n.contains('fish') || n.contains('salmon') || n.contains('tuna') || c.contains('seafood')) return Icons.set_meal_rounded;
+    if (n.contains('milk') || n.contains('yogurt') || n.contains('paneer') || n.contains('cheese') || c.contains('dairy')) return Icons.local_drink_rounded;
+    if (n.contains('oat') || n.contains('bread') || n.contains('rice') || c.contains('grain')) return Icons.bakery_dining_rounded;
+    if (n.contains('apple') || n.contains('banana') || n.contains('berry') || c.contains('fruit')) return Icons.apple_rounded;
+    if (n.contains('salad') || n.contains('spinach') || n.contains('broccoli') || c.contains('veg')) return Icons.eco_rounded;
+    if (n.contains('shake') || n.contains('protein') || n.contains('whey')) return Icons.fitness_center_rounded;
+    if (n.contains('coffee') || n.contains('tea') || c.contains('beverage')) return Icons.local_cafe_rounded;
+    return Icons.restaurant_menu_rounded;
+  }
+
+  Color _getMealCategoryColor(String category, String name) {
+    final c = category.toLowerCase();
+    final n = name.toLowerCase();
+    if (n.contains('fish') || n.contains('salmon') || c.contains('seafood')) return const Color(0xFF0284C7);
+    if (n.contains('chicken') || n.contains('turkey') || c.contains('poultry') || n.contains('beef')) return const Color(0xFFEA580C);
+    if (n.contains('salad') || n.contains('spinach') || c.contains('veg')) return const Color(0xFF16A34A);
+    if (n.contains('egg') || c.contains('egg') || c.contains('dairy')) return const Color(0xFFD97706);
+    if (n.contains('oat') || c.contains('grain')) return const Color(0xFFB45309);
+    if (n.contains('apple') || n.contains('berry') || c.contains('fruit')) return const Color(0xFFE11D48);
+    return const Color(0xFF6366F1);
   }
 
   Widget _buildStaggeredSection({
@@ -125,12 +238,21 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        // 01. Today's Nutrition — Hero Section (Stagger 0.0 -> 0.20)
+        // 00. Top Carousel Calendar (Stagger 0.0 -> 0.16)
         _buildStaggeredSection(
           startInterval: 0.0,
-          endInterval: 0.20,
+          endInterval: 0.16,
+          child: _buildCalendarCarouselSection(),
+        ),
+
+        const SizedBox(height: 18),
+
+        // 01. Today's Nutrition — Hero Section (Stagger 0.06 -> 0.22)
+        _buildStaggeredSection(
+          startInterval: 0.06,
+          endInterval: 0.22,
           child: _buildTodayNutritionHeroSection(),
         ),
 
@@ -181,28 +303,19 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
 
         const SizedBox(height: 26),
 
-        // 07. Healthy Picks For You 🥑 (Stagger 0.50 -> 0.68)
+        // 07. Healthy Picks For You 🥑 (Stagger 0.50 -> 0.70)
         _buildStaggeredSection(
           startInterval: 0.50,
-          endInterval: 0.68,
+          endInterval: 0.70,
           child: _buildHealthyPicksCarouselSection(),
         ),
 
         const SizedBox(height: 26),
 
-        // 08. Smart Meal Plans (Stagger 0.58 -> 0.76)
+        // 08. Recipes & Food Discovery 🍽️ (Stagger 0.60 -> 0.80)
         _buildStaggeredSection(
-          startInterval: 0.58,
-          endInterval: 0.76,
-          child: _buildSmartMealPlansSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 09. Recipes & Food Discovery 🍽️ (Stagger 0.66 -> 0.84)
-        _buildStaggeredSection(
-          startInterval: 0.66,
-          endInterval: 0.84,
+          startInterval: 0.60,
+          endInterval: 0.80,
           child: _buildRecipesDiscoverySection(),
         ),
 
@@ -248,7 +361,21 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // Skeleton Calendar Carousel
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(
+                  5,
+                  (i) => _buildShimmerBox(width: 62, height: 88, borderRadius: 18),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 18),
 
             // Skeleton Hero Calorie Ring Card
             Padding(
@@ -318,9 +445,316 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
   }
 
   // -------------------------------------------------------------
+  // 00. CAROUSEL CALENDAR SECTION (TOP OF NUTRITION TAB)
+  // -------------------------------------------------------------
+  Widget _buildCalendarCarouselSection() {
+    final now = DateTime.now();
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    final isViewingToday = _isSameDay(_selectedDate, now);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Month & Year + Jump to Date Button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_month_rounded,
+                      size: 17,
+                      color: Color(0xFF10B981),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${months[_selectedDate.month - 1]} ${_selectedDate.year}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        isViewingToday ? 'Real-time Daily Log' : 'Viewing Log for ${_formatFriendlyDate(_selectedDate)}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isViewingToday ? const Color(0xFF64748B) : const Color(0xFF10B981),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () async {
+                  HapticFeedback.lightImpact();
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: const ColorScheme.dark(
+                            primary: Color(0xFF10B981),
+                            onPrimary: Colors.white,
+                            surface: Color(0xFF1E293B),
+                            onSurface: Colors.white,
+                          ),
+                          dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF0F172A)),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null && mounted) {
+                    _selectDate(picked);
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.date_range_rounded, size: 14, color: Color(0xFF475569)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'All Dates',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF334155),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Horizontal Carousel List of Days
+          SizedBox(
+            height: 88,
+            child: ListView.separated(
+              controller: _calendarScrollController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _carouselDates.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final date = _carouselDates[index];
+                final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+                final isSelected = _isSameDay(date, _selectedDate);
+                final isPast = date.isBefore(DateTime(now.year, now.month, now.day));
+                final dateKey = _formatDateKey(date);
+
+                final history = UserNutritionService.instance.historyMap[dateKey];
+                final hasLogged = isToday
+                    ? (UserNutritionService.instance.currentNutrition.consumedCalories > 0 ||
+                        UserNutritionService.instance.currentNutrition.meals.isNotEmpty)
+                    : (history != null && history['hasLogged'] == true);
+
+                return InkWell(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _selectDate(date);
+                  },
+                  borderRadius: BorderRadius.circular(18),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 62,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF0F172A),
+                                Color(0xFF1E293B),
+                              ],
+                            )
+                          : null,
+                      color: isSelected ? null : Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF10B981)
+                            : (hasLogged
+                                ? const Color(0xFF10B981).withValues(alpha: 0.5)
+                                : const Color(0xFFE2E8F0)),
+                        width: isSelected ? 2.5 : 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isSelected
+                              ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                              : (hasLogged
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.03)),
+                          blurRadius: isSelected ? 12 : 4,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          isToday ? 'TODAY' : weekdays[date.weekday - 1].toUpperCase(),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                            color: isSelected
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${date.day}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                            color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        // Logged status indicator dot
+                        if (hasLogged)
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFF16A34A),
+                            ),
+                          )
+                        else
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isPast
+                                  ? Colors.transparent
+                                  : (isSelected
+                                      ? Colors.white.withValues(alpha: 0.2)
+                                      : Colors.transparent),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Date indicator banner if viewing non-today date
+          if (!isViewingToday) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.history_rounded, color: Color(0xFF10B981), size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Viewing ${_formatFriendlyDate(_selectedDate)} Data',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  InkWell(
+                    onTap: () => _selectDate(DateTime.now()),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Reset to Today',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF10B981),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
   // 01. TODAY'S NUTRITION — HERO SECTION (ZERO OVERFLOW)
   // -------------------------------------------------------------
   Widget _buildTodayNutritionHeroSection() {
+    final nutrition = _activeNutrition;
+    final isToday = _isSameDay(_selectedDate, DateTime.now());
+    final dateKey = _formatDateKey(_selectedDate);
+
+    final consumed = nutrition.consumedCalories;
+    final target = nutrition.targetCalories > 0 ? nutrition.targetCalories : 2400;
+    final remaining = (target - consumed).clamp(0, 99999);
+    final targetProtein = nutrition.targetProtein > 0 ? nutrition.targetProtein : 160.0;
+    final targetCarbs = nutrition.targetCarbs > 0 ? nutrition.targetCarbs : 220.0;
+    final targetFat = nutrition.targetFat > 0 ? nutrition.targetFat : 70.0;
+
+    final proteinRatio = (nutrition.consumedProtein / targetProtein).clamp(0.0, 1.0);
+    final carbsRatio = (nutrition.consumedCarbs / targetCarbs).clamp(0.0, 1.0);
+    final fatRatio = (nutrition.consumedFat / targetFat).clamp(0.0, 1.0);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Container(
@@ -340,7 +774,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Header: Date & Edit Goal Pill
+            // Top Header: Date & + Log Meal Action Button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -352,7 +786,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                         children: [
                           Flexible(
                             child: Text(
-                              "Today's Nutrition",
+                              isToday ? "Today's Nutrition" : "${_formatFriendlyDate(_selectedDate)} Nutrition",
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.plusJakartaSans(
@@ -369,7 +803,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "Wednesday, 27 Aug",
+                        isToday ? _getTodayFormattedDate() : "Selected Date Log",
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
@@ -380,26 +814,43 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                   ),
                 ),
                 const SizedBox(width: 8),
+
+                // + Log Meal Button
                 GestureDetector(
-                  onTap: () => HapticFeedback.lightImpact(),
+                  onTap: () async {
+                    HapticFeedback.lightImpact();
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => LogMealScreen(targetDate: dateKey)),
+                    );
+                    _selectDate(_selectedDate);
+                  },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF16A34A), Color(0xFF15803D)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.tune_rounded, size: 12, color: Color(0xFF475569)),
+                        const Icon(Icons.add_rounded, size: 14, color: Colors.white),
                         const SizedBox(width: 4),
                         Text(
-                          "Goal: 2,200",
+                          "+ Log Meal",
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10.5,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFF475569),
+                            color: Colors.white,
                           ),
                         ),
                       ],
@@ -420,7 +871,8 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                   child: AnimatedBuilder(
                     animation: _calorieRingController,
                     builder: (context, child) {
-                      final progress = (1680 / 2200) * CurvedAnimation(
+                      final rawProgress = target > 0 ? (consumed / target).clamp(0.0, 1.0) : 0.0;
+                      final progress = rawProgress * CurvedAnimation(
                         parent: _calorieRingController,
                         curve: Curves.easeOutCubic,
                       ).value;
@@ -432,7 +884,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                "1,680",
+                                "$consumed",
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
@@ -457,22 +909,22 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                 ),
                 const SizedBox(width: 12),
 
-                // Intake & Burn Side Cards
+                // Intake & Goal Side Cards
                 Expanded(
                   child: Column(
                     children: [
                       _buildHeroStatPill(
                         icon: Icons.restaurant_rounded,
                         label: "Food Intake",
-                        value: "1,680 kcal",
+                        value: "$consumed kcal",
                         color: const Color(0xFF16A34A),
                         bg: const Color(0xFFDCFCE7),
                       ),
                       const SizedBox(height: 8),
                       _buildHeroStatPill(
-                        icon: Icons.local_fire_department_rounded,
-                        label: "Exercise Burn",
-                        value: "420 kcal",
+                        icon: Icons.track_changes_rounded,
+                        label: "Daily Target",
+                        value: "$target kcal",
                         color: const Color(0xFFEA580C),
                         bg: const Color(0xFFFFF7ED),
                       ),
@@ -480,7 +932,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                       _buildHeroStatPill(
                         icon: Icons.hourglass_bottom_rounded,
                         label: "Remaining",
-                        value: "520 kcal",
+                        value: "$remaining kcal",
                         color: const Color(0xFF2563EB),
                         bg: const Color(0xFFDBEAFE),
                       ),
@@ -491,14 +943,14 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
             ),
             const SizedBox(height: 16),
 
-            // Bottom: Macro Progress Bars (Protein, Carbs, Fats)
+            // Bottom: Macro Progress Bars (Protein, Carbs, Fats) starting from 0
             Row(
               children: [
                 Expanded(
                   child: _buildMacroProgressItem(
                     name: "Protein",
-                    amount: "120 / 160g",
-                    percent: 0.75,
+                    amount: "${nutrition.consumedProtein.toStringAsFixed(0)} / ${targetProtein.toStringAsFixed(0)}g",
+                    percent: proteinRatio,
                     color: const Color(0xFF16A34A),
                     icon: "🟢",
                   ),
@@ -507,8 +959,8 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                 Expanded(
                   child: _buildMacroProgressItem(
                     name: "Carbs",
-                    amount: "180 / 220g",
-                    percent: 0.81,
+                    amount: "${nutrition.consumedCarbs.toStringAsFixed(0)} / ${targetCarbs.toStringAsFixed(0)}g",
+                    percent: carbsRatio,
                     color: const Color(0xFF8B5CF6),
                     icon: "🟣",
                   ),
@@ -517,8 +969,8 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                 Expanded(
                   child: _buildMacroProgressItem(
                     name: "Fats",
-                    amount: "60 / 70g",
-                    percent: 0.85,
+                    amount: "${nutrition.consumedFat.toStringAsFixed(0)} / ${targetFat.toStringAsFixed(0)}g",
+                    percent: fatRatio,
                     color: const Color(0xFFF59E0B),
                     icon: "🟠",
                   ),
@@ -643,6 +1095,21 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
   // 02. TODAY'S MACRO BALANCE
   // -------------------------------------------------------------
   Widget _buildMacroBalanceSection() {
+    final nutrition = _activeNutrition;
+    final dateKey = _formatDateKey(_selectedDate);
+    final pGrams = "${nutrition.consumedProtein.toStringAsFixed(0)}g";
+    final cGrams = "${nutrition.consumedCarbs.toStringAsFixed(0)}g";
+    final fGrams = "${nutrition.consumedFat.toStringAsFixed(0)}g";
+    final calStr = "${nutrition.consumedCalories}";
+
+    final targetP = nutrition.targetProtein > 0 ? nutrition.targetProtein : 160.0;
+    final targetC = nutrition.targetCarbs > 0 ? nutrition.targetCarbs : 220.0;
+    final targetF = nutrition.targetFat > 0 ? nutrition.targetFat : 70.0;
+
+    final pPct = "${((nutrition.consumedProtein / targetP) * 100).clamp(0, 999).toStringAsFixed(0)}%";
+    final cPct = "${((nutrition.consumedCarbs / targetC) * 100).clamp(0, 999).toStringAsFixed(0)}%";
+    final fPct = "${((nutrition.consumedFat / targetF) * 100).clamp(0, 999).toStringAsFixed(0)}%";
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Container(
@@ -682,9 +1149,16 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                     ),
                   ),
                   GestureDetector(
-                    onTap: () => HapticFeedback.lightImpact(),
+                    onTap: () async {
+                      HapticFeedback.lightImpact();
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => LogMealScreen(targetDate: dateKey)),
+                      );
+                      _selectDate(_selectedDate);
+                    },
                     child: Text(
-                      'View Details →',
+                      '+ Log Meal →',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w800,
@@ -699,17 +1173,17 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
               // 4 Cards Grid
               Row(
                 children: [
-                  Expanded(child: _buildMacroCardWidget("Protein", "120g", "29%", const Color(0xFF16A34A))),
+                  Expanded(child: _buildMacroCardWidget("Protein", pGrams, pPct, const Color(0xFF16A34A))),
                   const SizedBox(width: 14),
-                  Expanded(child: _buildMacroCardWidget("Carbs", "180g", "43%", const Color(0xFF8B5CF6))),
+                  Expanded(child: _buildMacroCardWidget("Carbs", cGrams, cPct, const Color(0xFF8B5CF6))),
                 ],
               ),
               const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: _buildMacroCardWidget("Fats", "60g", "14%", const Color(0xFFF59E0B))),
+                  Expanded(child: _buildMacroCardWidget("Fats", fGrams, fPct, const Color(0xFFF59E0B))),
                   const SizedBox(width: 14),
-                  Expanded(child: _buildMacroCardWidget("Calories", "1,680", "Kcal", const Color(0xFFEC4899))),
+                  Expanded(child: _buildMacroCardWidget("Calories", calStr, "Kcal", const Color(0xFFEC4899))),
                 ],
               ),
             ],
@@ -780,173 +1254,82 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
   }
 
   // -------------------------------------------------------------
-  // 03. WATER INTAKE 💧 (ZERO OVERFLOW, AUTO SCALING)
+  // 03. WATER INTAKE 💧 (TILTING NATURAL WATER CARD)
   // -------------------------------------------------------------
   Widget _buildWaterIntakeSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: AspectRatio(
-        aspectRatio: 3 / 4,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            image: const DecorationImage(
-              image: AssetImage('assets/images/hydration_bg.png'),
-              fit: BoxFit.cover,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.15),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.6),
-                  Colors.black.withValues(alpha: 0.9),
-                ],
-                stops: const [0.0, 0.4, 0.7, 1.0],
-              ),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text("💧", style: TextStyle(fontSize: 18)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Hydration',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        "$_waterGlasses / 8 glasses • ${(_waterGlasses * 0.25).toStringAsFixed(1)}L",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+    final nutrition = _activeNutrition;
+    final dateKey = _formatDateKey(_selectedDate);
 
-                // 8 Animated Interactive Water Glasses
-                Row(
-                  children: List.generate(8, (index) {
-                    final isFilled = index < _waterGlasses;
-
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                        child: GestureDetector(
-                          onTap: () => _toggleWaterGlass(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeOutCubic,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: isFilled ? const Color(0xFF38BDF8) : Colors.white.withValues(alpha: 0.15),
-                              borderRadius: const BorderRadius.vertical(
-                                bottom: Radius.circular(10),
-                                top: Radius.circular(4),
-                              ),
-                              border: Border.all(
-                                color: isFilled ? const Color(0xFF38BDF8) : Colors.white.withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
-                              boxShadow: isFilled
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(0xFF38BDF8).withValues(alpha: 0.4),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: Center(
-                              child: Icon(
-                                isFilled ? Icons.water_drop_rounded : Icons.water_drop_outlined,
-                                color: isFilled ? Colors.white : Colors.white.withValues(alpha: 0.5),
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return TiltingNaturalWaterCard(
+      glasses: nutrition.waterGlasses,
+      targetGlasses: nutrition.waterTargetGlasses > 0 ? nutrition.waterTargetGlasses : 8,
+      onGlassesChanged: (newGlasses) {
+        UserNutritionService.instance.updateWater(glasses: newGlasses, date: dateKey);
+        _selectDate(_selectedDate);
+      },
     );
   }
 
   // -------------------------------------------------------------
   // 04. TODAY'S MEALS CAROUSEL
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // 04. TODAY'S MEALS CAROUSEL (NO IMAGES - FOOD ICONS ONLY + USDA SUGGESTIONS)
+  // -------------------------------------------------------------
   Widget _buildTodaysMealsSection() {
-    final meals = [
+    final nutrition = _activeNutrition;
+    final loggedMeals = nutrition.loggedMeals;
+    final dateKey = _formatDateKey(_selectedDate);
+
+    // Standard daily slots to always present to the user
+    final mealSlots = [
       {
-        'type': 'Breakfast',
-        'calories': '420 kcal',
-        'food': 'Oats + berries & whey',
+        'slot': 'breakfast',
+        'label': 'Breakfast',
         'time': '8:30 AM',
-        'image': 'https://images.unsplash.com/photo-1517673132405-a56a62b18caf?q=80&w=400&auto=format&fit=crop',
+        'defaultName': 'Rolled Oats & Berry Whey Bowl',
+        'defaultSource': 'USDA FoodData',
+        'defaultCal': 380,
+        'defaultP': 26.0,
+        'defaultC': 52.0,
+        'defaultF': 6.0,
+        'category': 'Grains & Oats',
       },
       {
-        'type': 'Lunch',
-        'calories': '540 kcal',
-        'food': 'Brown rice + chicken & veg',
+        'slot': 'lunch',
+        'label': 'Lunch',
         'time': '1:00 PM',
-        'image': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop',
+        'defaultName': 'Grilled Chicken Breast & Brown Rice',
+        'defaultSource': 'USDA FoodData',
+        'defaultCal': 520,
+        'defaultP': 44.0,
+        'defaultC': 58.0,
+        'defaultF': 9.0,
+        'category': 'Poultry & Meat',
       },
       {
-        'type': 'Snack',
-        'calories': '180 kcal',
-        'food': 'Mixed almonds & walnuts',
+        'slot': 'snack',
+        'label': 'Snack',
         'time': '4:30 PM',
-        'image': 'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?q=80&w=400&auto=format&fit=crop',
+        'defaultName': 'Greek Yogurt with Mixed Almonds',
+        'defaultSource': 'USDA FoodData',
+        'defaultCal': 210,
+        'defaultP': 18.0,
+        'defaultC': 12.0,
+        'defaultF': 10.0,
+        'category': 'Dairy & Eggs',
       },
       {
-        'type': 'Dinner',
-        'calories': '540 kcal',
-        'food': 'Grilled salmon & quinoa',
+        'slot': 'dinner',
+        'label': 'Dinner',
         'time': '8:00 PM',
-        'image': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?q=80&w=400&auto=format&fit=crop',
+        'defaultName': 'Steamed Salmon Fillet & Steamed Broccoli',
+        'defaultSource': 'USDA FoodData',
+        'defaultCal': 480,
+        'defaultP': 42.0,
+        'defaultC': 14.0,
+        'defaultF': 18.0,
+        'category': 'Seafood',
       },
     ];
 
@@ -958,21 +1341,75 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Today's Meals",
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _isSameDay(_selectedDate, DateTime.now()) ? "Today's Meals" : "Meals Logged",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      "${loggedMeals.length} logged",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF15803D),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                'Customize',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
+
+              // + Log Meal Button
+              GestureDetector(
+                onTap: () async {
+                  HapticFeedback.lightImpact();
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => LogMealScreen(targetDate: dateKey)),
+                  );
+                  _selectDate(_selectedDate);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16A34A),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF16A34A).withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_rounded, color: Colors.white, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Log Meal',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -981,137 +1418,264 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
         const SizedBox(height: 14),
 
         SizedBox(
-          height: 215,
+          height: 200,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: meals.length,
+            itemCount: mealSlots.length,
             separatorBuilder: (context, index) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
-              final meal = meals[index];
-              final isLogged = _loggedMeals.contains(index);
+              final slot = mealSlots[index];
+              final slotKey = slot['slot'] as String;
+              final slotLabel = slot['label'] as String;
+              final slotTime = slot['time'] as String;
+
+              // Check if user already logged meal(s) for this slot
+              final matchingLogged = loggedMeals
+                  .where((m) => m.mealType.toLowerCase() == slotKey)
+                  .toList();
+              final isLogged = matchingLogged.isNotEmpty;
+              final activeLogged = isLogged ? matchingLogged.last : null;
+
+              final foodName = isLogged
+                  ? activeLogged!.name
+                  : (slot['defaultName'] as String);
+              final calories = isLogged
+                  ? activeLogged!.calories
+                  : (slot['defaultCal'] as int);
+              final protein = isLogged
+                  ? activeLogged!.protein
+                  : (slot['defaultP'] as double);
+              final category = isLogged
+                  ? activeLogged!.category
+                  : (slot['category'] as String);
+
+              final iconData = _getMealCategoryIcon(category, foodName);
+              final iconColor = _getMealCategoryColor(category, foodName);
 
               return Container(
-                width: 185,
+                width: 195,
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                  border: Border.all(
+                    color: isLogged ? const Color(0xFF86EFAC) : const Color(0xFFF1F5F9),
+                    width: isLogged ? 1.8 : 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                      color: isLogged
+                          ? const Color(0xFF16A34A).withValues(alpha: 0.08)
+                          : const Color(0xFF0F172A).withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                clipBehavior: Clip.antiAlias,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Meal Image with Time Badge
-                    Stack(
+                    // Top: Slot Label & Icon Badge (STRICTLY NO IMAGES - FOOD ICON ONLY)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Image.network(
-                          meal['image']!,
-                          height: 105,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            height: 105,
-                            color: const Color(0xFFF1F5F9),
-                            child: const Icon(Icons.restaurant_rounded, color: Color(0xFFCBD5E1)),
+                        // Thematic Food Icon Container
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: iconColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Icon(iconData, color: iconColor, size: 22),
                           ),
                         ),
-                        // Time Pill
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              meal['time']!,
+                        // Slot Pill & Time
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              slotLabel,
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF0F172A),
                               ),
                             ),
-                          ),
+                            Text(
+                              slotTime,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
 
-                    // Meal Details & Log Action
-                    Padding(
-                      padding: const EdgeInsets.all(10.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                meal['type']!,
+                    // Middle: Food Name & Calories / Source Pill
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          foodName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1E293B),
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "$calories kcal",
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
                                   color: const Color(0xFF0F172A),
                                 ),
                               ),
-                              Text(
-                                meal['calories']!,
+                            ),
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "${protein.toStringAsFixed(0)}g P",
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF16A34A),
+                                  color: const Color(0xFF15803D),
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            meal['food']!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF64748B),
                             ),
-                          ),
-                          const SizedBox(height: 8),
+                          ],
+                        ),
+                      ],
+                    ),
 
-                          // Log Button
-                          GestureDetector(
-                            onTap: () => _toggleMeal(index),
+                    // Bottom Action: Quick Log / Logged State with Delete Option
+                    if (isLogged)
+                      Row(
+                        children: [
+                          Expanded(
                             child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.symmetric(vertical: 6.5),
                               decoration: BoxDecoration(
-                                color: isLogged ? const Color(0xFFDCFCE7) : const Color(0xFF0F172A),
+                                color: const Color(0xFFDCFCE7),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Center(
                                 child: Text(
-                                  isLogged ? '✓ Logged' : '+ Add',
+                                  '✓ Logged',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w800,
-                                    color: isLogged ? const Color(0xFF15803D) : Colors.white,
+                                    color: const Color(0xFF15803D),
                                   ),
                                 ),
                               ),
                             ),
                           ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () async {
+                              HapticFeedback.lightImpact();
+                              await UserNutritionService.instance.deleteMeal(
+                                activeLogged!.id,
+                                date: dateKey,
+                              );
+                              _selectDate(_selectedDate);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEE2E2),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: const Icon(
+                                Icons.delete_outline_rounded,
+                                size: 16,
+                                color: Color(0xFFDC2626),
+                              ),
+                            ),
+                          ),
                         ],
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () async {
+                          HapticFeedback.mediumImpact();
+                          // 1-tap quick add of USDA suggestion
+                          await UserNutritionService.instance.logMeal(
+                            mealType: slotKey,
+                            name: foodName,
+                            category: category,
+                            calories: calories,
+                            protein: protein,
+                            carbs: (slot['defaultC'] as num).toDouble(),
+                            fat: (slot['defaultF'] as num).toDouble(),
+                            quantity: 1.0,
+                            servingSize: '1 serving',
+                            source: slot['defaultSource'] as String,
+                            date: dateKey,
+                          );
+                          _selectDate(_selectedDate);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Logged $foodName (+ $calories kcal)!'),
+                                duration: const Duration(seconds: 2),
+                                backgroundColor: const Color(0xFF16A34A),
+                              ),
+                            );
+                          }
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add_rounded, color: Colors.white, size: 14),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '+ Quick Add',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               );
@@ -1402,29 +1966,60 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
   // -------------------------------------------------------------
   // 07. HEALTHY PICKS FOR YOU 🥑
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // 07. HEALTHY PICKS FOR YOU 🥑 (LIVE FREE API RECIPES)
+  // -------------------------------------------------------------
   Widget _buildHealthyPicksCarouselSection() {
-    final picks = [
+    final liveRecipes = UserNutritionService.instance.dailyFeaturedRecipes;
+
+    // Fallback if still fetching
+    final defaultPicks = [
       {
-        'name': 'Avocado Toast & Egg',
-        'cal': '320 kcal',
-        'image': 'https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=400&auto=format&fit=crop',
+        'title': 'Avocado Toast & Boiled Egg',
+        'calories': 320,
+        'protein': 16.0,
+        'carbs': 24.0,
+        'fat': 18.0,
+        'imageUrl': 'https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=400&auto=format&fit=crop',
       },
       {
-        'name': 'Berry Acai Smoothie',
-        'cal': '250 kcal',
-        'image': 'https://images.unsplash.com/photo-1553530666-ba11a7da3888?q=80&w=400&auto=format&fit=crop',
+        'title': 'Berry Acai & Protein Shake',
+        'calories': 260,
+        'protein': 24.0,
+        'carbs': 28.0,
+        'fat': 4.0,
+        'imageUrl': 'https://images.unsplash.com/photo-1553530666-ba11a7da3888?q=80&w=400&auto=format&fit=crop',
       },
       {
-        'name': 'Quinoa Power Salad',
-        'cal': '350 kcal',
-        'image': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop',
+        'title': 'Quinoa & Grilled Paneer Bowl',
+        'calories': 380,
+        'protein': 22.0,
+        'carbs': 42.0,
+        'fat': 12.0,
+        'imageUrl': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop',
       },
       {
-        'name': 'Greek Yogurt Bowl',
-        'cal': '280 kcal',
-        'image': 'https://images.unsplash.com/photo-1488477181946-6428a0291777?q=80&w=400&auto=format&fit=crop',
+        'title': 'Greek Yogurt & Roasted Walnuts',
+        'calories': 280,
+        'protein': 20.0,
+        'carbs': 14.0,
+        'fat': 16.0,
+        'imageUrl': 'https://images.unsplash.com/photo-1488477181946-6428a0291777?q=80&w=400&auto=format&fit=crop',
       },
     ];
+
+    final displayList = liveRecipes.isNotEmpty
+        ? liveRecipes.take(6).map((r) => {
+            'title': r['title'] ?? 'Healthy Dish',
+            'calories': int.tryParse(r['calories']?.toString() ?? '300') ?? 300,
+            'protein': double.tryParse(r['protein']?.toString() ?? '20') ?? 20.0,
+            'carbs': double.tryParse(r['carbs']?.toString() ?? '30') ?? 30.0,
+            'fat': double.tryParse(r['fat']?.toString() ?? '10') ?? 10.0,
+            'imageUrl': (r['imageUrl'] ?? '').toString().isNotEmpty
+                ? r['imageUrl']
+                : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop',
+          }).toList()
+        : defaultPicks;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1443,12 +2038,21 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                   letterSpacing: -0.4,
                 ),
               ),
-              Text(
-                'Explore All',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LogMealScreen()),
+                  );
+                },
+                child: Text(
+                  'Explore All',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF16A34A),
+                  ),
                 ),
               ),
             ],
@@ -1457,18 +2061,24 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
         const SizedBox(height: 14),
 
         SizedBox(
-          height: 175,
+          height: 185,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: picks.length,
+            itemCount: displayList.length,
             separatorBuilder: (context, index) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
-              final pick = picks[index];
+              final pick = displayList[index];
+              final title = pick['title'] as String;
+              final cal = pick['calories'] as int;
+              final p = pick['protein'] as double;
+              final c = pick['carbs'] as double;
+              final f = pick['fat'] as double;
+              final img = pick['imageUrl'] as String;
 
               return Container(
-                width: 155,
+                width: 165,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -1486,10 +2096,17 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Image.network(
-                      pick['image']!,
+                      img,
                       height: 95,
                       width: double.infinity,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        height: 95,
+                        color: const Color(0xFFF1F5F9),
+                        child: const Center(
+                          child: Icon(Icons.restaurant_rounded, color: Color(0xFF94A3B8)),
+                        ),
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.all(10.0),
@@ -1497,7 +2114,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            pick['name']!,
+                            title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.plusJakartaSans(
@@ -1511,20 +2128,44 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                pick['cal']!,
+                                "$cal kcal",
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w700,
                                   color: const Color(0xFF16A34A),
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFDCFCE7),
-                                  shape: BoxShape.circle,
+                              GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  UserNutritionService.instance.logMeal(
+                                    mealType: 'lunch',
+                                    name: title,
+                                    category: 'Healthy Picks',
+                                    calories: cal,
+                                    protein: p,
+                                    carbs: c,
+                                    fat: f,
+                                    quantity: 1.0,
+                                    servingSize: '1 serving',
+                                    source: 'Healthy Picks',
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Logged $title (+ $cal kcal)!'),
+                                      duration: const Duration(seconds: 2),
+                                      backgroundColor: const Color(0xFF16A34A),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFDCFCE7),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.add_rounded, size: 14, color: Color(0xFF16A34A)),
                                 ),
-                                child: const Icon(Icons.add, size: 12, color: Color(0xFF16A34A)),
                               ),
                             ],
                           ),
@@ -1542,124 +2183,79 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
   }
 
   // -------------------------------------------------------------
-  // 08. SMART MEAL PLANS
-  // -------------------------------------------------------------
-  Widget _buildSmartMealPlansSection() {
-    final plans = [
-      {'title': 'High Protein Muscle', 'calories': '2,200 kcal/day', 'tag': 'Popular', 'color': const Color(0xFF16A34A), 'image': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Weight Loss Shred', 'calories': '1,800 kcal/day', 'tag': 'Deficit', 'color': const Color(0xFFEA580C), 'image': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Clean Bulking Power', 'calories': '2,500 kcal/day', 'tag': 'Surplus', 'color': const Color(0xFF2563EB), 'image': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Balanced Longevity', 'calories': '2,100 kcal/day', 'tag': 'Maintenance', 'color': const Color(0xFF8B5CF6), 'image': 'https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=400&auto=format&fit=crop'},
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Smart Meal Plans',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          Column(
-            children: List.generate(plans.length, (index) {
-              final plan = plans[index];
-              final color = plan['color'] as Color;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.network(
-                        plan['image'] as String,
-                        width: 64,
-                        height: 64,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              plan['tag'] as String,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                color: color,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            plan['title'] as String,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          Text(
-                            plan['calories'] as String,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // -------------------------------------------------------------
-  // 09. RECIPES & FOOD DISCOVERY 🍽️
+  // 08. RECIPES & FOOD DISCOVERY 🍽️ (CACHED 24H FROM 100% FREE APIS)
   // -------------------------------------------------------------
   Widget _buildRecipesDiscoverySection() {
     final categories = ['All', 'High Protein', 'Low Carb', 'Quick Meals', 'Post Workout'];
-    final recipes = [
-      {'title': 'Paneer Power Bowl', 'meta': '32g Protein • 420 kcal', 'time': '15 min', 'image': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Salmon Quinoa Crunch', 'meta': '38g Protein • 480 kcal', 'time': '20 min', 'image': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Tofu Veggie Stir Fry', 'meta': '26g Protein • 340 kcal', 'time': '12 min', 'image': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop'},
-    ];
+    final liveRecipes = UserNutritionService.instance.dailyFeaturedRecipes;
+
+    // Filter based on active category tab
+    List<Map<String, dynamic>> filteredList = List<Map<String, dynamic>>.from(liveRecipes);
+    if (_selectedRecipeCategory == 1) {
+      // High Protein >= 25g
+      filteredList = liveRecipes.where((r) {
+        final p = num.tryParse(r['protein']?.toString() ?? '0') ?? 0;
+        return p >= 25;
+      }).toList();
+    } else if (_selectedRecipeCategory == 2) {
+      // Low Carb <= 30g
+      filteredList = liveRecipes.where((r) {
+        final c = num.tryParse(r['carbs']?.toString() ?? '0') ?? 0;
+        return c <= 30;
+      }).toList();
+    } else if (_selectedRecipeCategory == 3) {
+      // Quick Meals
+      filteredList = liveRecipes.where((r) {
+        final time = (r['time'] ?? '').toString();
+        return time.contains('10') || time.contains('15') || time.contains('20');
+      }).toList();
+    } else if (_selectedRecipeCategory == 4) {
+      // Post Workout >= 20g protein
+      filteredList = liveRecipes.where((r) {
+        final p = num.tryParse(r['protein']?.toString() ?? '0') ?? 0;
+        return p >= 20;
+      }).toList();
+    }
+
+    if (filteredList.isEmpty && liveRecipes.isNotEmpty) {
+      filteredList = liveRecipes;
+    }
+
+    // Default fallback if loading
+    final displayRecipes = filteredList.isNotEmpty
+        ? filteredList
+        : [
+            {
+              'title': 'High Protein Paneer Bowl',
+              'meta': '32g Protein • 420 kcal',
+              'calories': 420,
+              'protein': 32.0,
+              'carbs': 28.0,
+              'fat': 18.0,
+              'time': '15 min',
+              'imageUrl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop',
+            },
+            {
+              'title': 'Salmon & Quinoa Power Bowl',
+              'meta': '38g Protein • 480 kcal',
+              'calories': 480,
+              'protein': 38.0,
+              'carbs': 35.0,
+              'fat': 16.0,
+              'time': '20 min',
+              'imageUrl': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?q=80&w=400&auto=format&fit=crop',
+            },
+            {
+              'title': 'Tofu & Edamame Veggie Stir Fry',
+              'meta': '26g Protein • 340 kcal',
+              'calories': 340,
+              'protein': 26.0,
+              'carbs': 30.0,
+              'fat': 10.0,
+              'time': '12 min',
+              'imageUrl': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop',
+            },
+          ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1669,21 +2265,51 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Explore Healthy Recipes 🍽️',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Explore Healthy Recipes 🍽️',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      "Daily Pick",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF2563EB),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                'All Recipes',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LogMealScreen()),
+                  );
+                },
+                child: Text(
+                  'All Recipes',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF16A34A),
+                  ),
                 ),
               ),
             ],
@@ -1728,75 +2354,327 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
         ),
         const SizedBox(height: 14),
 
+        // Daily Recipe Carousel (Cached 24h in MongoDB)
         SizedBox(
-          height: 195,
+          height: 205,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: recipes.length,
+            itemCount: displayRecipes.length,
             separatorBuilder: (context, index) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
-              final rec = recipes[index];
+              final rec = displayRecipes[index];
+              final title = (rec['title'] ?? 'Healthy Dish').toString();
+              final cal = int.tryParse(rec['calories']?.toString() ?? '350') ?? 350;
+              final p = double.tryParse(rec['protein']?.toString() ?? '25') ?? 25.0;
+              final c = double.tryParse(rec['carbs']?.toString() ?? '30') ?? 30.0;
+              final f = double.tryParse(rec['fat']?.toString() ?? '10') ?? 10.0;
+              final time = (rec['time'] ?? '15 min').toString();
+              final img = (rec['imageUrl'] ?? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop').toString();
 
-              return Container(
-                width: 220,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Image.network(
-                      rec['image']!,
-                      height: 110,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(10.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  // Show bottom sheet with details and log button
+                  _showRecipeDetailSheet(title, cal, p, c, f, time, img);
+                },
+                child: Container(
+                  width: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Stack(
                         children: [
-                          Text(
-                            rec['title']!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
+                          Image.network(
+                            img,
+                            height: 110,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              height: 110,
+                              color: const Color(0xFFF1F5F9),
+                              child: const Center(
+                                child: Icon(Icons.restaurant_rounded, color: Color(0xFF94A3B8)),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            rec['meta']!,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF16A34A),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.schedule_rounded, color: Colors.white, size: 10),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    time,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      Padding(
+                        padding: const EdgeInsets.all(10.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "${p.toStringAsFixed(0)}g P • $cal kcal",
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF16A34A),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDCFCE7),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    "+ Log",
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: const Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
           ),
         ),
       ],
+    );
+  }
+
+  void _showRecipeDetailSheet(
+    String title,
+    int cal,
+    double p,
+    double c,
+    double f,
+    String time,
+    String img,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.network(
+                  img,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 160,
+                    color: const Color(0xFFF1F5F9),
+                    child: const Icon(Icons.restaurant_rounded, size: 36, color: Color(0xFF94A3B8)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Ready in $time • 100% Free Recipe API",
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Macro Pills
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildRecipeMacroBadge("Calories", "$cal", "kcal", const Color(0xFFEC4899)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildRecipeMacroBadge("Protein", "${p.toStringAsFixed(0)}g", "muscle", const Color(0xFF16A34A)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildRecipeMacroBadge("Carbs", "${c.toStringAsFixed(0)}g", "energy", const Color(0xFF8B5CF6)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildRecipeMacroBadge("Fats", "${f.toStringAsFixed(0)}g", "healthy", const Color(0xFFF59E0B)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.pop(context);
+                  UserNutritionService.instance.logMeal(
+                    mealType: 'dinner',
+                    name: title,
+                    category: 'Explore Recipes',
+                    calories: cal,
+                    protein: p,
+                    carbs: c,
+                    fat: f,
+                    quantity: 1.0,
+                    servingSize: '1 serving',
+                    source: 'Free Recipe API',
+                  );
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text('Logged $title (+ $cal kcal)!'),
+                      duration: const Duration(seconds: 2),
+                      backgroundColor: const Color(0xFF16A34A),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF16A34A), Color(0xFF15803D)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      "+ Log This Recipe to Today's Meals",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRecipeMacroBadge(String label, String value, String unit, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF475569),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2135,3 +3013,446 @@ class _NutritionProgressChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+// ----------------------------------------------------------------------------
+// TILTING NATURAL WATER CARD (PHYSICS & ACCELEROMETER SENSOR RESPONSIVE)
+// ----------------------------------------------------------------------------
+class TiltingNaturalWaterCard extends StatefulWidget {
+  final int glasses;
+  final int targetGlasses;
+  final Function(int) onGlassesChanged;
+
+  const TiltingNaturalWaterCard({
+    super.key,
+    required this.glasses,
+    this.targetGlasses = 8,
+    required this.onGlassesChanged,
+  });
+
+  @override
+  State<TiltingNaturalWaterCard> createState() => _TiltingNaturalWaterCardState();
+}
+
+class _TiltingNaturalWaterCardState extends State<TiltingNaturalWaterCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _waveController;
+  StreamSubscription<AccelerometerEvent>? _accelSub;
+  double _tiltX = 0.0;
+  double _manualTiltX = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+
+    _listenToAccelerometer();
+  }
+
+  void _listenToAccelerometer() {
+    try {
+      _accelSub = accelerometerEventStream().listen((event) {
+        if (!mounted) return;
+        setState(() {
+          final targetX = (-event.x / 9.8).clamp(-1.0, 1.0);
+          _tiltX += (targetX - _tiltX) * 0.15;
+        });
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _accelSub?.cancel();
+    _waveController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveTiltX = (_tiltX.abs() > 0.01) ? _tiltX : _manualTiltX;
+    final totalMl = widget.glasses * 250;
+    final targetMl = widget.targetGlasses * 250;
+    final liters = (totalMl / 1000.0).toStringAsFixed(2);
+    final targetLiters = (targetMl / 1000.0).toStringAsFixed(1);
+    final fillFraction = (widget.glasses / widget.targetGlasses).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          setState(() {
+            _manualTiltX = (_manualTiltX + details.delta.dx * 0.01).clamp(-1.0, 1.0);
+          });
+        },
+        onPanEnd: (_) {
+          Timer.periodic(const Duration(milliseconds: 16), (timer) {
+            if (!mounted) {
+              timer.cancel();
+              return;
+            }
+            if (_manualTiltX.abs() < 0.02) {
+              setState(() => _manualTiltX = 0);
+              timer.cancel();
+            } else {
+              setState(() => _manualTiltX *= 0.85);
+            }
+          });
+        },
+        child: Container(
+          height: 240,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0F172A),
+                Color(0xFF1E293B),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+            border: Border.all(
+              color: const Color(0xFF38BDF8).withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              // Liquid Custom Paint Layer
+              AnimatedBuilder(
+                animation: _waveController,
+                builder: (context, child) {
+                  return CustomPaint(
+                    size: Size.infinite,
+                    painter: NaturalWaterLiquidPainter(
+                      fillFraction: fillFraction,
+                      wavePhase: _waveController.value * 2 * math.pi,
+                      tiltAngle: effectiveTiltX * 0.35,
+                    ),
+                  );
+                },
+              ),
+
+              // Foreground Content
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Top Bar
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.water_drop_rounded, color: Color(0xFF38BDF8), size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Hydration Tracker',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Natural Liquid • Tilt Phone 📱',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.5)),
+                          ),
+                          child: Text(
+                            '$liters L / $targetLiters L',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Middle: Glasses count & controls
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Text(
+                                  '${widget.glasses}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 38,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    shadows: const [
+                                      Shadow(
+                                        color: Colors.black45,
+                                        blurRadius: 8,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  ' / ${widget.targetGlasses} glasses',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '${(fillFraction * 100).toInt()}% Daily Hydration Goal',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFFBAE6FD),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // - / + Buttons
+                        Row(
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                final newG = (widget.glasses - 1).clamp(0, 16);
+                                widget.onGlassesChanged(newG);
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                ),
+                                child: const Icon(Icons.remove_rounded, color: Colors.white, size: 22),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                final newG = (widget.glasses + 1).clamp(0, 16);
+                                widget.onGlassesChanged(newG);
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0284C7),
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF0284C7).withValues(alpha: 0.5),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    // Bottom: Glass Chips Bar
+                    Row(
+                      children: List.generate(widget.targetGlasses, (index) {
+                        final isFilled = index < widget.glasses;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                            child: InkWell(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                final newG = (widget.glasses == index + 1) ? index : index + 1;
+                                widget.onGlassesChanged(newG);
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: isFilled
+                                      ? const Color(0xFF38BDF8)
+                                      : Colors.white.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isFilled
+                                        ? const Color(0xFF7DD3FC)
+                                        : Colors.white.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.water_drop_rounded,
+                                    size: 14,
+                                    color: isFilled ? Colors.white : Colors.white54,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NaturalWaterLiquidPainter extends CustomPainter {
+  final double fillFraction;
+  final double wavePhase;
+  final double tiltAngle;
+
+  NaturalWaterLiquidPainter({
+    required this.fillFraction,
+    required this.wavePhase,
+    required this.tiltAngle,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (fillFraction <= 0.001) return;
+
+    final width = size.width;
+    final height = size.height;
+    final targetY = height * (1.0 - (fillFraction * 0.85));
+
+    final paintBack = Paint()
+      ..color = const Color(0xFF0284C7).withValues(alpha: 0.45)
+      ..style = PaintingStyle.fill;
+
+    final paintFront = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF38BDF8).withValues(alpha: 0.85),
+          const Color(0xFF0284C7).withValues(alpha: 0.95),
+          const Color(0xFF075985),
+        ],
+        stops: const [0.0, 0.4, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, width, height))
+      ..style = PaintingStyle.fill;
+
+    final paintFoam = Paint()
+      ..color = Colors.white.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    final pathBack = Path();
+    final pathFront = Path();
+    final cx = width / 2;
+    final cy = targetY;
+
+    pathBack.moveTo(0, height);
+    pathFront.moveTo(0, height);
+
+    for (double x = 0; x <= width; x += 3) {
+      final relX = x - cx;
+      final wave1 = math.sin((x / width * 4 * math.pi) + wavePhase) * 6;
+      final wave2 = math.cos((x / width * 3 * math.pi) + wavePhase * 1.3) * 5;
+      final tiltOffsetY = relX * math.tan(tiltAngle);
+
+      final yBack = (cy + wave1 + tiltOffsetY).clamp(0.0, height);
+      final yFront = (cy + wave2 + tiltOffsetY).clamp(0.0, height);
+
+      if (x == 0) {
+        pathBack.lineTo(0, yBack);
+        pathFront.lineTo(0, yFront);
+      } else {
+        pathBack.lineTo(x, yBack);
+        pathFront.lineTo(x, yFront);
+      }
+    }
+
+    pathBack.lineTo(width, height);
+    pathBack.lineTo(0, height);
+    pathBack.close();
+
+    pathFront.lineTo(width, height);
+    pathFront.lineTo(0, height);
+    pathFront.close();
+
+    canvas.drawPath(pathBack, paintBack);
+    canvas.drawPath(pathFront, paintFront);
+    canvas.drawPath(pathFront, paintFoam);
+
+    final rand = math.Random(42);
+    final bubblePaint = Paint()..color = Colors.white.withValues(alpha: 0.35);
+    for (int i = 0; i < 8; i++) {
+      final bx = (rand.nextDouble() * width);
+      final speed = 0.5 + rand.nextDouble() * 0.5;
+      final offset = (wavePhase * 20 * speed + i * 35) % (height - targetY);
+      final by = height - offset;
+
+      if (by > targetY + 10 && by < height - 10) {
+        final radius = 2.0 + rand.nextDouble() * 3.0;
+        canvas.drawCircle(Offset(bx, by), radius, bubblePaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant NaturalWaterLiquidPainter oldDelegate) {
+    return oldDelegate.fillFraction != fillFraction ||
+        oldDelegate.wavePhase != wavePhase ||
+        oldDelegate.tiltAngle != tiltAngle;
+  }
+}
+

@@ -1,532 +1,463 @@
 import 'dart:async';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
+
 import '../screens/workout_category_detail_screen.dart';
 import '../screens/workout_detail_screen.dart';
+import '../services/workout_layout_backend_service.dart';
+import '../services/workout_category_backend_service.dart';
+import '../services/category_backend_service.dart';
+import '../services/workout_banners_backend_service.dart';
+import '../services/workout_section_items_service.dart';
 
+// =============================================================
+// DESIGN TOKENS  (one accent, neutral slate base)
+// =============================================================
+const _kInk = Color(0xFF0F172A);
+const _kMuted = Color(0xFF64748B);
+const _kFaint = Color(0xFF94A3B8);
+const _kLine = Color(0xFFE2E8F0);
+const _kSurface = Color(0xFFF8FAFC);
+const _kAccent = Color(0xFF16A34A);
+const _kAccentDeep = Color(0xFF15803D);
+const _kAccentSoft = Color(0xFFDCFCE7);
+
+TextStyle _t(
+  double size, {
+  FontWeight w = FontWeight.w700,
+  Color c = _kInk,
+  double ls = 0,
+  double h = 1.2,
+}) =>
+    GoogleFonts.plusJakartaSans(
+      fontSize: size,
+      fontWeight: w,
+      color: c,
+      letterSpacing: ls,
+      height: h,
+    );
+
+// =============================================================
+// WORKOUTS TAB
+// =============================================================
 class DashboardWorkoutTabContent extends StatefulWidget {
   const DashboardWorkoutTabContent({super.key});
 
   @override
-  State<DashboardWorkoutTabContent> createState() => _DashboardWorkoutTabContentState();
+  State<DashboardWorkoutTabContent> createState() =>
+      _DashboardWorkoutTabContentState();
 }
 
 class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
     with TickerProviderStateMixin {
-  int _selectedCategoryFilter = 0;
-  final Set<int> _bookmarkedPrograms = {0};
-  final Set<int> _followedCoaches = {0};
-  bool _isLoading = true;
+  final Set<String> _bookmarked = {};
+  final Set<String> _followed = {};
 
-  late AnimationController _staggerController;
-  late AnimationController _shimmerController;
+  final _layout = WorkoutLayoutBackendService();
+  final _categories = WorkoutCategoryBackendService();
+  final _banners = WorkoutBannersBackendService();
+  final _items = WorkoutSectionItemsService.instance;
+
+  late final AnimationController _shimmer;
+  final Set<String> _revealed = {};
+  bool _revealing = false;
+  bool _prefetched = false;
 
   @override
   void initState() {
     super.initState();
-
-    // 1. Shimmer Controller for Skeleton
-    _shimmerController = AnimationController(
+    _shimmer = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
 
-    // 2. Stagger Animation Controller
-    _staggerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
+    _layout.addListener(_onData);
+    _categories.addListener(_onData);
+    _banners.addListener(_onData);
+    _items.addListener(_onData);
 
-    // Simulate clean, fast skeleton loading -> Stagger Blur Reveal
-    Timer(const Duration(milliseconds: 650), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _staggerController.forward();
-      }
-    });
+    // Kick off every network call at once — nothing waits on anything else.
+    _categories.fetchCategories();
+    _banners.fetchWorkoutBanners();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
   @override
   void dispose() {
-    _shimmerController.dispose();
-    _staggerController.dispose();
+    _layout.removeListener(_onData);
+    _categories.removeListener(_onData);
+    _banners.removeListener(_onData);
+    _items.removeListener(_onData);
+    _shimmer.dispose();
     super.dispose();
   }
 
-  void _toggleBookmark(int index) {
-    HapticFeedback.lightImpact();
-    setState(() {
-      if (_bookmarkedPrograms.contains(index)) {
-        _bookmarkedPrograms.remove(index);
-      } else {
-        _bookmarkedPrograms.add(index);
-      }
-    });
+  void _onData() {
+    if (!mounted) return;
+    setState(() {});
+    _bootstrap();
   }
 
-  void _toggleFollowCoach(int index) {
-    HapticFeedback.lightImpact();
-    setState(() {
-      if (_followedCoaches.contains(index)) {
-        _followedCoaches.remove(index);
-      } else {
-        _followedCoaches.add(index);
-      }
-    });
+  // -------------------------------------------------------------
+  // LOADING STRATEGY
+  //  1. All section item queries fire in parallel as soon as the
+  //     layout arrives.
+  //  2. Sections are revealed top-to-bottom, each one only once its
+  //     data is in and its first 3 images are decoded — so the user
+  //     never sees a card pop in with a blank image.
+  //  3. Everything above stays interactive; skeletons match the exact
+  //     card dimensions so nothing shifts.
+  // -------------------------------------------------------------
+  void _bootstrap() {
+    final sections = _layout.activeSections;
+    if (sections.isEmpty) return;
+
+    if (!_prefetched) {
+      _prefetched = true;
+      _items.prefetchAll(sections.map((s) => (id: s.id, type: s.type)));
+    }
+    if (!_revealing && _revealed.length < sections.length) {
+      _revealSequentially();
+    }
   }
 
-  // Helper to apply staggered blur reveal to each section
-  Widget _buildStaggeredBlurSection({
-    required double startInterval,
-    required double endInterval,
-    required Widget child,
-  }) {
-    return AnimatedBuilder(
-      animation: _staggerController,
-      builder: (context, _) {
-        final anim = CurvedAnimation(
-          parent: _staggerController,
-          curve: Interval(startInterval, endInterval, curve: Curves.easeOutCubic),
-        ).value;
+  Future<void> _revealSequentially() async {
+    _revealing = true;
+    final sections = _layout.activeSections;
 
-        final blurVal = ((1 - anim) * 12.0).clamp(0.0, 12.0);
-        final slideY = (24.0 * (1 - anim));
+    for (final sec in sections) {
+      if (!mounted) break;
+      if (_revealed.contains(sec.id)) continue;
 
-        return Transform.translate(
-          offset: Offset(0, slideY),
-          child: Opacity(
-            opacity: anim.clamp(0.0, 1.0),
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
-              child: child,
-            ),
+      await _waitForData(sec);
+      if (!mounted) break;
+      await _precache(_imagesFor(sec).take(3));
+      if (!mounted) break;
+
+      setState(() => _revealed.add(sec.id));
+      await Future.delayed(const Duration(milliseconds: 90));
+    }
+    _revealing = false;
+  }
+
+  Future<void> _waitForData(WorkoutLayoutSectionModel sec) async {
+    final needsItems =
+        WorkoutSectionItemsService.collectionForType.containsKey(sec.type);
+    bool ready() {
+      switch (sec.type) {
+        case 'categories':
+          return _categories.activeCategories.isNotEmpty;
+        case 'hero_banners':
+          return _banners.banners.isNotEmpty;
+        default:
+          return !needsItems || _items.isLoaded(sec.id);
+      }
+    }
+
+    final deadline = DateTime.now().add(const Duration(milliseconds: 2500));
+    while (!ready() && DateTime.now().isBefore(deadline) && mounted) {
+      await Future.delayed(const Duration(milliseconds: 60));
+    }
+  }
+
+  Future<void> _precache(Iterable<String> urls) async {
+    final targets = urls.where((u) => u.trim().isNotEmpty).toList();
+    if (targets.isEmpty) return;
+    await Future.wait(targets.map((u) {
+      try {
+        return precacheImage(_provider(u, width: 720), context)
+            .timeout(const Duration(milliseconds: 700), onTimeout: () {});
+      } catch (_) {
+        return Future.value();
+      }
+    }));
+  }
+
+  List<String> _imagesFor(WorkoutLayoutSectionModel sec) {
+    switch (sec.type) {
+      case 'hero_banners':
+        return _banners.banners
+            .where((b) => b.isActive)
+            .map((b) => b.imageUrl)
+            .toList();
+      case 'categories':
+        return _visibleCategories(sec)
+            .map((c) => CategoryBackendService.getDisplayableImageUrl(
+                  c.mediaUrl,
+                ))
+            .toList();
+      case 'custom_banner':
+        return [
+          CategoryBackendService.getDisplayableImageUrl(
+            sec.customBannerImageUrl,
           ),
-        );
-      },
-    );
+        ];
+      default:
+        return _itemsFor(sec)
+            .map((i) => CategoryBackendService.getDisplayableImageUrl(
+                  i.str('image', i.str('imageUrl', i.str('avatar'))),
+                ))
+            .toList();
+    }
   }
 
+  // -------------------------------------------------------------
+  // DATA ACCESSORS
+  // -------------------------------------------------------------
+  List<WorkoutCategoryModel> _visibleCategories(
+    WorkoutLayoutSectionModel? sec,
+  ) {
+    var cats = _categories.activeCategories.isNotEmpty
+        ? _categories.activeCategories
+        : _categories.getDefaultFallbackCategories();
+    if (sec != null && sec.selectedItemIds.isNotEmpty) {
+      final sel =
+          cats.where((c) => sec.selectedItemIds.contains(c.id)).toList();
+      if (sel.isNotEmpty) cats = sel;
+    }
+    return cats;
+  }
+
+  /// Items from Firestore; falls back to seed data only when the
+  /// collection is empty so the tab never renders blank mid-migration.
+  List<WorkoutSectionItem> _itemsFor(WorkoutLayoutSectionModel sec) {
+    var list = _items.items(sec.id);
+    if (list.isEmpty) list = _seed(sec.type);
+    if (sec.selectedItemIds.isNotEmpty) {
+      final sel = list.where((i) => sec.selectedItemIds.contains(i.id)).toList();
+      if (sel.isNotEmpty) list = sel;
+    }
+    return list;
+  }
+
+  // -------------------------------------------------------------
+  // BUILD
+  // -------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildSkeletonLoadingView();
-    }
+    final sections = _layout.activeSections;
+    if (sections.isEmpty) return _InitialSkeleton(shimmer: _shimmer);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-
-        // 1. Search Bar (Stagger 0.0 -> 0.25)
-        _buildStaggeredBlurSection(
-          startInterval: 0.0,
-          endInterval: 0.25,
-          child: _buildWorkoutSearchBar(),
-        ),
-
-        const SizedBox(height: 18),
-
-        // 2. Featured Programs Hero Banners Carousel (Stagger 0.08 -> 0.35)
-        _buildStaggeredBlurSection(
-          startInterval: 0.08,
-          endInterval: 0.35,
-          child: _buildFeaturedProgramsBannerCarousel(),
-        ),
-
-        const SizedBox(height: 24),
-
-        // 3. Workout Categories in 1:1 Aspect Ratio (Stagger 0.16 -> 0.45)
-        _buildStaggeredBlurSection(
-          startInterval: 0.16,
-          endInterval: 0.45,
-          child: _buildWorkoutCategoriesSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 4. Popular Programs Section (Carousel) (Stagger 0.24 -> 0.55)
-        _buildStaggeredBlurSection(
-          startInterval: 0.24,
-          endInterval: 0.55,
-          child: _buildPopularProgramsCarouselSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 5. Bento Grid Spotlight (Stagger 0.32 -> 0.65)
-        _buildStaggeredBlurSection(
-          startInterval: 0.32,
-          endInterval: 0.65,
-          child: _buildBentoGridSpotlightSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 6. Train by Muscle Group Grid Carousel (Stagger 0.40 -> 0.72)
-        _buildStaggeredBlurSection(
-          startInterval: 0.40,
-          endInterval: 0.72,
-          child: _buildTargetMuscleGroupsSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 7. Top Celebrity Coaches Carousel (Stagger 0.48 -> 0.80)
-        _buildStaggeredBlurSection(
-          startInterval: 0.48,
-          endInterval: 0.80,
-          child: _buildCelebrityCoachesCarouselSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 8. Equipment-Based Training Carousel (Stagger 0.55 -> 0.88)
-        _buildStaggeredBlurSection(
-          startInterval: 0.55,
-          endInterval: 0.88,
-          child: _buildEquipmentBasedTrainingSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 9. Trending Transformation Challenges (Stagger 0.62 -> 0.94)
-        _buildStaggeredBlurSection(
-          startInterval: 0.62,
-          endInterval: 0.94,
-          child: _buildTrendingChallengesSection(),
-        ),
-
-        const SizedBox(height: 26),
-
-        // 10. Beat-Synced Audio & Video Workouts (Stagger 0.70 -> 1.0)
-        _buildStaggeredBlurSection(
-          startInterval: 0.70,
-          endInterval: 1.0,
-          child: _buildAudioBeatsWorkoutsSection(),
-        ),
-
-        const SizedBox(height: 28),
+        _searchBar(),
+        const SizedBox(height: 22),
+        for (final sec in sections) ...[
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 420),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.035),
+                  end: Offset.zero,
+                ).animate(anim),
+                child: child,
+              ),
+            ),
+            child: _revealed.contains(sec.id)
+                ? KeyedSubtree(
+                    key: ValueKey('on_${sec.id}'),
+                    child: RepaintBoundary(child: _section(sec)),
+                  )
+                : KeyedSubtree(
+                    key: ValueKey('sk_${sec.id}'),
+                    child: _SectionSkeleton(type: sec.type, shimmer: _shimmer),
+                  ),
+          ),
+          const SizedBox(height: 28),
+        ],
+        const SizedBox(height: 8),
       ],
     );
   }
 
-  // -------------------------------------------------------------
-  // SHIMMER SKELETON LOADING VIEW (WHITE THEME)
-  // -------------------------------------------------------------
-  Widget _buildSkeletonLoadingView() {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
-
-            // Skeleton Search Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: _buildShimmerBox(height: 50, borderRadius: 16),
-            ),
-
-            const SizedBox(height: 18),
-
-            // Skeleton Featured Banner
-            SizedBox(
-              height: 180,
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                scrollDirection: Axis.horizontal,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildShimmerBox(width: 295, height: 180, borderRadius: 24),
-                  const SizedBox(width: 14),
-                  _buildShimmerBox(width: 295, height: 180, borderRadius: 24),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Skeleton Categories Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildShimmerBox(width: 120, height: 20, borderRadius: 6),
-                  _buildShimmerBox(width: 50, height: 16, borderRadius: 6),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Skeleton 1:1 Square Categories (125x125)
-            SizedBox(
-              height: 125,
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                scrollDirection: Axis.horizontal,
-                physics: const NeverScrollableScrollPhysics(),
-                children: List.generate(4, (index) {
-                  return Container(
-                    margin: const EdgeInsets.only(right: 12),
-                    child: _buildShimmerBox(width: 125, height: 125, borderRadius: 20),
-                  );
-                }),
-              ),
-            ),
-
-            const SizedBox(height: 26),
-
-            // Skeleton Popular Programs Carousel Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildShimmerBox(width: 150, height: 20, borderRadius: 6),
-                  _buildShimmerBox(width: 50, height: 16, borderRadius: 6),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Skeleton Popular Carousel Cards
-            SizedBox(
-              height: 220,
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                scrollDirection: Axis.horizontal,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildShimmerBox(width: 240, height: 220, borderRadius: 22),
-                  const SizedBox(width: 14),
-                  _buildShimmerBox(width: 240, height: 220, borderRadius: 22),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 26),
-
-            // Skeleton Bento Grid Box
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: _buildShimmerBox(height: 200, borderRadius: 22),
-            ),
-            const SizedBox(height: 24),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildShimmerBox({double? width, required double height, double borderRadius = 12}) {
-    final double shimmerPos = _shimmerController.value;
-
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(borderRadius),
-        gradient: LinearGradient(
-          begin: Alignment(-1.5 + (3.0 * shimmerPos), -0.3),
-          end: Alignment(1.5 + (3.0 * shimmerPos), 0.3),
-          colors: const [
-            Color(0xFFF1F5F9),
-            Color(0xFFFFFFFF),
-            Color(0xFFF1F5F9),
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        ),
-      ),
-    );
+  Widget _section(WorkoutLayoutSectionModel sec) {
+    switch (sec.type) {
+      case 'hero_banners':
+        return _heroBanners();
+      case 'categories':
+        return _categoriesSection(sec);
+      case 'popular_programs':
+        return _programs(sec);
+      case 'bento_spotlight':
+        return _spotlight(sec);
+      case 'muscle_groups':
+        return _muscleGroups(sec);
+      case 'celebrity_coaches':
+        return _coaches(sec);
+      case 'equipment_training':
+        return _equipment(sec);
+      case 'trending_challenges':
+        return _challenges(sec);
+      case 'audio_beats':
+        return _audio(sec);
+      case 'custom_banner':
+        return _customBanner(sec);
+      default:
+        return _programs(sec);
+    }
   }
 
   // -------------------------------------------------------------
-  // 1. Search Bar
+  // SEARCH  (light glass over the tab gradient)
   // -------------------------------------------------------------
-  Widget _buildWorkoutSearchBar() {
+  Widget _searchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Container(
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 14),
-            const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF0F172A),
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Search workouts, coaches, body part...',
-                  hintStyle: GoogleFonts.plusJakartaSans(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF94A3B8),
-                  ),
-                  border: InputBorder.none,
-                  isDense: true,
-                ),
-              ),
-            ),
-            Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF0F172A)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // -------------------------------------------------------------
-  // 2. Featured Programs Hero Banners Carousel (WHITE THEME + VIDEO)
-  // -------------------------------------------------------------
-  Widget _buildFeaturedProgramsBannerCarousel() {
-    final banners = [
-      'assets/images/workout_banner_1.png',
-      'assets/images/workout_banner_2.png',
-      'assets/images/workout_banner_3.png',
-      'assets/images/workout_banner_4.png',
-    ];
-    return _AutoScrollingBannersWidget(images: banners);
-  }
-
-  // -------------------------------------------------------------
-  // 3. Workout Categories (1:1 Square Cards: 125x125 - Full Cover Image)
-  // -------------------------------------------------------------
-  Widget _buildWorkoutCategoriesSection() {
-    final categories = [
-      'assets/images/workout_category_1.png',
-      'assets/images/workout_category_2.jpg',
-      'assets/images/workout_category_3.png',
-      'assets/images/workout_category_4.png',
-      'assets/images/workout_category_5.png',
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: _Glass(
+        radius: 18,
+        blur: 12,
+        padding: const EdgeInsets.only(left: 14, right: 6),
+        child: SizedBox(
+          height: 52,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Categories',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
+              const Icon(Icons.search_rounded, color: _kFaint, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  style: _t(14, w: FontWeight.w600),
+                  decoration: InputDecoration(
+                    hintText: 'Search workouts, coaches, body part',
+                    hintStyle: _t(13.5, w: FontWeight.w500, c: _kFaint),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
                 ),
               ),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const WorkoutCategoryDetailScreen(),
-                    ),
-                  );
-                },
-                child: Text(
-                  'See All',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF16A34A),
+              _Tap(
+                onTap: () => HapticFeedback.selectionClick(),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _kInk,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: const Icon(Icons.tune_rounded,
+                      size: 18, color: Colors.white),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
+      ),
+    );
+  }
 
-        // Categories Carousel with 1:1 Aspect Ratio (Square 125x125) - Full Cover Image Only
+  // -------------------------------------------------------------
+  // 1. HERO BANNERS
+  // -------------------------------------------------------------
+  Widget _heroBanners() {
+    final active = _banners.banners.where((b) => b.isActive).toList();
+    if (active.isEmpty) return const SizedBox.shrink();
+    return _HeroBannerCarousel(
+      banners: active
+          .map((b) => _BannerVM(
+                key: '${b.bannerId}_${b.imageUrl}',
+                imageUrl: b.imageUrl,
+                mediaType: b.mediaType,
+                title: b.title,
+                subtitle: b.subtitle,
+                badge: b.badge,
+                buttonText: b.buttonText,
+                showTitle: b.showTitle,
+              ))
+          .toList(),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 2. CATEGORIES
+  // -------------------------------------------------------------
+  Widget _categoriesSection(WorkoutLayoutSectionModel sec) {
+    final cats = _visibleCategories(sec);
+    final title = sec.title.trim().isNotEmpty ? sec.title.trim() : 'Categories';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (sec.showTitle)
+          _Header(
+            title: title,
+            action: 'See all',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const WorkoutCategoryDetailScreen(),
+              ),
+            ),
+          ),
         SizedBox(
-          height: 125,
+          height: 122,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: categories.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final imagePath = categories[index];
-              final isSelected = _selectedCategoryFilter == index;
-
-              final categoryNames = [
-                'Strength',
-                'HIIT',
-                'Yoga',
-                'Core',
-                'Cardio',
-              ];
-
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _selectedCategoryFilter = index);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => WorkoutCategoryDetailScreen(
-                        initialCategory: index < categoryNames.length ? categoryNames[index] : null,
+            itemCount: cats.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final cat = cats[i];
+              return _Tap(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WorkoutCategoryDetailScreen(
+                      initialCategory: cat.name,
+                    ),
+                  ),
+                ),
+                child: _Card(
+                  width: 122,
+                  height: 122,
+                  radius: 22,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _CategoryMediaRenderer(
+                        mediaUrl: cat.mediaUrl,
+                        mediaType: cat.mediaType,
                       ),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 125,
-                  height: 125,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    image: DecorationImage(
-                      image: AssetImage(imagePath),
-                      fit: BoxFit.cover,
-                    ),
-                    border: Border.all(
-                      color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFF1F5F9),
-                      width: isSelected ? 2.0 : 1.2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                      _scrim(top: false, strength: 0.55),
+                      Positioned(
+                        left: 8,
+                        right: 8,
+                        bottom: 8,
+                        child: _Glass(
+                          dark: true,
+                          radius: 12,
+                          blur: 10,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 7,
+                          ),
+                          child: Text(
+                            cat.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _t(11.5,
+                                w: FontWeight.w800, c: Colors.white),
+                          ),
+                        ),
                       ),
+                      if (cat.mediaType == 'video' || cat.mediaType == 'gif')
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: _MediaBadge(type: cat.mediaType),
+                        ),
                     ],
                   ),
-                  clipBehavior: Clip.antiAlias,
                 ),
               );
             },
@@ -537,279 +468,140 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
   }
 
   // -------------------------------------------------------------
-  // 4. Popular Programs Carousel (WHITE THEME GRADIENT)
+  // 3. POPULAR PROGRAMS
   // -------------------------------------------------------------
-  Widget _buildPopularProgramsCarouselSection() {
-    final programs = [
-      {
-        'title': 'Body Wellness & Core',
-        'subtitle': 'Full body toning & condition',
-        'duration': '35 min',
-        'episodes': '18 episodes',
-        'level': 'Intermediate',
-        'rating': '4.9',
-        'coach': 'Coach Emma',
-        'image': 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        'title': 'Lean Muscle Hypertrophy',
-        'subtitle': 'Dumbbell & compound mastery',
-        'duration': '45 min',
-        'episodes': '24 episodes',
-        'level': 'Advanced',
-        'rating': '5.0',
-        'coach': 'Coach David',
-        'image': 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        'title': 'Morning Sun Vinyasa',
-        'subtitle': 'Flexibility & spine alignment',
-        'duration': '25 min',
-        'episodes': '14 episodes',
-        'level': 'All Levels',
-        'rating': '4.8',
-        'coach': 'Coach Maya',
-        'image': 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        'title': 'HIIT Metabolic Burn',
-        'subtitle': 'Explosive cardio & endurance',
-        'duration': '30 min',
-        'episodes': '16 episodes',
-        'level': 'Intermediate',
-        'rating': '4.9',
-        'coach': 'Coach Alex',
-        'image': 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop',
-      },
-    ];
+  Widget _programs(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    if (items.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Popular Programs',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              GestureDetector(
-                onTap: () => HapticFeedback.lightImpact(),
-                child: Text(
-                  'See All',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF16A34A),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        _Header(
+          title: sec.title.trim().isNotEmpty ? sec.title : 'Popular Programs',
+          subtitle: sec.subtitle.trim().isNotEmpty ? sec.subtitle : null,
+          action: 'See all',
+          onTap: () {},
         ),
-        const SizedBox(height: 14),
-
-        // Programs Horizontal Carousel Cards with White Theme
         SizedBox(
-          height: 225,
+          height: 236,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: programs.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 14),
-            itemBuilder: (context, index) {
-              final prog = programs[index];
-              final isBookmarked = _bookmarkedPrograms.contains(index);
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, i) {
+              final p = items[i];
+              final saved = _bookmarked.contains(p.id);
+              final image = _display(p.str('image', p.str('imageUrl')));
 
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => WorkoutDetailScreen(
-                        title: prog['title'],
-                        subtitle: prog['subtitle'],
-                        image: prog['image'],
-                        trainer: prog['coach'],
-                        duration: prog['duration'],
-                        level: prog['level'],
-                        rating: prog['rating'],
-                      ),
+              return _Tap(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WorkoutDetailScreen(
+                      title: p.str('title'),
+                      subtitle: p.str('subtitle'),
+                      image: image,
+                      trainer: p.str('coach'),
+                      duration: p.str('duration'),
+                      level: p.str('level'),
+                      rating: p.str('rating'),
                     ),
-                  );
-                },
-                child: Container(
-                  width: 235,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  ),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Banner Image with White Bottom Gradient
-                    Stack(
-                      children: [
-                        Image.network(
-                          prog['image']!,
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            height: 120,
-                            color: const Color(0xFFF1F5F9),
-                            child: const Icon(Icons.fitness_center_rounded, color: Color(0xFFCBD5E1)),
-                          ),
-                        ),
-                        // White Linear Gradient on Image Bottom
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                stops: const [0.0, 0.45],
-                                colors: [
-                                  Colors.white,
-                                  Colors.white.withValues(alpha: 0.0),
+                child: _Card(
+                  width: 240,
+                  radius: 24,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 138,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _NetImage(image, cacheWidth: 600),
+                            _scrim(top: true, strength: 0.28),
+                            Positioned(
+                              top: 10,
+                              left: 10,
+                              child: _RatingChip(p.str('rating', '4.9')),
+                            ),
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: _IconGlassButton(
+                                icon: saved
+                                    ? Icons.bookmark_rounded
+                                    : Icons.bookmark_border_rounded,
+                                active: saved,
+                                onTap: () => _toggle(_bookmarked, p.id),
+                              ),
+                            ),
+                            Positioned(
+                              left: 10,
+                              bottom: 10,
+                              child: Row(
+                                children: [
+                                  _Pill(
+                                    p.str('duration', '30 min'),
+                                    icon: Icons.schedule_rounded,
+                                    dark: true,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _Pill(p.str('level', 'All levels'),
+                                      dark: true),
                                 ],
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                        // Rating Pill
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 4,
-                                ),
-                              ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.str('title'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(14, w: FontWeight.w900, ls: -0.3),
                             ),
-                            child: Row(
+                            const SizedBox(height: 3),
+                            Text(
+                              p.str('subtitle'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(11, w: FontWeight.w600, c: _kMuted),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
                               children: [
-                                const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 12),
-                                const SizedBox(width: 2),
-                                Text(
-                                  prog['rating']!,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF0F172A),
+                                const Icon(Icons.person_rounded,
+                                    size: 13, color: _kFaint),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    '${p.str('coach', 'Coach')}  ·  ${p.str('episodes', '')}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _t(10.5,
+                                        w: FontWeight.w700, c: _kFaint),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ),
-                        // Bookmark Button
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: () => _toggleBookmark(index),
-                            child: Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: isBookmarked ? const Color(0xFF16A34A) : Colors.white.withValues(alpha: 0.9),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                color: isBookmarked ? Colors.white : const Color(0xFF0F172A),
-                                size: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Bottom duration badge
-                        Positioned(
-                          right: 8,
-                          bottom: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDCFCE7),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              prog['duration']!,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF15803D),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Details with Dark Text
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            prog['title']!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "${prog['coach']!} • ${prog['episodes']!}",
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
           ),
         ),
       ],
@@ -817,99 +609,75 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
   }
 
   // -------------------------------------------------------------
-  // 5. Bento Grid Workout Spotlight (WHITE THEME GRADIENT)
+  // 4. BENTO SPOTLIGHT
   // -------------------------------------------------------------
-  Widget _buildBentoGridSpotlightSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Workout Spotlight',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Text(
-                'Featured',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+  Widget _spotlight(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    final imgs = <String>[
+      if (sec.customBannerImageUrl.isNotEmpty)
+        _display(sec.customBannerImageUrl),
+      ...items.map((i) => _display(i.str('image', i.str('imageUrl')))),
+    ];
+    while (imgs.length < 3) {
+      imgs.add(_display('spotlight_${imgs.length + 1}.png'));
+    }
+    String label(int i) =>
+        i < items.length ? items[i].str('title') : '';
 
-          // Bento Grid Layout with 5px gap
-          SizedBox(
-            height: 215,
-            child: Row(
-              children: [
-                // Left Big Bento Card
-                Expanded(
-                  flex: 6,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      image: const DecorationImage(
-                        image: AssetImage('assets/images/spotlight_1.png'),
-                        fit: BoxFit.cover,
-                      ),
-                      border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+    Widget tile(String img, String text, double radius) => _Card(
+          radius: radius,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _NetImage(img, cacheWidth: 600),
+              if (text.isNotEmpty) ...[
+                _scrim(top: false, strength: 0.45),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: _Glass(
+                    dark: true,
+                    radius: 12,
+                    blur: 10,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 7),
+                    child: Text(
+                      text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _t(11, w: FontWeight.w800, c: Colors.white),
                     ),
                   ),
                 ),
-                const SizedBox(width: 5),
+              ],
+            ],
+          ),
+        );
 
-                // Right 2 Stacked Bento Cards
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(
+            title: sec.title.trim().isNotEmpty ? sec.title : 'Workout Spotlight',
+            action: 'Featured',
+            padded: false,
+          ),
+          SizedBox(
+            height: 222,
+            child: Row(
+              children: [
+                Expanded(flex: 6, child: tile(imgs[0], label(0), 24)),
+                const SizedBox(width: 8),
                 Expanded(
                   flex: 5,
                   child: Column(
                     children: [
-                      // Top Right Card
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            image: const DecorationImage(
-                              image: AssetImage('assets/images/spotlight_2.png'),
-                              fit: BoxFit.cover,
-                            ),
-                            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-
-                      // Bottom Right Card
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            image: const DecorationImage(
-                              image: AssetImage('assets/images/spotlight_3.png'),
-                              fit: BoxFit.cover,
-                            ),
-                            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
-                          ),
-                        ),
-                      ),
+                      Expanded(child: tile(imgs[1], label(1), 20)),
+                      const SizedBox(height: 8),
+                      Expanded(child: tile(imgs[2], label(2), 20)),
                     ],
                   ),
                 ),
@@ -922,572 +690,223 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
   }
 
   // -------------------------------------------------------------
-  // 6. Train by Muscle Group Grid Carousel (WHITE THEME GRADIENT)
+  // 5. MUSCLE GROUPS
   // -------------------------------------------------------------
-  Widget _buildTargetMuscleGroupsSection() {
-    final muscles = [
-      {'name': 'Chest & Triceps', 'exercises': '14 exercises', 'image': 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=400&auto=format&fit=crop'},
-      {'name': 'Back & Biceps', 'exercises': '16 exercises', 'image': 'https://images.unsplash.com/photo-1605296867304-46d5465a13f1?q=80&w=400&auto=format&fit=crop'},
-      {'name': 'Legs & Glutes', 'exercises': '20 exercises', 'image': 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=400&auto=format&fit=crop'},
-      {'name': 'Shoulders & Abs', 'exercises': '12 exercises', 'image': 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=400&auto=format&fit=crop'},
-    ];
+  Widget _muscleGroups(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    if (items.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Target Muscle Groups',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Text(
-                'Explore',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
+        _Header(
+          title: sec.title.trim().isNotEmpty ? sec.title : 'Target Muscle Groups',
+          action: 'Explore',
         ),
-        const SizedBox(height: 14),
-
         SizedBox(
-          height: 140,
+          height: 152,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: muscles.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final muscle = muscles[index];
-
-              return Container(
-                width: 165,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  image: DecorationImage(
-                    image: NetworkImage(muscle['image']!),
-                    fit: BoxFit.cover,
-                  ),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    // White Linear Gradient
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            stops: const [0.0, 0.65],
-                            colors: [
-                              Colors.white,
-                              Colors.white.withValues(alpha: 0.0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 12,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            muscle['name']!,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            muscle['exercises']!,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // -------------------------------------------------------------
-  // 7. Top Celebrity Coaches Carousel
-  // -------------------------------------------------------------
-  Widget _buildCelebrityCoachesCarouselSection() {
-    final coaches = [
-      {
-        'name': 'Elena Rostova',
-        'specialty': 'Olympic Lifting & HIIT',
-        'rating': '4.9',
-        'avatar': 'https://images.unsplash.com/photo-1548690312-e3b507d8c110?q=80&w=300&auto=format&fit=crop',
-      },
-      {
-        'name': 'Marcus Vance',
-        'specialty': 'CrossFit & Conditioning',
-        'rating': '5.0',
-        'avatar': 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=300&auto=format&fit=crop',
-      },
-      {
-        'name': 'Sarah Jenkins',
-        'specialty': 'Mindful Yoga & Pilates',
-        'rating': '4.9',
-        'avatar': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop',
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Elite Coaches',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Text(
-                'View All',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        SizedBox(
-          height: 155,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: coaches.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final coach = coaches[index];
-              final isFollowed = _followedCoaches.contains(index);
-
-              return Container(
-                width: 160,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Avatar + Rating
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundImage: NetworkImage(coach['avatar']!),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final m = items[i];
+              return _Tap(
+                onTap: () => HapticFeedback.selectionClick(),
+                child: _Card(
+                  width: 166,
+                  radius: 22,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _NetImage(_display(m.str('image', m.str('imageUrl'))),
+                          cacheWidth: 480),
+                      _scrim(top: false, strength: 0.5),
+                      Positioned(
+                        left: 8,
+                        right: 8,
+                        bottom: 8,
+                        child: _Glass(
+                          dark: true,
+                          radius: 14,
+                          blur: 12,
+                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 12),
-                              const SizedBox(width: 2),
                               Text(
-                                coach['rating']!,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF92400E),
-                                ),
+                                m.str('name', m.str('title')),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _t(12.5,
+                                    w: FontWeight.w900, c: Colors.white),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                m.str('exercises', m.str('count')),
+                                style: _t(10,
+                                    w: FontWeight.w600,
+                                    c: Colors.white.withValues(alpha: 0.78)),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-
-                    // Name & Specialty
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          coach['name']!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                        Text(
-                          coach['specialty']!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Follow Button
-                    GestureDetector(
-                      onTap: () => _toggleFollowCoach(index),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isFollowed ? const Color(0xFFDCFCE7) : const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Text(
-                            isFollowed ? 'Following' : '+ Follow',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: isFollowed ? const Color(0xFF15803D) : Colors.white,
-                            ),
-                          ),
-                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // -------------------------------------------------------------
-  // 8. Equipment-Based Training Carousel
-  // -------------------------------------------------------------
-  Widget _buildEquipmentBasedTrainingSection() {
-    final gear = [
-      {'name': 'Dumbbells Only', 'count': '28 workouts', 'icon': Icons.fitness_center_rounded, 'color': const Color(0xFF16A34A), 'bg': const Color(0xFFDCFCE7)},
-      {'name': 'Resistance Bands', 'count': '16 workouts', 'icon': Icons.album_rounded, 'color': const Color(0xFF8B5CF6), 'bg': const Color(0xFFF3E8FF)},
-      {'name': 'Kettlebell Mastery', 'count': '14 workouts', 'icon': Icons.sports_gymnastics_rounded, 'color': const Color(0xFFEA580C), 'bg': const Color(0xFFFFF7ED)},
-      {'name': 'Bodyweight (Zero)', 'count': '35 workouts', 'icon': Icons.directions_run_rounded, 'color': const Color(0xFF0284C7), 'bg': const Color(0xFFF0F9FF)},
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Workout by Equipment',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Text(
-                'Filter',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        SizedBox(
-          height: 120,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: gear.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final item = gear[index];
-
-              return Container(
-                width: 145,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (item['color'] as Color).withValues(alpha: 0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: item['bg'] as Color,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 20),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['name'] as String,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                        Text(
-                          item['count'] as String,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // -------------------------------------------------------------
-  // 9. Trending Transformation Challenges (WHITE THEME GRADIENT)
-  // -------------------------------------------------------------
-  Widget _buildTrendingChallengesSection() {
-    final challenges = [
-      {
-        'title': '30-Day Summer Shred Challenge',
-        'joined': '14.2k joined',
-        'progress': 'Week 2 of 4',
-        'badge': '+500 XP',
-        'image': 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop',
-      },
-      {
-        'title': '21-Day Core & Abs Ignite',
-        'joined': '8.6k joined',
-        'progress': 'Week 1 of 3',
-        'badge': '+350 XP',
-        'image': 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=600&auto=format&fit=crop',
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Trending Challenges',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Text(
-                'Join All',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        SizedBox(
-          height: 165,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: challenges.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 14),
-            itemBuilder: (context, index) {
-              final challenge = challenges[index];
-
-              return Container(
-                width: 270,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  image: DecorationImage(
-                    image: NetworkImage(challenge['image']!),
-                    fit: BoxFit.cover,
+                    ],
                   ),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
-                clipBehavior: Clip.antiAlias,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 6. COACHES
+  // -------------------------------------------------------------
+  Widget _coaches(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Header(
+          title: sec.title.trim().isNotEmpty ? sec.title : 'Elite Coaches',
+          action: 'View all',
+        ),
+        SizedBox(
+          height: 188,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final c = items[i];
+              final following = _followed.contains(c.id);
+              final avatar = _display(c.str('avatar', c.str('image')));
+
+              return _Card(
+                width: 170,
+                radius: 24,
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    // White Linear Gradient Overlay
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            stops: const [0.0, 0.70],
-                            colors: [
-                              Colors.white,
-                              Colors.white.withValues(alpha: 0.0),
-                            ],
-                          ),
+                    // Blurred avatar as ambient backdrop
+                    ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                      child: Opacity(
+                        opacity: 0.35,
+                        child: _NetImage(avatar, cacheWidth: 120),
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.55),
+                            Colors.white.withValues(alpha: 0.92),
+                          ],
                         ),
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(14.0),
+                      padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.all(2.5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFDCFCE7),
-                                  borderRadius: BorderRadius.circular(6),
+                                  shape: BoxShape.circle,
+                                  gradient: const LinearGradient(
+                                    colors: [_kAccent, Color(0xFF4ADE80)],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: _kAccent.withValues(alpha: 0.25),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
-                                child: Text(
-                                  challenge['badge']!,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF15803D),
+                                child: CircleAvatar(
+                                  radius: 23,
+                                  backgroundColor: Colors.white,
+                                  child: ClipOval(
+                                    child: SizedBox(
+                                      width: 44,
+                                      height: 44,
+                                      child: _NetImage(avatar,
+                                          cacheWidth: 160),
+                                    ),
                                   ),
                                 ),
                               ),
-                              Text(
-                                challenge['joined']!,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
+                              _RatingChip(c.str('rating', '4.9')),
                             ],
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                challenge['title']!,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF0F172A),
-                                  height: 1.2,
-                                ),
+                          const Spacer(),
+                          Text(
+                            c.str('name'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _t(13.5, w: FontWeight.w900, ls: -0.2),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            c.str('specialty'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _t(10.5, w: FontWeight.w600, c: _kMuted),
+                          ),
+                          const SizedBox(height: 10),
+                          _Tap(
+                            onTap: () => _toggle(_followed, c.id),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 220),
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: following ? _kAccentSoft : _kInk,
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                challenge['progress']!,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF16A34A),
-                                ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    following
+                                        ? Icons.check_rounded
+                                        : Icons.add_rounded,
+                                    size: 14,
+                                    color: following
+                                        ? _kAccentDeep
+                                        : Colors.white,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    following ? 'Following' : 'Follow',
+                                    style: _t(11,
+                                        w: FontWeight.w800,
+                                        c: following
+                                            ? _kAccentDeep
+                                            : Colors.white),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -1503,123 +922,81 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
   }
 
   // -------------------------------------------------------------
-  // 10. Beat-Synced Audio & Video Workouts
+  // 7. EQUIPMENT
   // -------------------------------------------------------------
-  Widget _buildAudioBeatsWorkoutsSection() {
-    final tracks = [
-      {'title': 'High BPM HIIT Cardio Beat', 'bpm': '145 BPM', 'duration': '30 min', 'color': const Color(0xFF16A34A), 'image': 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Deep House Strength Lift', 'bpm': '128 BPM', 'duration': '45 min', 'color': const Color(0xFF8B5CF6), 'image': 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=400&auto=format&fit=crop'},
-      {'title': 'Lo-Fi Chill Sunset Yoga', 'bpm': '90 BPM', 'duration': '20 min', 'color': const Color(0xFF3B82F6), 'image': 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=400&auto=format&fit=crop'},
-    ];
+  Widget _equipment(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    if (items.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Music-Synced Workouts',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Text(
-                'Playlists',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
+        _Header(
+          title: sec.title.trim().isNotEmpty ? sec.title : 'Workout by Equipment',
+          action: 'Filter',
         ),
-        const SizedBox(height: 14),
-
         SizedBox(
-          height: 145,
+          height: 124,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: tracks.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              final color = track['color'] as Color;
-
-              return Container(
-                width: 175,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final e = items[i];
+              final color = _hex(e.str('color'), _kAccent);
+              return _Tap(
+                onTap: () => HapticFeedback.selectionClick(),
+                child: _Card(
+                  width: 150,
+                  radius: 22,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: -22,
+                        top: -22,
+                        child: Container(
+                          width: 90,
+                          height: 90,
                           decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            shape: BoxShape.circle,
+                            color: color.withValues(alpha: 0.10),
                           ),
-                          child: Text(
-                            track['bpm'] as String,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w800,
-                              color: color,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(_iconFor(e.str('icon')),
+                                  color: color, size: 20),
                             ),
-                          ),
+                            const Spacer(),
+                            Text(
+                              e.str('name', e.str('title')),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(12.5, w: FontWeight.w900, ls: -0.2),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              e.str('count', e.str('subtitle')),
+                              style: _t(10, w: FontWeight.w600, c: _kMuted),
+                            ),
+                          ],
                         ),
-                        const Icon(Icons.graphic_eq_rounded, color: Color(0xFF16A34A), size: 18),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          track['title'] as String,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0F172A),
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          track['duration'] as String,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -1628,137 +1005,1217 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
       ],
     );
   }
-}
 
-// -------------------------------------------------------------
-// Auto-playing Muted Loop Video Widget for Workout Banner
-// -------------------------------------------------------------
-class _WorkoutBannerVideoWidget extends StatefulWidget {
-  final String assetPath;
-  const _WorkoutBannerVideoWidget({required this.assetPath});
+  // -------------------------------------------------------------
+  // 8. CHALLENGES
+  // -------------------------------------------------------------
+  Widget _challenges(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    if (items.isEmpty) return const SizedBox.shrink();
 
-  @override
-  State<_WorkoutBannerVideoWidget> createState() => _WorkoutBannerVideoWidgetState();
-}
-
-class _WorkoutBannerVideoWidgetState extends State<_WorkoutBannerVideoWidget> {
-  late VideoPlayerController _controller;
-  bool _isInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.asset(widget.assetPath)
-      ..initialize().then((_) {
-        if (mounted) {
-          _controller.setVolume(0.0);
-          _controller.setLooping(true);
-          _controller.play();
-          setState(() {
-            _isInitialized = true;
-          });
-        }
-      });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Header(
+          title: sec.title.trim().isNotEmpty ? sec.title : 'Trending Challenges',
+          action: 'Join',
+        ),
+        SizedBox(
+          height: 182,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, i) {
+              final ch = items[i];
+              final progress = ch.dbl('progressRatio', 0.4).clamp(0.0, 1.0);
+              return _Tap(
+                onTap: () => HapticFeedback.selectionClick(),
+                child: _Card(
+                  width: 280,
+                  radius: 24,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _NetImage(_display(ch.str('image', ch.str('imageUrl'))),
+                          cacheWidth: 720),
+                      _scrim(top: false, strength: 0.55),
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: _Pill(ch.str('badge', '+500 XP'),
+                            icon: Icons.bolt_rounded, accent: true),
+                      ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: _Pill(ch.str('joined', ''),
+                            icon: Icons.groups_rounded, dark: true),
+                      ),
+                      Positioned(
+                        left: 10,
+                        right: 10,
+                        bottom: 10,
+                        child: _Glass(
+                          dark: true,
+                          radius: 16,
+                          blur: 14,
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                ch.str('title'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _t(13.5,
+                                    w: FontWeight.w900,
+                                    c: Colors.white,
+                                    ls: -0.2),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: progress,
+                                        minHeight: 5,
+                                        backgroundColor:
+                                            Colors.white.withValues(alpha: 0.2),
+                                        valueColor:
+                                            const AlwaysStoppedAnimation(
+                                                Color(0xFF4ADE80)),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    ch.str('progress'),
+                                    style: _t(10,
+                                        w: FontWeight.w700,
+                                        c: Colors.white
+                                            .withValues(alpha: 0.85)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  // -------------------------------------------------------------
+  // 9. MUSIC-SYNCED
+  // -------------------------------------------------------------
+  Widget _audio(WorkoutLayoutSectionModel sec) {
+    final items = _itemsFor(sec);
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Header(
+          title: sec.title.trim().isNotEmpty ? sec.title : 'Music-Synced Workouts',
+          action: 'Playlists',
+        ),
+        SizedBox(
+          height: 156,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final tr = items[i];
+              return _Tap(
+                onTap: () => HapticFeedback.selectionClick(),
+                child: _Card(
+                  width: 184,
+                  radius: 22,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _NetImage(_display(tr.str('image', tr.str('imageUrl'))),
+                          cacheWidth: 480),
+                      Container(
+                        color: _kInk.withValues(alpha: 0.42),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                _Pill(tr.str('bpm', ''),
+                                    icon: Icons.graphic_eq_rounded,
+                                    accent: true),
+                                const _IconGlassButton(
+                                  icon: Icons.play_arrow_rounded,
+                                  active: false,
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Text(
+                              tr.str('title'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(13,
+                                  w: FontWeight.w900,
+                                  c: Colors.white,
+                                  ls: -0.2),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              tr.str('duration'),
+                              style: _t(10.5,
+                                  w: FontWeight.w600,
+                                  c: Colors.white.withValues(alpha: 0.75)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
+
+  // -------------------------------------------------------------
+  // 10. CUSTOM BANNER
+  // -------------------------------------------------------------
+  Widget _customBanner(WorkoutLayoutSectionModel sec) {
+    final img = _display(sec.customBannerImageUrl);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: _Tap(
+        onTap: () => HapticFeedback.selectionClick(),
+        child: _Card(
+          height: 168,
+          radius: 26,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (img.isNotEmpty)
+                _NetImage(img, cacheWidth: 900)
+              else
+                Container(color: _kInk),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      _kInk.withValues(alpha: 0.75),
+                      _kInk.withValues(alpha: 0.15),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (sec.customBannerBadge.isNotEmpty) ...[
+                      _Pill(sec.customBannerBadge, accent: true),
+                      const SizedBox(height: 10),
+                    ],
+                    Text(
+                      sec.title,
+                      maxLines: 2,
+                      style: _t(17,
+                          w: FontWeight.w900, c: Colors.white, ls: -0.4),
+                    ),
+                    if (sec.subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        sec.subtitle,
+                        maxLines: 2,
+                        style: _t(11.5,
+                            w: FontWeight.w600,
+                            c: Colors.white.withValues(alpha: 0.78)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // HELPERS
+  // -------------------------------------------------------------
+  void _toggle(Set<String> set, String id) {
+    HapticFeedback.lightImpact();
+    setState(() => set.contains(id) ? set.remove(id) : set.add(id));
+  }
+
+  String _display(String raw) =>
+      raw.isEmpty ? '' : CategoryBackendService.getDisplayableImageUrl(raw);
+
+  Widget _scrim({required bool top, double strength = 0.5}) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: top ? Alignment.topCenter : Alignment.bottomCenter,
+          end: top ? Alignment.bottomCenter : Alignment.topCenter,
+          stops: const [0.0, 0.7],
+          colors: [
+            _kInk.withValues(alpha: strength),
+            Colors.transparent,
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Color _hex(String v, Color fallback) {
+    if (v.isEmpty) return fallback;
+    var s = v.replaceAll('#', '').trim();
+    if (s.length == 6) s = 'FF$s';
+    final n = int.tryParse(s, radix: 16);
+    return n == null ? fallback : Color(n);
+  }
+
+  static IconData _iconFor(String name) {
+    switch (name.toLowerCase()) {
+      case 'bands':
+      case 'album':
+        return Icons.album_rounded;
+      case 'kettlebell':
+      case 'gymnastics':
+        return Icons.sports_gymnastics_rounded;
+      case 'bodyweight':
+      case 'run':
+        return Icons.directions_run_rounded;
+      case 'bike':
+        return Icons.directions_bike_rounded;
+      case 'yoga':
+        return Icons.self_improvement_rounded;
+      default:
+        return Icons.fitness_center_rounded;
+    }
+  }
+
+  /// Seed rows shown only while a Firestore collection is still empty.
+  static List<WorkoutSectionItem> _seed(String type) {
+    List<WorkoutSectionItem> rows(List<Map<String, dynamic>> l) => [
+          for (var i = 0; i < l.length; i++)
+            WorkoutSectionItem(id: 'seed_${type}_$i', data: l[i]),
+        ];
+    const u = 'https://images.unsplash.com/';
+    switch (type) {
+      case 'popular_programs':
+        return rows([
+          {'title': 'Body Wellness & Core', 'subtitle': 'Full body toning & condition', 'duration': '35 min', 'episodes': '18 episodes', 'level': 'Intermediate', 'rating': '4.9', 'coach': 'Coach Emma', 'image': '${u}photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop'},
+          {'title': 'Lean Muscle Hypertrophy', 'subtitle': 'Dumbbell & compound mastery', 'duration': '45 min', 'episodes': '24 episodes', 'level': 'Advanced', 'rating': '5.0', 'coach': 'Coach David', 'image': '${u}photo-1583454110551-21f2fa2afe61?q=80&w=600&auto=format&fit=crop'},
+          {'title': 'Morning Sun Vinyasa', 'subtitle': 'Flexibility & spine alignment', 'duration': '25 min', 'episodes': '14 episodes', 'level': 'All levels', 'rating': '4.8', 'coach': 'Coach Maya', 'image': '${u}photo-1506126613408-eca07ce68773?q=80&w=600&auto=format&fit=crop'},
+        ]);
+      case 'muscle_groups':
+        return rows([
+          {'name': 'Chest & Triceps', 'exercises': '14 exercises', 'image': '${u}photo-1581009146145-b5ef050c2e1e?q=80&w=400&auto=format&fit=crop'},
+          {'name': 'Back & Biceps', 'exercises': '16 exercises', 'image': '${u}photo-1605296867304-46d5465a13f1?q=80&w=400&auto=format&fit=crop'},
+          {'name': 'Legs & Glutes', 'exercises': '20 exercises', 'image': '${u}photo-1434682881908-b43d0467b798?q=80&w=400&auto=format&fit=crop'},
+        ]);
+      case 'celebrity_coaches':
+        return rows([
+          {'name': 'Elena Rostova', 'specialty': 'Olympic lifting & HIIT', 'rating': '4.9', 'avatar': '${u}photo-1548690312-e3b507d8c110?q=80&w=300&auto=format&fit=crop'},
+          {'name': 'Marcus Vance', 'specialty': 'CrossFit & conditioning', 'rating': '5.0', 'avatar': '${u}photo-1568602471122-7832951cc4c5?q=80&w=300&auto=format&fit=crop'},
+        ]);
+      case 'equipment_training':
+        return rows([
+          {'name': 'Dumbbells only', 'count': '28 workouts', 'icon': 'dumbbell', 'color': '#16A34A'},
+          {'name': 'Resistance bands', 'count': '16 workouts', 'icon': 'bands', 'color': '#0284C7'},
+          {'name': 'Bodyweight', 'count': '35 workouts', 'icon': 'bodyweight', 'color': '#EA580C'},
+        ]);
+      case 'trending_challenges':
+        return rows([
+          {'title': '30-Day Summer Shred', 'joined': '14.2k', 'progress': 'Week 2 of 4', 'progressRatio': 0.5, 'badge': '+500 XP', 'image': '${u}photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop'},
+        ]);
+      case 'audio_beats':
+        return rows([
+          {'title': 'High BPM HIIT Cardio', 'bpm': '145 BPM', 'duration': '30 min', 'image': '${u}photo-1518310383802-640c2de311b2?q=80&w=400&auto=format&fit=crop'},
+          {'title': 'Deep House Strength', 'bpm': '128 BPM', 'duration': '45 min', 'image': '${u}photo-1581009146145-b5ef050c2e1e?q=80&w=400&auto=format&fit=crop'},
+        ]);
+      default:
+        return const [];
+    }
+  }
+}
+
+// =============================================================
+// SHARED BUILDING BLOCKS
+// =============================================================
+
+/// Frosted panel with a top-edge highlight to fake refraction.
+class _Glass extends StatelessWidget {
+  final Widget child;
+  final double radius;
+  final double blur;
+  final bool dark;
+  final EdgeInsets padding;
+
+  const _Glass({
+    required this.child,
+    this.radius = 16,
+    this.blur = 12,
+    this.dark = false,
+    this.padding = EdgeInsets.zero,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
-      return Container(color: const Color(0xFFF1F5F9));
-    }
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: _controller.value.size.width,
-          height: _controller.value.size.height,
-          child: VideoPlayer(_controller),
+    final base = dark ? Colors.black : Colors.white;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            color: base.withValues(alpha: dark ? 0.30 : 0.62),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: dark ? 0.22 : 0.80),
+              width: 1,
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white.withValues(alpha: dark ? 0.14 : 0.55),
+                Colors.white.withValues(alpha: dark ? 0.02 : 0.15),
+              ],
+            ),
+          ),
+          child: child,
         ),
       ),
     );
   }
 }
 
-class _AutoScrollingBannersWidget extends StatefulWidget {
-  final List<String> images;
-  const _AutoScrollingBannersWidget({super.key, required this.images});
+/// White card with hairline border and a wide, low-opacity diffusion shadow.
+class _Card extends StatelessWidget {
+  final Widget child;
+  final double? width;
+  final double? height;
+  final double radius;
+
+  const _Card({
+    required this.child,
+    this.width,
+    this.height,
+    this.radius = 22,
+  });
 
   @override
-  State<_AutoScrollingBannersWidget> createState() => _AutoScrollingBannersWidgetState();
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _kLine.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: _kInk.withValues(alpha: 0.06),
+            blurRadius: 28,
+            spreadRadius: -10,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 }
 
-class _AutoScrollingBannersWidgetState extends State<_AutoScrollingBannersWidget> {
-  final PageController _pageController = PageController(viewportFraction: 0.9);
+/// Tactile press: scales to 0.97 on touch, haptic on release.
+class _Tap extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  const _Tap({required this.child, required this.onTap});
+
+  @override
+  State<_Tap> createState() => _TapState();
+}
+
+class _TapState extends State<_Tap> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _down = true),
+      onTapCancel: () => setState(() => _down = false),
+      onTapUp: (_) {
+        setState(() => _down = false);
+        HapticFeedback.selectionClick();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: _down ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 130),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String? action;
+  final VoidCallback? onTap;
+  final bool padded;
+
+  const _Header({
+    required this.title,
+    this.subtitle,
+    this.action,
+    this.onTap,
+    this.padded = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(padded ? 20 : 0, 0, padded ? 20 : 0, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 3.5,
+            height: subtitle == null ? 18 : 28,
+            decoration: BoxDecoration(
+              color: _kAccent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _t(17, w: FontWeight.w900, ls: -0.5),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _t(11.5, w: FontWeight.w600, c: _kMuted),
+                  ),
+              ],
+            ),
+          ),
+          if (action != null)
+            _Tap(
+              onTap: onTap ?? () {},
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _kAccent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(action!,
+                        style: _t(12, w: FontWeight.w800, c: _kAccentDeep)),
+                    const SizedBox(width: 3),
+                    const Icon(Icons.arrow_forward_rounded,
+                        size: 13, color: _kAccentDeep),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final String text;
+  final IconData? icon;
+  final bool dark;
+  final bool accent;
+  const _Pill(this.text, {this.icon, this.dark = false, this.accent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    final fg = accent ? _kAccentDeep : (dark ? Colors.white : _kInk);
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 12, color: fg),
+          const SizedBox(width: 3),
+        ],
+        Text(text, style: _t(10, w: FontWeight.w800, c: fg)),
+      ],
+    );
+    if (accent) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: _kAccentSoft,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: content,
+      );
+    }
+    return _Glass(
+      dark: dark,
+      radius: 8,
+      blur: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: content,
+    );
+  }
+}
+
+class _RatingChip extends StatelessWidget {
+  final String rating;
+  const _RatingChip(this.rating);
+
+  @override
+  Widget build(BuildContext context) {
+    return _Glass(
+      radius: 8,
+      blur: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 13),
+          const SizedBox(width: 2),
+          Text(rating, style: _t(10.5, w: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconGlassButton extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final VoidCallback? onTap;
+  const _IconGlassButton({required this.icon, this.active = false, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final body = active
+        ? Container(
+            width: 30,
+            height: 30,
+            decoration: const BoxDecoration(
+              color: _kAccent,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 16, color: Colors.white),
+          )
+        : _Glass(
+            radius: 15,
+            blur: 8,
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: Icon(icon, size: 16, color: _kInk),
+            ),
+          );
+    return onTap == null ? body : _Tap(onTap: onTap!, child: body);
+  }
+}
+
+class _MediaBadge extends StatelessWidget {
+  final String type;
+  const _MediaBadge({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Glass(
+      dark: true,
+      radius: 8,
+      blur: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      child: type == 'video'
+          ? const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 13)
+          : Text('GIF', style: _t(8, w: FontWeight.w900, c: Colors.white)),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// IMAGE  — decoded at cacheWidth to keep memory low, fades in once ready
+// -------------------------------------------------------------
+ImageProvider _provider(String path, {int? width}) {
+  ImageProvider base;
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    base = NetworkImage(path);
+  } else if (path.startsWith('assets/')) {
+    base = AssetImage(path);
+  } else {
+    base = AssetImage('assets/images/$path');
+  }
+  return width == null ? base : ResizeImage(base, width: width);
+}
+
+class _NetImage extends StatelessWidget {
+  final String url;
+  final int cacheWidth;
+  const _NetImage(this.url, {this.cacheWidth = 600});
+
+  @override
+  Widget build(BuildContext context) {
+    if (url.isEmpty) return const _ImageFallback();
+    return Image(
+      image: _provider(url, width: cacheWidth),
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      frameBuilder: (context, child, frame, syncLoaded) {
+        if (syncLoaded) return child;
+        return AnimatedOpacity(
+          opacity: frame == null ? 0 : 1,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+          child: child,
+        );
+      },
+      errorBuilder: (_, __, ___) => const _ImageFallback(),
+    );
+  }
+}
+
+class _ImageFallback extends StatelessWidget {
+  const _ImageFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFE2E8F0), Color(0xFFF8FAFC)],
+        ),
+      ),
+      child: const Center(
+        child: Icon(Icons.fitness_center_rounded, color: _kFaint, size: 26),
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// SKELETONS  — same dimensions as the real cards so nothing jumps
+// -------------------------------------------------------------
+class _ShimmerBox extends StatelessWidget {
+  final Animation<double> shimmer;
+  final double? width;
+  final double? height;
+  final double radius;
+  const _ShimmerBox({
+    required this.shimmer,
+    this.width,
+    this.height,
+    this.radius = 16,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: shimmer,
+      builder: (_, __) {
+        final p = shimmer.value;
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            gradient: LinearGradient(
+              begin: Alignment(-1.5 + 3 * p, -0.3),
+              end: Alignment(1.5 + 3 * p, 0.3),
+              colors: const [Color(0xFFEDF1F5), Colors.white, Color(0xFFEDF1F5)],
+              stops: const [0, 0.5, 1],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SectionSkeleton extends StatelessWidget {
+  final String type;
+  final Animation<double> shimmer;
+  const _SectionSkeleton({required this.type, required this.shimmer});
+
+  Widget _header() => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _ShimmerBox(shimmer: shimmer, width: 150, height: 20, radius: 6),
+            _ShimmerBox(shimmer: shimmer, width: 64, height: 26, radius: 13),
+          ],
+        ),
+      );
+
+  Widget _row(double h, double w, int n, double r) => SizedBox(
+        height: h,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: n,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (_, __) =>
+              _ShimmerBox(shimmer: shimmer, width: w, height: h, radius: r),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    switch (type) {
+      case 'hero_banners':
+        return _row(195, 320, 2, 26);
+      case 'categories':
+        return Column(children: [_header(), _row(122, 122, 4, 22)]);
+      case 'popular_programs':
+        return Column(children: [_header(), _row(236, 240, 2, 24)]);
+      case 'bento_spotlight':
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _ShimmerBox(
+                        shimmer: shimmer, width: 150, height: 20, radius: 6),
+                    _ShimmerBox(
+                        shimmer: shimmer, width: 64, height: 26, radius: 13),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 222,
+                child: Row(
+                  children: [
+                    Expanded(
+                        flex: 6,
+                        child: _ShimmerBox(shimmer: shimmer, radius: 24)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        children: [
+                          Expanded(
+                              child: _ShimmerBox(shimmer: shimmer, radius: 20)),
+                          const SizedBox(height: 8),
+                          Expanded(
+                              child: _ShimmerBox(shimmer: shimmer, radius: 20)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      case 'muscle_groups':
+        return Column(children: [_header(), _row(152, 166, 3, 22)]);
+      case 'celebrity_coaches':
+        return Column(children: [_header(), _row(188, 170, 3, 24)]);
+      case 'equipment_training':
+        return Column(children: [_header(), _row(124, 150, 3, 22)]);
+      case 'trending_challenges':
+        return Column(children: [_header(), _row(182, 280, 2, 24)]);
+      case 'audio_beats':
+        return Column(children: [_header(), _row(156, 184, 3, 22)]);
+      case 'custom_banner':
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _ShimmerBox(shimmer: shimmer, height: 168, radius: 26),
+        );
+      default:
+        return Column(children: [_header(), _row(170, 200, 2, 22)]);
+    }
+  }
+}
+
+class _InitialSkeleton extends StatelessWidget {
+  final Animation<double> shimmer;
+  const _InitialSkeleton({required this.shimmer});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _ShimmerBox(shimmer: shimmer, height: 52, radius: 18),
+        ),
+        const SizedBox(height: 22),
+        _SectionSkeleton(type: 'hero_banners', shimmer: shimmer),
+        const SizedBox(height: 28),
+        _SectionSkeleton(type: 'categories', shimmer: shimmer),
+        const SizedBox(height: 28),
+        _SectionSkeleton(type: 'popular_programs', shimmer: shimmer),
+        const SizedBox(height: 28),
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// HERO BANNER CAROUSEL  (glass caption, animated dots)
+// -------------------------------------------------------------
+class _BannerVM {
+  final String key;
+  final String imageUrl;
+  final String mediaType;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final String buttonText;
+  final bool showTitle;
+  const _BannerVM({
+    required this.key,
+    required this.imageUrl,
+    required this.mediaType,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.buttonText,
+    required this.showTitle,
+  });
+}
+
+class _HeroBannerCarousel extends StatefulWidget {
+  final List<_BannerVM> banners;
+  const _HeroBannerCarousel({required this.banners});
+
+  @override
+  State<_HeroBannerCarousel> createState() => _HeroBannerCarouselState();
+}
+
+class _HeroBannerCarouselState extends State<_HeroBannerCarousel> {
+  final _pc = PageController(viewportFraction: 0.9);
   Timer? _timer;
-  int _currentPage = 0;
+  int _page = 0;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
-      if (!mounted) return;
-      if (_currentPage < widget.images.length - 1) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          _currentPage,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOutCubic,
-        );
-      }
+    _arm();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeroBannerCarousel old) {
+    super.didUpdateWidget(old);
+    if (old.banners.length != widget.banners.length) {
+      if (_page >= widget.banners.length) _page = 0;
+      _arm();
+    }
+  }
+
+  void _arm() {
+    _timer?.cancel();
+    if (widget.banners.length < 2) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_pc.hasClients) return;
+      _page = (_page + 1) % widget.banners.length;
+      _pc.animateToPage(
+        _page,
+        duration: const Duration(milliseconds: 620),
+        curve: Curves.easeInOutCubic,
+      );
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _pageController.dispose();
+    _pc.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 195,
-      child: PageView.builder(
-        controller: _pageController,
-        onPageChanged: (index) {
-          _currentPage = index;
-        },
-        itemCount: widget.images.length,
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                image: DecorationImage(
-                  image: AssetImage(widget.images[index]),
-                  fit: BoxFit.cover,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.12),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
+    if (widget.banners.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        SizedBox(
+          height: 195,
+          child: PageView.builder(
+            controller: _pc,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemCount: widget.banners.length,
+            itemBuilder: (context, i) {
+              final b = widget.banners[i];
+              final hasText =
+                  b.showTitle && (b.title.isNotEmpty || b.subtitle.isNotEmpty);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: _Card(
+                  radius: 26,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _CategoryMediaRenderer(
+                        key: ValueKey(b.key),
+                        mediaUrl: b.imageUrl,
+                        mediaType: b.mediaType,
+                      ),
+                      if (hasText) ...[
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              stops: const [0.35, 1],
+                              colors: [
+                                Colors.transparent,
+                                _kInk.withValues(alpha: 0.55),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: _Glass(
+                            dark: true,
+                            radius: 18,
+                            blur: 16,
+                            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (b.badge.isNotEmpty) ...[
+                                        _Pill(b.badge.toUpperCase(),
+                                            accent: true),
+                                        const SizedBox(height: 6),
+                                      ],
+                                      if (b.title.isNotEmpty)
+                                        Text(
+                                          b.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: _t(15,
+                                              w: FontWeight.w900,
+                                              c: Colors.white,
+                                              ls: -0.3),
+                                        ),
+                                      if (b.subtitle.isNotEmpty)
+                                        Text(
+                                          b.subtitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: _t(11,
+                                              w: FontWeight.w600,
+                                              c: Colors.white
+                                                  .withValues(alpha: 0.78)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 16,
+                                    color: _kInk,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
+                ),
+              );
+            },
+          ),
+        ),
+        if (widget.banners.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.banners.length, (i) {
+              final on = i == _page;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: on ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: on ? _kAccent : _kLine,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// MEDIA RENDERER  (image / gif / muted looping video)
+// -------------------------------------------------------------
+class _CategoryMediaRenderer extends StatefulWidget {
+  final String mediaUrl;
+  final String mediaType;
+  const _CategoryMediaRenderer({
+    super.key,
+    required this.mediaUrl,
+    required this.mediaType,
+  });
+
+  @override
+  State<_CategoryMediaRenderer> createState() => _CategoryMediaRendererState();
+}
+
+class _CategoryMediaRendererState extends State<_CategoryMediaRenderer> {
+  VideoPlayerController? _video;
+  bool _ready = false;
+
+  bool get _isVideo {
+    final l = widget.mediaUrl.toLowerCase();
+    return widget.mediaType == 'video' ||
+        l.endsWith('.mp4') ||
+        l.endsWith('.mov') ||
+        l.endsWith('.webm');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CategoryMediaRenderer old) {
+    super.didUpdateWidget(old);
+    if (old.mediaUrl != widget.mediaUrl || old.mediaType != widget.mediaType) {
+      _video?.dispose();
+      _video = null;
+      _ready = false;
+      _init();
+    }
+  }
+
+  void _init() {
+    if (!_isVideo || widget.mediaUrl.isEmpty) return;
+    final url = CategoryBackendService.getDisplayableImageUrl(widget.mediaUrl);
+    _video = url.startsWith('http')
+        ? VideoPlayerController.networkUrl(Uri.parse(url))
+        : VideoPlayerController.asset(
+            url.startsWith('assets/') ? url : 'assets/videos/$url');
+    _video!.initialize().then((_) {
+      if (!mounted) return;
+      _video!
+        ..setVolume(0)
+        ..setLooping(true)
+        ..play();
+      setState(() => _ready = true);
+    }).catchError((e) => debugPrint('[video] $e'));
+  }
+
+  @override
+  void dispose() {
+    _video?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isVideo) {
+      if (_video != null && _ready) {
+        final s = _video!.value.size;
+        return SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: s.width > 0 ? s.width : 16,
+              height: s.height > 0 ? s.height : 9,
+              child: VideoPlayer(_video!),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      }
+      return Container(color: _kSurface);
+    }
+    return _NetImage(
+      CategoryBackendService.getDisplayableImageUrl(widget.mediaUrl),
+      cacheWidth: 720,
     );
   }
 }

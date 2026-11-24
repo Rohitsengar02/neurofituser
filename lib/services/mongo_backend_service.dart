@@ -153,11 +153,55 @@ class MongoBackendService extends ChangeNotifier {
 
       await col.insert(orderDoc);
       debugPrint('✅ Order $orderId successfully inserted into MongoDB orders collection!');
+
+      // Create Notification Record in MongoDB Atlas 'notifications' collection
+      await createNotification(
+        uid: uid,
+        title: 'Order Placed Successfully! 🎉',
+        message: 'Your order #$orderId for ₹${totalAmount.toStringAsFixed(0)} has been placed.',
+        type: 'ORDER_PLACED',
+        data: {'orderId': orderId, 'totalAmount': totalAmount, 'orderStatus': 'Placed'},
+      );
       return true;
     } catch (e) {
       debugPrint('Error placing order in MongoDB: $e');
     }
     return false;
+  }
+
+  // -------------------------------------------------------------
+  // 3.5 CREATE NOTIFICATION DOCUMENT IN MONGODB ATLAS
+  // -------------------------------------------------------------
+  Future<void> createNotification({
+    required String uid,
+    required String title,
+    required String message,
+    required String type,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      final col = await getCollection('notifications');
+      if (col == null) return;
+
+      final notifDoc = {
+        'notificationId': 'notif_${DateTime.now().millisecondsSinceEpoch}',
+        'uid': uid,
+        'title': title,
+        'message': message,
+        'type': type,
+        'data': data ?? {},
+        'isRead': false,
+        'fcmMessageId': '',
+        'fcmStatus': 'pending',
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      await col.insert(notifDoc);
+      debugPrint('🔔 Notification inserted into MongoDB notifications collection: ${notifDoc['notificationId']}');
+    } catch (e) {
+      debugPrint('Error inserting notification in MongoDB: $e');
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchUserOrders(String uid) async {

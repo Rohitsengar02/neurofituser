@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../constants/api_constants.dart';
 
 class CategoryModel {
   final String categoryId;
@@ -71,6 +73,34 @@ class CategoryModel {
       'createdAt': {'timestampValue': createdAt.toUtc().toIso8601String()},
       'updatedAt': {'timestampValue': updatedAt.toUtc().toIso8601String()},
     };
+  }
+
+  factory CategoryModel.fromJson(Map<String, dynamic> json) {
+    final String catId = json['categoryId']?.toString() ?? json['id']?.toString() ?? json['_id']?.toString() ?? 'cat_${DateTime.now().millisecondsSinceEpoch}';
+    final String name = json['name']?.toString() ?? json['title']?.toString() ?? 'Unnamed Category';
+    final String slug = json['slug']?.toString() ?? name.toLowerCase().replaceAll(' ', '-');
+    final String imageUrl = json['imageUrl']?.toString() ?? json['image']?.toString() ?? '';
+    final int count = (json['itemCount'] as num?)?.toInt() ?? (json['productCount'] as num?)?.toInt() ?? 0;
+    final int subCount = (json['subCount'] as num?)?.toInt() ?? (json['subCategoryCount'] as num?)?.toInt() ?? 0;
+    final String status = json['status']?.toString() ?? 'Active';
+    final bool isActive = json['isActive'] == true || status == 'Active';
+
+    return CategoryModel(
+      categoryId: catId,
+      id: catId,
+      name: name,
+      title: name,
+      slug: slug,
+      imageUrl: imageUrl,
+      itemCount: count,
+      productCount: count,
+      subCount: subCount,
+      subCategoryCount: subCount,
+      description: json['description']?.toString() ?? '',
+      status: status,
+      isActive: isActive,
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 1,
+    );
   }
 
   factory CategoryModel.fromFirestoreDoc(Map<String, dynamic> doc) {
@@ -184,6 +214,33 @@ class SubCategoryModel {
     };
   }
 
+  factory SubCategoryModel.fromJson(Map<String, dynamic> json) {
+    final String sId = json['subCategoryId']?.toString() ?? json['id']?.toString() ?? json['_id']?.toString() ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
+    final String pId = json['parentCategoryId']?.toString() ?? json['parentId']?.toString() ?? '';
+    final String pName = json['parentCategoryName']?.toString() ?? json['parentName']?.toString() ?? '';
+    final String name = json['name']?.toString() ?? json['title']?.toString() ?? 'Unnamed Subcategory';
+    final String slug = json['slug']?.toString() ?? name.toLowerCase().replaceAll(' ', '-');
+    final String imageUrl = json['imageUrl']?.toString() ?? json['image']?.toString() ?? '';
+    final int pCount = (json['productCount'] as num?)?.toInt() ?? 0;
+    final String status = json['status']?.toString() ?? 'Active';
+    final bool isActive = json['isActive'] == true || status == 'Active';
+
+    return SubCategoryModel(
+      subCategoryId: sId,
+      id: sId,
+      parentCategoryId: pId,
+      parentCategoryName: pName,
+      name: name,
+      title: name,
+      slug: slug,
+      imageUrl: imageUrl,
+      productCount: pCount,
+      status: status,
+      isActive: isActive,
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 1,
+    );
+  }
+
   factory SubCategoryModel.fromFirestoreDoc(Map<String, dynamic> doc, String parentId, String parentName) {
     final String fullPath = doc['name'] ?? '';
     final String docId = fullPath.split('/').last;
@@ -233,10 +290,32 @@ class CategoryBackendService extends ChangeNotifier {
   static final CategoryBackendService _instance = CategoryBackendService._internal();
   factory CategoryBackendService() => _instance;
   static CategoryBackendService get instance => _instance;
+
+  IO.Socket? _socket;
+
   CategoryBackendService._internal() {
     fetchCategoriesFromFirestore();
     fetchAllSubCategoriesFromFirestore();
     startRealtimeSync();
+    _initSocket();
+  }
+
+  void _initSocket() {
+    try {
+      final socketUri = ApiConstants.socketUrl;
+      _socket = IO.io(
+        socketUri,
+        IO.OptionBuilder().setTransports(['websocket', 'polling']).disableAutoConnect().build(),
+      );
+
+      _socket?.connect();
+
+      _socket?.on('category_created', (_) => fetchCategoriesFromFirestore(silent: true));
+      _socket?.on('category_updated', (_) => fetchCategoriesFromFirestore(silent: true));
+      _socket?.on('category_deleted', (_) => fetchCategoriesFromFirestore(silent: true));
+      _socket?.on('categories_updated', (_) => fetchCategoriesFromFirestore(silent: true));
+      _socket?.on('subcategories_updated', (_) => fetchAllSubCategoriesFromFirestore(silent: true));
+    } catch (_) {}
   }
 
   Timer? _syncTimer;
@@ -253,7 +332,51 @@ class CategoryBackendService extends ChangeNotifier {
   static const String r2AccountId = '61519b8c6a1a20d3535eb39e85687539';
   static const String r2ApiToken = 'cfat_CUzcTemF5447Ag5mi2gIrcDGYyrMrHSrO9PY6q5Sc69f5185';
   static const String r2BucketName = 'neurofit';
-  static const String r2PublicDevUrl = 'https://pub-2faf8f45ef6f42afba49f3944feacff6.r2.dev/uploads';
+  static const String r2PublicDevUrl = 'https://pub-2faf8f45ef6f42afba49f3944feacff6.r2.dev';
+
+  static String getDisplayableImageUrl(String url) {
+    if (url.isEmpty) return '';
+
+    // 1. If already formatted as active API endpoint, return as is
+    if (url.contains('/api/media/file/') || url.contains('/api/media/proxy')) {
+      return url;
+    }
+
+    final trimmed = url.trim();
+
+    // 2. Handle local/backend exercise assets & videos/gifs
+    if (trimmed.startsWith('assets/exercises') ||
+        trimmed.startsWith('/assets/exercises') ||
+        trimmed.startsWith('exercises/') ||
+        trimmed.startsWith('/exercises/')) {
+      final clean = trimmed.startsWith('/') ? trimmed.substring(1) : trimmed;
+      return '${ApiConstants.baseUrl}/$clean';
+    }
+
+    if (trimmed.endsWith('.gif') && !trimmed.startsWith('http')) {
+      return '${ApiConstants.baseUrl}/assets/exercises/videos/$trimmed';
+    }
+    if ((trimmed.endsWith('.jpg') || trimmed.endsWith('.png') || trimmed.endsWith('.webp')) &&
+        !trimmed.startsWith('http') &&
+        !trimmed.contains('/')) {
+      return '${ApiConstants.baseUrl}/assets/exercises/images/$trimmed';
+    }
+
+    // 3. Handle Cloudflare R2 images & local upload filenames:
+    if (trimmed.contains('r2.dev') ||
+        trimmed.contains('/uploads/') ||
+        trimmed.contains('scaled_') ||
+        trimmed.startsWith('1788')) {
+      final fileName = trimmed.split('/').last.split('?').first;
+      if (fileName.isNotEmpty && !fileName.contains(':')) {
+        return '${ApiConstants.apiBaseUrl}/media/file/$fileName';
+      }
+      return '${ApiConstants.apiBaseUrl}/media/proxy?url=${Uri.encodeComponent(trimmed)}';
+    }
+
+    // 4. For Unsplash, Pexels, or standard external CDN image URLs, return directly
+    return trimmed;
+  }
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -267,77 +390,66 @@ class CategoryBackendService extends ChangeNotifier {
   Future<void> fetchCategoriesFromFirestore({bool silent = false}) async {
     if (!silent) _isLoading = true;
     if (!silent) notifyListeners();
-    _isLoading = true;
-    notifyListeners();
 
-    try {
-      final Uri uri = Uri.parse(
-        'https://firestore.googleapis.com/v1/projects/$firebaseProjectId/databases/(default)/documents/categories?key=$firebaseApiKey&pageSize=100',
-      );
+    final candidateUrls = ApiConstants.candidateBaseUrls.map((b) => Uri.parse('$b/api/categories')).toList();
 
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final documents = data['documents'] as List<dynamic>?;
-        if (documents != null && documents.isNotEmpty) {
-          final List<CategoryModel> fetched = [];
-          for (var doc in documents) {
-            fetched.add(CategoryModel.fromFirestoreDoc(doc));
+    for (final url in candidateUrls) {
+      try {
+        final res = await http.get(url).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body);
+          final rawData = (body['data'] ?? body) as List<dynamic>? ?? [];
+          if (rawData.isNotEmpty) {
+            final List<CategoryModel> fetched = rawData.map((item) {
+              return CategoryModel.fromJson(Map<String, dynamic>.from(item as Map));
+            }).toList();
+
+            fetched.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+            _categories.clear();
+            _categories.addAll(fetched);
+            debugPrint('✅ [CATEGORIES LOADED FROM MONGODB ATLAS] ${_categories.length} live categories');
+            _isLoading = false;
+            notifyListeners();
+            return;
           }
-          fetched.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-          _categories.clear();
-          _categories.addAll(fetched);
-          debugPrint('✅ [CATEGORIES LOADED FROM FIRESTORE] ${_categories.length} live categories');
         }
-      }
-    } catch (e) {
-      debugPrint('Firestore fetch categories error: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      } catch (_) {}
     }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> fetchAllSubCategoriesFromFirestore({bool silent = false}) async {
     if (!silent) _isLoading = true;
     if (!silent) notifyListeners();
-    _isLoading = true;
-    notifyListeners();
 
-    try {
-      final List<SubCategoryModel> allSubs = [];
-      final List<Future<void>> futures = [];
+    final candidateUrls = ApiConstants.candidateBaseUrls.map((b) => Uri.parse('$b/api/subcategories')).toList();
 
-      for (var cat in _categories) {
-        futures.add(() async {
-          final Uri subUri = Uri.parse(
-            'https://firestore.googleapis.com/v1/projects/$firebaseProjectId/databases/(default)/documents/categories/${cat.categoryId}/subcategories?key=$firebaseApiKey',
-          );
-          try {
-            final res = await http.get(subUri).timeout(const Duration(seconds: 6));
-            if (res.statusCode == 200) {
-              final data = jsonDecode(res.body);
-              final docs = data['documents'] as List<dynamic>?;
-              if (docs != null) {
-                for (var d in docs) {
-                  allSubs.add(SubCategoryModel.fromFirestoreDoc(d, cat.categoryId, cat.name));
-                }
-              }
-            }
-          } catch (_) {}
-        }());
-      }
+    for (final url in candidateUrls) {
+      try {
+        final res = await http.get(url).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body);
+          final rawData = (body['data'] ?? body) as List<dynamic>? ?? [];
+          if (rawData.isNotEmpty) {
+            final List<SubCategoryModel> fetched = rawData.map((item) {
+              return SubCategoryModel.fromJson(Map<String, dynamic>.from(item as Map));
+            }).toList();
 
-      await Future.wait(futures);
-      _subCategories.clear();
-      _subCategories.addAll(allSubs);
-      debugPrint('✅ [SUBCATEGORIES LOADED FROM FIRESTORE] ${_subCategories.length} live subcategories');
-    } catch (e) {
-      debugPrint('Firestore fetch subcategories error: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+            _subCategories.clear();
+            _subCategories.addAll(fetched);
+            debugPrint('✅ [SUBCATEGORIES LOADED FROM MONGODB ATLAS] ${_subCategories.length} live subcategories');
+            _isLoading = false;
+            notifyListeners();
+            return;
+          }
+        }
+      } catch (_) {}
     }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<String?> uploadRawImageToR2({

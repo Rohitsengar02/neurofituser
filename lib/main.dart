@@ -7,10 +7,13 @@ import 'screens/terms_of_service_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'theme/app_theme.dart';
 
+import 'services/fcm_notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp();
+    await FcmNotificationService.instance.initialize();
   } catch (e) {
     debugPrint('Firebase initialization notice: $e');
   }

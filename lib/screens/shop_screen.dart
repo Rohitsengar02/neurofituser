@@ -17,10 +17,10 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
-  final CategoryBackendService _catService = CategoryBackendService();
-  final ProductsBackendService _prodService = ProductsBackendService();
-  final BannersBackendService _banService = BannersBackendService();
-  final MarketplaceHomeLayoutService _layoutService = MarketplaceHomeLayoutService();
+  final CategoryBackendService _catService = CategoryBackendService.instance;
+  final ProductsBackendService _prodService = ProductsBackendService.instance;
+  final BannersBackendService _banService = BannersBackendService.instance;
+  final MarketplaceHomeLayoutService _layoutService = MarketplaceHomeLayoutService.instance;
 
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -63,10 +63,10 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
 
   Future<void> _loadDataAndPrecache() async {
     await Future.wait([
-      if (_catService.categories.isEmpty) _catService.fetchCategoriesFromFirestore(),
-      if (_prodService.products.isEmpty) _prodService.fetchProductsFromFirestore(),
-      if (_banService.banners.isEmpty) _banService.fetchBannersFromFirestore(),
-      if (_layoutService.sections.isEmpty) _layoutService.fetchLayoutSectionsFromFirestore(),
+      _catService.fetchCategoriesFromFirestore(),
+      _prodService.fetchProductsFromFirestore(),
+      _banService.fetchBannersFromFirestore(),
+      _layoutService.fetchLayoutSectionsFromFirestore(),
     ]);
 
     if (mounted) {
@@ -94,7 +94,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
     _totalCriticalImages = criticalUrls.length;
     _loadedCriticalImages = 0;
 
-    Timer(const Duration(milliseconds: 2000), () {
+    Timer(const Duration(milliseconds: 600), () {
       if (mounted && _isInitialLoading) {
         setState(() => _isInitialLoading = false);
       }
@@ -575,12 +575,12 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
 
               const SizedBox(height: 12),
 
-              // 2. Circular Categories Carousel (Same UI as Shop Tab)
+              // 2. Circular Categories Carousel
               _buildCircularCategoriesCarousel(categories),
 
               const SizedBox(height: 16),
 
-              // 3. Products Header (Active Category + Count + Filter Badges)
+              // 3. Products Catalog Grid
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Row(
@@ -588,7 +588,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                   children: [
                     Text(
                       _selectedCategoryFilter == 'All'
-                          ? 'All Products (${filtered.length})'
+                          ? (_searchQuery.isNotEmpty ? 'Search Results (${filtered.length})' : 'All Products (${filtered.length})')
                           : '$_selectedCategoryFilter (${filtered.length})',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 16,
@@ -597,12 +597,14 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    if (_selectedCategoryFilter != 'All' || _priceRange.start > 0 || _priceRange.end < 10000 || _onlyInStock)
+                    if (_selectedCategoryFilter != 'All' || _searchQuery.isNotEmpty)
                       GestureDetector(
                         onTap: () {
                           HapticFeedback.selectionClick();
                           setState(() {
                             _selectedCategoryFilter = 'All';
+                            _searchController.clear();
+                            _searchQuery = '';
                             _priceRange = const RangeValues(0, 10000);
                             _selectedSortBy = 'Popularity';
                             _minRatingFilter = 0.0;
@@ -622,10 +624,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
                   ],
                 ),
               ),
-
               const SizedBox(height: 12),
-
-              // 4. Products 2-Column Responsive Grid
               if (filtered.isEmpty)
                 _buildNoProductsFound()
               else
@@ -648,6 +647,282 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
               const SizedBox(height: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // DYNAMIC CMS LAYOUT SECTION RENDERER
+  // -------------------------------------------------------------
+  Widget _buildDynamicLayoutSection(LayoutSectionModel section) {
+    if (!section.isActive) return const SizedBox.shrink();
+
+    Widget contentWidget;
+    if (section.type == 'banners') {
+      contentWidget = _buildBannerSectionContent(section);
+    } else if (section.type == 'categories') {
+      contentWidget = _buildCategorySectionContent(section);
+    } else {
+      contentWidget = _buildProductSectionContent(section);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (section.showTitle && section.title.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  section.title,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                if (section.subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    section.subtitle,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        contentWidget,
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildBannerSectionContent(LayoutSectionModel section) {
+    final banners = _banService.banners;
+    if (banners.isEmpty) return const SizedBox.shrink();
+
+    List<BannerModel> targetBanners = banners;
+    if (section.selectedItemIds.isNotEmpty) {
+      final selected = banners.where((b) => section.selectedItemIds.contains(b.bannerId) || section.selectedItemIds.contains(b.id)).toList();
+      if (selected.isNotEmpty) targetBanners = selected;
+    }
+
+    final items = targetBanners.take(section.itemLimit).toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    if (section.layoutMode == 'grid') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.6,
+          ),
+          itemBuilder: (context, idx) => _buildBannerCard(items[idx]),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 135,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, idx) => SizedBox(
+          width: 280,
+          child: _buildBannerCard(items[idx]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBannerCard(BannerModel b) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Image.network(
+              CategoryBackendService.getDisplayableImageUrl(b.imageUrl),
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(color: const Color(0xFFE2E8F0)),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black.withValues(alpha: 0.65), Colors.transparent],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 10,
+              left: 12,
+              right: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (b.title.isNotEmpty)
+                    Text(
+                      b.title,
+                      style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (b.subtitle.isNotEmpty)
+                    Text(
+                      b.subtitle,
+                      style: GoogleFonts.plusJakartaSans(fontSize: 10.5, color: Colors.white70),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategorySectionContent(LayoutSectionModel section) {
+    final categories = _catService.categories;
+    if (categories.isEmpty) return const SizedBox.shrink();
+
+    final items = categories.take(section.itemLimit).toList();
+
+    if (section.layoutMode == 'grid') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 2.2,
+          ),
+          itemBuilder: (context, idx) {
+            final cat = items[idx];
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _selectedCategoryFilter = cat.name);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: cat.imageUrl.isNotEmpty
+                          ? Image.network(cat.imageUrl, width: 42, height: 42, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFFF1F5F9)))
+                          : Container(color: const Color(0xFFF1F5F9), width: 42, height: 42, child: const Icon(Icons.category_rounded, size: 20, color: Color(0xFF64748B))),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        cat.name,
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    return _buildCircularCategoriesCarousel(categories);
+  }
+
+  Widget _buildProductSectionContent(LayoutSectionModel section) {
+    List<ProductModel> sectionProducts = _prodService.products;
+
+    if (section.filterSource == 'category' && section.filterId.isNotEmpty) {
+      sectionProducts = sectionProducts.where((p) => p.categoryId == section.filterId || p.category.toLowerCase().contains(section.filterName.toLowerCase())).toList();
+    } else if (section.filterSource == 'subcategory' && section.filterId.isNotEmpty) {
+      sectionProducts = sectionProducts.where((p) => p.subcategoryId == section.filterId || p.subcategoryName.toLowerCase().contains(section.filterName.toLowerCase())).toList();
+    } else if (section.filterSource == 'featured') {
+      sectionProducts = sectionProducts.where((p) => p.isFeatured).toList();
+    }
+
+    if (sectionProducts.isEmpty) sectionProducts = _prodService.products;
+    final items = sectionProducts.take(section.itemLimit).toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    if (section.layoutMode == 'grid') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.68,
+          ),
+          itemBuilder: (context, index) => _buildProductCard(items[index]),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 255,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) => SizedBox(
+          width: 165,
+          child: _buildProductCard(items[index]),
         ),
       ),
     );
@@ -852,7 +1127,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
           )
                           : (catImage.isNotEmpty
                               ? Image.network(
-                                  catImage,
+                                  CategoryBackendService.getDisplayableImageUrl(catImage),
                                   width: 58,
                                   height: 58,
                                   fit: BoxFit.cover,
@@ -934,7 +1209,7 @@ class _ShopScreenState extends State<ShopScreen> with TickerProviderStateMixin {
               child: Stack(
                 children: [
                   Image.network(
-                    imageUrl,
+                    CategoryBackendService.getDisplayableImageUrl(imageUrl),
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,

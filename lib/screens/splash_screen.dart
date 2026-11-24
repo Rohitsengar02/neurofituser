@@ -1,3 +1,4 @@
+import 'package:permission_handler/permission_handler.dart';
 import '../services/user_backend_service.dart';
 import 'dashboard_screen.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
+    _requestNotificationPermission();
 
     // Logo entrance animation (scale + fade)
     _logoController = AnimationController(
@@ -92,6 +94,17 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         );
       });
     });
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final status = await Permission.notification.status;
+      if (!status.isGranted) {
+        await Permission.notification.request();
+      }
+    } catch (e) {
+      debugPrint('Notification permission request notice: $e');
+    }
   }
 
   @override

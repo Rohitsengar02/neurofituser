@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'category_backend_service.dart';
+import '../constants/api_constants.dart';
 
 class BannerModel {
   final String bannerId;
@@ -11,6 +13,9 @@ class BannerModel {
   String subtitle;
   String imageUrl;
   String imageKey;
+  String mediaType; // 'image', 'gif', 'video'
+  bool showTitle;
+  bool showHeading;
   String targetType; // 'category', 'product', 'offer', 'brand'
   String targetId;
   String targetName;
@@ -30,6 +35,9 @@ class BannerModel {
     this.subtitle = '',
     required this.imageUrl,
     String? imageKey,
+    this.mediaType = 'image',
+    this.showTitle = true,
+    this.showHeading = true,
     this.targetType = 'category',
     this.targetId = '',
     this.targetName = '',
@@ -53,6 +61,9 @@ class BannerModel {
       'subtitle': {'stringValue': subtitle},
       'imageUrl': {'stringValue': imageUrl},
       'imageKey': {'stringValue': imageKey},
+      'mediaType': {'stringValue': mediaType},
+      'showTitle': {'booleanValue': showTitle},
+      'showHeading': {'booleanValue': showHeading},
       'targetType': {'stringValue': targetType},
       'targetId': {'stringValue': targetId},
       'targetName': {'stringValue': targetName},
@@ -65,6 +76,55 @@ class BannerModel {
       'createdAt': {'timestampValue': createdAt.toUtc().toIso8601String()},
       'updatedAt': {'timestampValue': updatedAt.toUtc().toIso8601String()},
     };
+  }
+
+  factory BannerModel.fromJson(Map<String, dynamic> json) {
+    final String bId = json['bannerId']?.toString() ?? json['id']?.toString() ?? json['_id']?.toString() ?? 'banner_${DateTime.now().millisecondsSinceEpoch}';
+    final String title = json['title']?.toString() ?? 'Special Offer';
+    final String subtitle = json['subtitle']?.toString() ?? '';
+    final String imageUrl = json['imageUrl']?.toString() ?? json['image']?.toString() ?? '';
+    final lower = imageUrl.toLowerCase();
+
+    String mType = json['mediaType']?.toString() ?? '';
+    if (mType.isEmpty) {
+      if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm')) {
+        mType = 'video';
+      } else if (lower.endsWith('.gif')) {
+        mType = 'gif';
+      } else {
+        mType = 'image';
+      }
+    }
+
+    final String targetType = json['targetType']?.toString() ?? 'category';
+    final String targetId = json['targetId']?.toString() ?? '';
+    final String targetName = json['targetName']?.toString() ?? '';
+    final String buttonText = json['buttonText']?.toString() ?? 'Shop Now';
+    final String badge = json['badge']?.toString() ?? 'FEATURED';
+    final int sortOrder = (json['sortOrder'] as num?)?.toInt() ?? 1;
+    final String status = json['status']?.toString() ?? 'Active';
+    final bool active = json['isActive'] == true || status == 'Active';
+    final String discountCode = json['discountCode']?.toString() ?? '';
+
+    return BannerModel(
+      bannerId: bId,
+      id: bId,
+      title: title,
+      subtitle: subtitle,
+      imageUrl: imageUrl,
+      mediaType: mType,
+      showTitle: json['showTitle'] ?? true,
+      showHeading: json['showHeading'] ?? json['showTitle'] ?? true,
+      targetType: targetType,
+      targetId: targetId,
+      targetName: targetName,
+      buttonText: buttonText,
+      badge: badge,
+      sortOrder: sortOrder,
+      status: status,
+      isActive: active,
+      discountCode: discountCode,
+    );
   }
 
   factory BannerModel.fromFirestoreDoc(Map<String, dynamic> doc) {
@@ -121,9 +181,68 @@ class BannersBackendService extends ChangeNotifier {
   static final BannersBackendService _instance = BannersBackendService._internal();
   factory BannersBackendService() => _instance;
   static BannersBackendService get instance => _instance;
+
+  IO.Socket? _socket;
+
   BannersBackendService._internal() {
     fetchBannersFromFirestore();
     startRealtimeSync();
+    _initSocket();
+  }
+
+  void _initSocket() {
+    try {
+      final socketUri = ApiConstants.socketUrl;
+      _socket = IO.io(
+        socketUri,
+        IO.OptionBuilder().setTransports(['websocket', 'polling']).disableAutoConnect().build(),
+      );
+
+      _socket?.connect();
+
+      _socket?.on('banner_created', (data) {
+        if (data is Map<String, dynamic>) {
+          final newBanner = BannerModel.fromJson(data);
+          _banners.removeWhere((b) => b.bannerId == newBanner.bannerId || b.id == newBanner.id);
+          _banners.add(newBanner);
+          _banners.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          notifyListeners();
+        }
+      });
+
+      _socket?.on('banner_updated', (data) {
+        if (data is Map<String, dynamic>) {
+          final updated = BannerModel.fromJson(data);
+          final index = _banners.indexWhere((b) => b.bannerId == updated.bannerId || b.id == updated.id);
+          if (index != -1) {
+            _banners[index] = updated;
+          } else {
+            _banners.add(updated);
+          }
+          _banners.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          notifyListeners();
+        }
+      });
+
+      _socket?.on('banner_deleted', (data) {
+        final delId = (data is Map) ? (data['id'] ?? data['bannerId']) : data.toString();
+        _banners.removeWhere((b) => b.bannerId == delId || b.id == delId);
+        notifyListeners();
+      });
+
+      _socket?.on('banners_updated', (data) {
+        if (data is List) {
+          final List<BannerModel> list = [];
+          for (var item in data) {
+            if (item is Map<String, dynamic>) list.add(BannerModel.fromJson(item));
+          }
+          list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          _banners.clear();
+          _banners.addAll(list);
+          notifyListeners();
+        }
+      });
+    } catch (_) {}
   }
 
   Timer? _syncTimer;
@@ -146,35 +265,34 @@ class BannersBackendService extends ChangeNotifier {
   Future<void> fetchBannersFromFirestore({bool silent = false}) async {
     if (!silent) _isLoading = true;
     if (!silent) notifyListeners();
-    _isLoading = true;
-    notifyListeners();
 
-    try {
-      final Uri uri = Uri.parse(
-        'https://firestore.googleapis.com/v1/projects/$firebaseProjectId/databases/(default)/documents/banners?key=$firebaseApiKey&pageSize=100',
-      );
+    final candidateUrls = ApiConstants.candidateBaseUrls.map((b) => Uri.parse('$b/api/banners')).toList();
 
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final documents = data['documents'] as List<dynamic>?;
-        if (documents != null) {
-          final List<BannerModel> fetched = [];
-          for (var doc in documents) {
-            fetched.add(BannerModel.fromFirestoreDoc(doc));
+    for (final url in candidateUrls) {
+      try {
+        final res = await http.get(url).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body);
+          final rawData = (body['data'] ?? body) as List<dynamic>? ?? [];
+          if (rawData.isNotEmpty) {
+            final List<BannerModel> fetched = rawData.map((item) {
+              return BannerModel.fromJson(Map<String, dynamic>.from(item as Map));
+            }).toList();
+
+            fetched.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+            _banners.clear();
+            _banners.addAll(fetched);
+            debugPrint('✅ [BANNERS LOADED FROM MONGODB ATLAS] ${_banners.length} live banners');
+            _isLoading = false;
+            notifyListeners();
+            return;
           }
-          fetched.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-          _banners.clear();
-          _banners.addAll(fetched);
-          debugPrint('✅ [BANNERS LOADED FROM FIRESTORE] ${_banners.length} live banners');
         }
-      }
-    } catch (e) {
-      debugPrint('Error fetching banners from Firestore: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      } catch (_) {}
     }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<bool> createBanner({

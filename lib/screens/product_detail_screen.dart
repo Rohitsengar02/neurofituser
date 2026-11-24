@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/products_backend_service.dart';
+import '../services/category_backend_service.dart';
 import 'product_detail_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -57,27 +58,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final List<Map<String, dynamic>> _userReviews = [
     {
       'name': 'Rahul Sharma',
-      'avatar': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      'avatar':
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
       'rating': 5.0,
       'date': '2 days ago',
       'verified': true,
-      'comment': 'Exceptional mixability and authentic taste. Noticed solid recovery within a week of use! Highly recommended.',
+      'comment':
+          'Exceptional mixability and authentic taste. Noticed solid recovery within a week of use! Highly recommended.',
     },
     {
       'name': 'Priya Patel',
-      'avatar': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+      'avatar':
+          'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
       'rating': 5.0,
       'date': '1 week ago',
       'verified': true,
-      'comment': 'Lab certification QR code verified immediately. Zero bloat, great protein-to-calorie ratio.',
+      'comment':
+          'Lab certification QR code verified immediately. Zero bloat, great protein-to-calorie ratio.',
     },
     {
       'name': 'Aman Verma',
-      'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
       'rating': 4.5,
       'date': '2 weeks ago',
       'verified': true,
-      'comment': 'Top notch packaging and fast delivery. Chocolate flavor is rich without being overly sweet.',
+      'comment':
+          'Top notch packaging and fast delivery. Chocolate flavor is rich without being overly sweet.',
     },
   ];
 
@@ -94,7 +101,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final p = widget.product;
     if (p != null) {
       _activeTitle = p.title;
-      _activeCategory = p.categoryName.isNotEmpty ? p.categoryName : (widget.category ?? 'Supplements');
+      _activeCategory = p.categoryName.isNotEmpty
+          ? p.categoryName
+          : (widget.category ?? 'Supplements');
       _activeDescription = p.description.isNotEmpty
           ? p.description
           : 'Premium lab-certified formula designed for peak athletic performance, sustained energy, and rapid muscle recovery. Crafted with ultra-pure ingredients and verified for quality.';
@@ -111,26 +120,53 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         if (img.isNotEmpty && !imgs.contains(img)) imgs.add(img);
       }
       for (final v in p.variants) {
-        if (v.imageUrl.isNotEmpty && !imgs.contains(v.imageUrl)) imgs.add(v.imageUrl);
+        if (v.imageUrl.isNotEmpty && !imgs.contains(v.imageUrl))
+          imgs.add(v.imageUrl);
       }
       if (imgs.isEmpty && widget.image != null) imgs.add(widget.image!);
-      _allImages = imgs.isNotEmpty ? imgs : ['https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800'];
+      _allImages = imgs.isNotEmpty
+          ? imgs
+          : ['https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800'];
     } else {
       _activeTitle = widget.title ?? 'Gold Standard 100% Whey Isolate';
       _activeCategory = widget.category ?? 'Supplements';
-      _activeDescription = 'Premium lab-certified formula designed for peak athletic performance, sustained energy, and rapid muscle recovery. Crafted with ultra-pure ingredients and verified for quality.';
+      _activeDescription =
+          'Premium lab-certified formula designed for peak athletic performance, sustained energy, and rapid muscle recovery. Crafted with ultra-pure ingredients and verified for quality.';
       _activePrice = widget.price ?? 3499.0;
       _activeOldPrice = widget.oldPrice;
       _activeRating = widget.rating ?? 4.8;
       _activeReviewCount = int.tryParse(widget.reviewsCount ?? '128') ?? 128;
       _activeStock = 25;
       _variants = [
-        ProductVariant(name: 'Double Rich Chocolate', price: 3499.0, stock: 20, sku: 'NF-CHO-01', imageUrl: widget.image ?? 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800'),
-        ProductVariant(name: 'Vanilla Ice Cream', price: 3499.0, stock: 15, sku: 'NF-VAN-02', imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800'),
-        ProductVariant(name: 'Delicious Strawberry', price: 3499.0, stock: 12, sku: 'NF-STR-03', imageUrl: 'https://images.unsplash.com/photo-1579722821273-0f6c7d44362f?w=800'),
+        ProductVariant(
+          name: 'Double Rich Chocolate',
+          price: 3499.0,
+          stock: 20,
+          sku: 'NF-CHO-01',
+          imageUrl:
+              widget.image ??
+              'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800',
+        ),
+        ProductVariant(
+          name: 'Vanilla Ice Cream',
+          price: 3499.0,
+          stock: 15,
+          sku: 'NF-VAN-02',
+          imageUrl:
+              'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800',
+        ),
+        ProductVariant(
+          name: 'Delicious Strawberry',
+          price: 3499.0,
+          stock: 12,
+          sku: 'NF-STR-03',
+          imageUrl:
+              'https://images.unsplash.com/photo-1579722821273-0f6c7d44362f?w=800',
+        ),
       ];
       _allImages = [
-        widget.image ?? 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800',
+        widget.image ??
+            'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800',
         'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800',
         'https://images.unsplash.com/photo-1579722821273-0f6c7d44362f?w=800',
       ];
@@ -145,7 +181,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _onServiceUpdate() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final targetId = widget.product?.id;
+    if (targetId != null && targetId.isNotEmpty) {
+      final matches = _prodService.products.where((p) => p.id == targetId);
+      if (matches.isNotEmpty) {
+        final updated = matches.first;
+        setState(() {
+          _activeTitle = updated.title;
+          if (updated.categoryName.isNotEmpty) _activeCategory = updated.categoryName;
+          if (updated.description.isNotEmpty) _activeDescription = updated.description;
+          _activePrice = updated.salePrice > 0 ? updated.salePrice : updated.price;
+          _activeOldPrice = updated.regularPrice > _activePrice ? updated.regularPrice : null;
+          _activeStock = updated.stock;
+          _variants = updated.variants;
+
+          final List<String> imgs = [];
+          if (updated.mainImageUrl.isNotEmpty) imgs.add(updated.mainImageUrl);
+          for (final img in updated.additionalImages) {
+            if (img.isNotEmpty && !imgs.contains(img)) imgs.add(img);
+          }
+          for (final v in updated.variants) {
+            if (v.imageUrl.isNotEmpty && !imgs.contains(v.imageUrl)) imgs.add(v.imageUrl);
+          }
+          if (imgs.isNotEmpty) _allImages = imgs;
+        });
+        return;
+      }
+    }
+    setState(() {});
   }
 
   void _selectImage(int index) {
@@ -207,15 +271,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     HapticFeedback.heavyImpact();
 
     // Add or update current product in cart
-    final String currentVariantName = _variants.isNotEmpty ? _variants[_selectedVariantIndex].name : 'Standard Edition';
-    final String currentImage = _allImages.isNotEmpty ? _allImages[_selectedImageIndex] : '';
+    final String currentVariantName = _variants.isNotEmpty
+        ? _variants[_selectedVariantIndex].name
+        : 'Standard Edition';
+    final String currentImage = _allImages.isNotEmpty
+        ? _allImages[_selectedImageIndex]
+        : '';
 
-    final existingIdx = _cartItems.indexWhere((item) =>
-        item['title'] == _activeTitle &&
-        item['variant'] == currentVariantName);
+    final existingIdx = _cartItems.indexWhere(
+      (item) =>
+          item['title'] == _activeTitle &&
+          item['variant'] == currentVariantName,
+    );
 
     if (existingIdx != -1) {
-      _cartItems[existingIdx]['quantity'] = (_cartItems[existingIdx]['quantity'] as int) + _quantity;
+      _cartItems[existingIdx]['quantity'] =
+          (_cartItems[existingIdx]['quantity'] as int) + _quantity;
     } else {
       _cartItems.add({
         'title': _activeTitle,
@@ -258,17 +329,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   double subtotal = 0;
                   int totalItems = 0;
                   for (final item in _cartItems) {
-                    subtotal += (item['price'] as double) * (item['quantity'] as int);
+                    subtotal +=
+                        (item['price'] as double) * (item['quantity'] as int);
                     totalItems += item['quantity'] as int;
                   }
-                  final double finalTotal = (subtotal - _appliedDiscount).clamp(0.0, double.infinity);
+                  final double finalTotal = (subtotal - _appliedDiscount).clamp(
+                    0.0,
+                    double.infinity,
+                  );
 
                   return Container(
                     width: MediaQuery.of(context).size.width * 0.88,
                     height: double.infinity,
                     decoration: const BoxDecoration(
                       color: Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.horizontal(left: Radius.circular(28)),
+                      borderRadius: BorderRadius.horizontal(
+                        left: Radius.circular(28),
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black26,
@@ -295,7 +372,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         color: const Color(0xFF0F172A),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: const Icon(Icons.shopping_bag_rounded, color: Colors.white, size: 18),
+                                      child: const Icon(
+                                        Icons.shopping_bag_rounded,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
                                     ),
                                     const SizedBox(width: 10),
                                     Text(
@@ -315,9 +396,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      border: Border.all(
+                                        color: const Color(0xFFE2E8F0),
+                                      ),
                                     ),
-                                    child: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 18),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      color: Color(0xFF64748B),
+                                      size: 18,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -329,14 +416,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           // 2. Free Delivery Badge
                           Container(
                             margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFDCFCE7),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.local_shipping_rounded, color: Color(0xFF16A34A), size: 16),
+                                const Icon(
+                                  Icons.local_shipping_rounded,
+                                  color: Color(0xFF16A34A),
+                                  size: 16,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -359,30 +453,52 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.shopping_cart_outlined, size: 54, color: Color(0xFF94A3B8)),
+                                        const Icon(
+                                          Icons.shopping_cart_outlined,
+                                          size: 54,
+                                          color: Color(0xFF94A3B8),
+                                        ),
                                         const SizedBox(height: 12),
-                                        Text('Your cart is empty', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w800)),
+                                        Text(
+                                          'Your cart is empty',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   )
                                 : ListView.separated(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
                                     physics: const BouncingScrollPhysics(),
                                     itemCount: _cartItems.length,
-                                    separatorBuilder: (c, i) => const SizedBox(height: 12),
+                                    separatorBuilder: (c, i) =>
+                                        const SizedBox(height: 12),
                                     itemBuilder: (context, index) {
                                       final item = _cartItems[index];
-                                      final itemTotal = (item['price'] as double) * (item['quantity'] as int);
+                                      final itemTotal =
+                                          (item['price'] as double) *
+                                          (item['quantity'] as int);
 
                                       return Container(
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(18),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFE2E8F0),
+                                          ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.02),
+                                              color: Colors.black.withValues(
+                                                alpha: 0.02,
+                                              ),
                                               blurRadius: 6,
                                               offset: const Offset(0, 2),
                                             ),
@@ -392,57 +508,82 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           children: [
                                             // Thumbnail
                                             ClipRRect(
-                                              borderRadius: BorderRadius.circular(12),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
                                               child: Image.network(
-                                                item['image'] as String,
+                                                CategoryBackendService.getDisplayableImageUrl(item['image'] as String),
                                                 width: 58,
                                                 height: 58,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (c, e, s) => Container(
-                                                  width: 58,
-                                                  height: 58,
-                                                  color: const Color(0xFFF1F5F9),
-                                                  child: const Icon(Icons.fitness_center_rounded, size: 20),
-                                                ),
+                                                errorBuilder: (c, e, s) =>
+                                                    Container(
+                                                      width: 58,
+                                                      height: 58,
+                                                      color: const Color(
+                                                        0xFFF1F5F9,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons
+                                                            .fitness_center_rounded,
+                                                        size: 20,
+                                                      ),
+                                                    ),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
                                             // Title & Variant
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     item['title'] as String,
-                                                    style: GoogleFonts.plusJakartaSans(
-                                                      fontSize: 12.5,
-                                                      fontWeight: FontWeight.w800,
-                                                      color: const Color(0xFF0F172A),
-                                                    ),
+                                                    style:
+                                                        GoogleFonts.plusJakartaSans(
+                                                          fontSize: 12.5,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          color: const Color(
+                                                            0xFF0F172A,
+                                                          ),
+                                                        ),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
-                                                  if ((item['variant'] as String).isNotEmpty) ...[
+                                                  if ((item['variant']
+                                                          as String)
+                                                      .isNotEmpty) ...[
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       item['variant'] as String,
-                                                      style: GoogleFonts.plusJakartaSans(
-                                                        fontSize: 10.5,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: const Color(0xFF64748B),
-                                                      ),
+                                                      style:
+                                                          GoogleFonts.plusJakartaSans(
+                                                            fontSize: 10.5,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: const Color(
+                                                              0xFF64748B,
+                                                            ),
+                                                          ),
                                                       maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
                                                   ],
                                                   const SizedBox(height: 4),
                                                   Text(
                                                     '₹${itemTotal.toStringAsFixed(0)}',
-                                                    style: GoogleFonts.plusJakartaSans(
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.w900,
-                                                      color: const Color(0xFF7C3AED),
-                                                    ),
+                                                    style:
+                                                        GoogleFonts.plusJakartaSans(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: const Color(
+                                                            0xFF7C3AED,
+                                                          ),
+                                                        ),
                                                   ),
                                                 ],
                                               ),
@@ -451,7 +592,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                             Container(
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFF1F5F9),
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               child: Row(
                                                 children: [
@@ -459,33 +601,59 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                     onPressed: () {
                                                       HapticFeedback.selectionClick();
                                                       setCartState(() {
-                                                        if ((item['quantity'] as int) > 1) {
-                                                          item['quantity'] = (item['quantity'] as int) - 1;
+                                                        if ((item['quantity']
+                                                                as int) >
+                                                            1) {
+                                                          item['quantity'] =
+                                                              (item['quantity']
+                                                                  as int) -
+                                                              1;
                                                         } else {
-                                                          _cartItems.removeAt(index);
+                                                          _cartItems.removeAt(
+                                                            index,
+                                                          );
                                                         }
                                                       });
                                                     },
-                                                    icon: const Icon(Icons.remove_rounded, size: 14),
-                                                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                                    icon: const Icon(
+                                                      Icons.remove_rounded,
+                                                      size: 14,
+                                                    ),
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                          minWidth: 26,
+                                                          minHeight: 26,
+                                                        ),
                                                     padding: EdgeInsets.zero,
                                                   ),
                                                   Text(
                                                     '${item['quantity']}',
-                                                    style: GoogleFonts.plusJakartaSans(
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.w800,
-                                                    ),
+                                                    style:
+                                                        GoogleFonts.plusJakartaSans(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                        ),
                                                   ),
                                                   IconButton(
                                                     onPressed: () {
                                                       HapticFeedback.selectionClick();
                                                       setCartState(() {
-                                                        item['quantity'] = (item['quantity'] as int) + 1;
+                                                        item['quantity'] =
+                                                            (item['quantity']
+                                                                as int) +
+                                                            1;
                                                       });
                                                     },
-                                                    icon: const Icon(Icons.add_rounded, size: 14),
-                                                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                                    icon: const Icon(
+                                                      Icons.add_rounded,
+                                                      size: 14,
+                                                    ),
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                          minWidth: 26,
+                                                          minHeight: 26,
+                                                        ),
                                                     padding: EdgeInsets.zero,
                                                   ),
                                                 ],
@@ -506,21 +674,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 Expanded(
                                   child: Container(
                                     height: 38,
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      border: Border.all(
+                                        color: const Color(0xFFE2E8F0),
+                                      ),
                                     ),
                                     child: TextField(
                                       controller: _promoController,
-                                      style: GoogleFonts.plusJakartaSans(fontSize: 11.5, fontWeight: FontWeight.w700),
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                       decoration: InputDecoration(
                                         hintText: 'Promo Code (e.g. NEURO10)',
-                                        hintStyle: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF94A3B8)),
+                                        hintStyle: GoogleFonts.plusJakartaSans(
+                                          fontSize: 11,
+                                          color: const Color(0xFF94A3B8),
+                                        ),
                                         border: InputBorder.none,
                                         isDense: true,
-                                        contentPadding: const EdgeInsets.only(top: 8),
+                                        contentPadding: const EdgeInsets.only(
+                                          top: 8,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -528,7 +708,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 const SizedBox(width: 8),
                                 GestureDetector(
                                   onTap: () {
-                                    final code = _promoController.text.trim().toUpperCase();
+                                    final code = _promoController.text
+                                        .trim()
+                                        .toUpperCase();
                                     if (code.isNotEmpty) {
                                       HapticFeedback.selectionClick();
                                       setCartState(() {
@@ -538,7 +720,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     }
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF0F172A),
                                       borderRadius: BorderRadius.circular(12),
@@ -564,41 +749,102 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                              ),
                             ),
                             child: Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Subtotal', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B))),
-                                    Text('₹${subtotal.toStringAsFixed(2)}', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    Text(
+                                      'Subtotal',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                    Text(
+                                      '₹${subtotal.toStringAsFixed(2)}',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 if (_appliedDiscount > 0) ...[
                                   const SizedBox(height: 6),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('Discount ($_appliedPromoCode)', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF16A34A))),
-                                      Text('-₹${_appliedDiscount.toStringAsFixed(2)}', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF16A34A))),
+                                      Text(
+                                        'Discount ($_appliedPromoCode)',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          color: const Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                      Text(
+                                        '-₹${_appliedDiscount.toStringAsFixed(2)}',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF16A34A),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
                                 const SizedBox(height: 6),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Estimated Delivery', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B))),
-                                    Text('FREE', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF16A34A))),
+                                    Text(
+                                      'Estimated Delivery',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                    Text(
+                                      'FREE',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF16A34A),
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                                const Divider(
+                                  height: 16,
+                                  color: Color(0xFFF1F5F9),
+                                ),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Total Payable', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-                                    Text('₹${finalTotal.toStringAsFixed(2)}', style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF7C3AED))),
+                                    Text(
+                                      'Total Payable',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    Text(
+                                      '₹${finalTotal.toStringAsFixed(2)}',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF7C3AED),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -615,27 +861,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 onPressed: _cartItems.isNotEmpty
                                     ? () {
                                         HapticFeedback.heavyImpact();
-                                        Navigator.pop(context); // Close cart drawer
+                                        Navigator.pop(
+                                          context,
+                                        ); // Close cart drawer
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => CheckoutScreen(
-                                              cartItems: _cartItems,
-                                              initialDiscount: _appliedDiscount,
-                                            ),
+                                            builder: (context) =>
+                                                CheckoutScreen(
+                                                  cartItems: _cartItems,
+                                                  initialDiscount:
+                                                      _appliedDiscount,
+                                                ),
                                           ),
                                         );
                                       }
                                     : null,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0F172A),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
                                   elevation: 4,
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 16),
+                                    const Icon(
+                                      Icons.lock_outline_rounded,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
                                     const SizedBox(width: 8),
                                     Text(
                                       'Checkout Now • ₹${finalTotal.toStringAsFixed(0)}',
@@ -677,7 +933,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Container(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -710,7 +971,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF64748B),
+                    ),
                   ),
                 ],
               ),
@@ -738,7 +1002,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4.0),
                         child: Icon(
-                          starNum <= tempRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                          starNum <= tempRating
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
                           color: const Color(0xFFF59E0B),
                           size: 38,
                         ),
@@ -752,13 +1018,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               // Your Name Input
               TextField(
                 controller: nameCtrl,
-                style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Your Name',
                   hintText: 'e.g. Vikram Singh',
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -767,13 +1039,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               TextField(
                 controller: commentCtrl,
                 maxLines: 3,
-                style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Your Review',
-                  hintText: 'How is the performance, taste, mixability, and results?',
+                  hintText:
+                      'How is the performance, taste, mixability, and results?',
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
                 ),
               ),
               const SizedBox(height: 18),
@@ -788,8 +1067,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     HapticFeedback.mediumImpact();
                     setState(() {
                       _userReviews.insert(0, {
-                        'name': nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : 'Athlete User',
-                        'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+                        'name': nameCtrl.text.trim().isNotEmpty
+                            ? nameCtrl.text.trim()
+                            : 'Athlete User',
+                        'avatar':
+                            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
                         'rating': tempRating,
                         'date': 'Just now',
                         'verified': true,
@@ -800,14 +1082,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Thank you! Your verified review has been posted 🎉'),
+                        content: Text(
+                          'Thank you! Your verified review has been posted 🎉',
+                        ),
                         backgroundColor: const Color(0xFF10B981),
                       ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F172A),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: Text(
                     'Submit Review',
@@ -832,13 +1118,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     // 3 Carousel Products Sections:
     // 1. Similar / Frequently Bought Together
-    final similarProducts = allProducts.where((p) => p.id != widget.product?.id).take(6).toList();
+    final similarProducts = allProducts
+        .where((p) => p.id != widget.product?.id)
+        .take(6)
+        .toList();
     // 2. Trending in Category
-    final trendingProducts = allProducts.where((p) => p.categoryName == _activeCategory || p.category == _activeCategory).take(6).toList();
+    final trendingProducts = allProducts
+        .where(
+          (p) =>
+              p.categoryName == _activeCategory ||
+              p.category == _activeCategory,
+        )
+        .take(6)
+        .toList();
     // 3. Customers Also Viewed
     final alsoViewedProducts = allProducts.reversed.take(6).toList();
 
-    final double discountPercent = _activeOldPrice != null && _activeOldPrice! > _activePrice
+    final double discountPercent =
+        _activeOldPrice != null && _activeOldPrice! > _activePrice
         ? (((_activeOldPrice! - _activePrice) / _activeOldPrice!) * 100)
         : 0;
 
@@ -881,7 +1178,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFEDE9FE),
                                   borderRadius: BorderRadius.circular(8),
@@ -898,9 +1198,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: _activeStock > 0 ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+                                  color: _activeStock > 0
+                                      ? const Color(0xFFDCFCE7)
+                                      : const Color(0xFFFEE2E2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
@@ -911,16 +1216,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       height: 6,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: _activeStock > 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                                        color: _activeStock > 0
+                                            ? const Color(0xFF16A34A)
+                                            : const Color(0xFFDC2626),
                                       ),
                                     ),
                                     const SizedBox(width: 5),
                                     Text(
-                                      _activeStock > 0 ? 'In Stock ($_activeStock)' : 'Out of Stock',
+                                      _activeStock > 0
+                                          ? 'In Stock ($_activeStock)'
+                                          : 'Out of Stock',
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
-                                        color: _activeStock > 0 ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
+                                        color: _activeStock > 0
+                                            ? const Color(0xFF15803D)
+                                            : const Color(0xFFB91C1C),
                                       ),
                                     ),
                                   ],
@@ -971,7 +1282,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 const SizedBox(width: 10),
                                 if (discountPercent > 0)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFEF4444),
                                       borderRadius: BorderRadius.circular(6),
@@ -1004,14 +1318,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     color: const Color(0xFF0F172A),
                                   ),
                                 ),
-                                Text(
-                                  _variants[_selectedVariantIndex].name,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF6366F1),
-                                  ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 10),
@@ -1021,28 +1327,43 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 scrollDirection: Axis.horizontal,
                                 physics: const BouncingScrollPhysics(),
                                 itemCount: _variants.length,
-                                separatorBuilder: (c, i) => const SizedBox(width: 10),
+                                separatorBuilder: (c, i) =>
+                                    const SizedBox(width: 10),
                                 itemBuilder: (context, index) {
                                   final v = _variants[index];
-                                  final isSelected = _selectedVariantIndex == index;
+                                  final isSelected =
+                                      _selectedVariantIndex == index;
 
                                   return GestureDetector(
                                     onTap: () => _selectVariant(index),
                                     child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: isSelected ? const Color(0xFF0F172A) : Colors.white,
+                                        color: isSelected
+                                            ? const Color(0xFF0F172A)
+                                            : Colors.white,
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
+                                          color: isSelected
+                                              ? const Color(0xFF0F172A)
+                                              : const Color(0xFFE2E8F0),
                                           width: isSelected ? 2 : 1,
                                         ),
                                         boxShadow: [
                                           BoxShadow(
                                             color: isSelected
-                                                ? const Color(0xFF0F172A).withValues(alpha: 0.15)
-                                                : Colors.black.withValues(alpha: 0.02),
+                                                ? const Color(
+                                                    0xFF0F172A,
+                                                  ).withValues(alpha: 0.15)
+                                                : Colors.black.withValues(
+                                                    alpha: 0.02,
+                                                  ),
                                             blurRadius: 6,
                                             offset: const Offset(0, 2),
                                           ),
@@ -1052,41 +1373,71 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         children: [
                                           // Variant Image Thumbnail
                                           ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                             child: Image.network(
-                                              v.imageUrl.isNotEmpty ? v.imageUrl : _allImages.first,
+                                              CategoryBackendService.getDisplayableImageUrl(
+                                                v.imageUrl.isNotEmpty
+                                                    ? v.imageUrl
+                                                    : _allImages.first,
+                                              ),
                                               width: 38,
                                               height: 38,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (c, e, s) => Container(
-                                                width: 38,
-                                                height: 38,
-                                                color: const Color(0xFFF1F5F9),
-                                                child: const Icon(Icons.fitness_center_rounded, size: 18),
-                                              ),
+                                              errorBuilder: (c, e, s) =>
+                                                  Container(
+                                                    width: 38,
+                                                    height: 38,
+                                                    color: const Color(
+                                                      0xFFF1F5F9,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons
+                                                          .fitness_center_rounded,
+                                                      size: 18,
+                                                    ),
+                                                  ),
                                             ),
                                           ),
                                           const SizedBox(width: 10),
                                           Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
                                             children: [
                                               Text(
                                                 v.name,
-                                                style: GoogleFonts.plusJakartaSans(
-                                                  fontSize: 12,
-                                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                                  color: isSelected ? Colors.white : const Color(0xFF0F172A),
-                                                ),
+                                                style:
+                                                    GoogleFonts.plusJakartaSans(
+                                                      fontSize: 12,
+                                                      fontWeight: isSelected
+                                                          ? FontWeight.w800
+                                                          : FontWeight.w600,
+                                                      color: isSelected
+                                                          ? Colors.white
+                                                          : const Color(
+                                                              0xFF0F172A,
+                                                            ),
+                                                    ),
                                               ),
                                               if (v.price > 0)
                                                 Text(
                                                   '₹${v.price.toStringAsFixed(0)}',
-                                                  style: GoogleFonts.plusJakartaSans(
-                                                    fontSize: 10.5,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: isSelected ? const Color(0xFFCBD5E1) : const Color(0xFF7C3AED),
-                                                  ),
+                                                  style:
+                                                      GoogleFonts.plusJakartaSans(
+                                                        fontSize: 10.5,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: isSelected
+                                                            ? const Color(
+                                                                0xFFCBD5E1,
+                                                              )
+                                                            : const Color(
+                                                                0xFF7C3AED,
+                                                              ),
+                                                      ),
                                                 ),
                                             ],
                                           ),
@@ -1122,11 +1473,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           GestureDetector(
-                            onTap: () => setState(() => _isDescriptionExpanded = !_isDescriptionExpanded),
+                            onTap: () => setState(
+                              () => _isDescriptionExpanded =
+                                  !_isDescriptionExpanded,
+                            ),
                             child: Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Text(
-                                _isDescriptionExpanded ? 'Show Less' : 'Read More',
+                                _isDescriptionExpanded
+                                    ? 'Show Less'
+                                    : 'Read More',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -1215,16 +1571,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             clipBehavior: Clip.antiAlias,
             child: PageView.builder(
               controller: _pageController,
-              onPageChanged: (index) => setState(() => _selectedImageIndex = index),
+              onPageChanged: (index) =>
+                  setState(() => _selectedImageIndex = index),
               itemCount: _allImages.length,
               itemBuilder: (context, index) {
                 return Image.network(
-                  _allImages[index],
+                  CategoryBackendService.getDisplayableImageUrl(_allImages[index]),
                   fit: BoxFit.contain,
                   errorBuilder: (c, e, s) => Container(
                     color: const Color(0xFFE2E8F0),
                     child: const Center(
-                      child: Icon(Icons.fitness_center_rounded, color: Color(0xFF94A3B8), size: 48),
+                      child: Icon(
+                        Icons.fitness_center_rounded,
+                        color: Color(0xFF94A3B8),
+                        size: 48,
+                      ),
                     ),
                   ),
                 );
@@ -1238,7 +1599,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               bottom: 14,
               right: 14,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.65),
                   borderRadius: BorderRadius.circular(14),
@@ -1284,7 +1648,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
+                    color: isSelected
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFE2E8F0),
                     width: isSelected ? 2.5 : 1.2,
                   ),
                   boxShadow: [
@@ -1299,11 +1665,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Image.network(
-                  _allImages[index],
+                  CategoryBackendService.getDisplayableImageUrl(_allImages[index]),
                   fit: BoxFit.cover,
                   errorBuilder: (c, e, s) => Container(
                     color: const Color(0xFFF1F5F9),
-                    child: const Icon(Icons.broken_image_rounded, size: 20, color: Color(0xFF94A3B8)),
+                    child: const Icon(
+                      Icons.broken_image_rounded,
+                      size: 20,
+                      color: Color(0xFF94A3B8),
+                    ),
                   ),
                 ),
               ),
@@ -1338,7 +1708,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
+                    const Icon(
+                      Icons.star_rounded,
+                      color: Color(0xFFF59E0B),
+                      size: 16,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       '${_activeRating.toStringAsFixed(1)} based on $_activeReviewCount reviews',
@@ -1355,14 +1729,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             GestureDetector(
               onTap: _openGiveReviewModal,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF6366F1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.rate_review_rounded, color: Colors.white, size: 14),
+                    const Icon(
+                      Icons.rate_review_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                     const SizedBox(width: 5),
                     Text(
                       'Give Review',
@@ -1429,7 +1810,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 ),
                                 if (r['verified'] == true) ...[
                                   const SizedBox(width: 4),
-                                  const Icon(Icons.verified_rounded, size: 13, color: Color(0xFF10B981)),
+                                  const Icon(
+                                    Icons.verified_rounded,
+                                    size: 13,
+                                    color: Color(0xFF10B981),
+                                  ),
                                 ],
                               ],
                             ),
@@ -1447,7 +1832,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Row(
                         children: List.generate(
                           (r['rating'] as double).toInt(),
-                          (i) => const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 14),
+                          (i) => const Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFF59E0B),
+                            size: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -1510,10 +1899,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             separatorBuilder: (c, i) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final p = products[index];
-              return SizedBox(
-                width: 165,
-                child: _buildRelatedProductCard(p),
-              );
+              return SizedBox(width: 165, child: _buildRelatedProductCard(p));
             },
           ),
         ),
@@ -1522,7 +1908,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildRelatedProductCard(ProductItem p) {
-    final imageUrl = p.images.isNotEmpty ? p.images.first : 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600';
+    final imageUrl = p.images.isNotEmpty
+        ? p.images.first
+        : 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600';
     final double price = p.salePrice > 0 ? p.salePrice : p.price;
     final double? oldPrice = p.regularPrice > price ? p.regularPrice : null;
     final rating = p.rating > 0 ? p.rating : 4.8;
@@ -1550,17 +1938,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Stack(
                 children: [
                   Image.network(
-                    imageUrl,
+                    CategoryBackendService.getDisplayableImageUrl(imageUrl),
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => Container(color: const Color(0xFFE2E8F0)),
+                    errorBuilder: (c, e, s) =>
+                        Container(color: const Color(0xFFE2E8F0)),
                   ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2.5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(10),
@@ -1568,7 +1960,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 11),
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFF59E0B),
+                            size: 11,
+                          ),
                           const SizedBox(width: 2),
                           Text(
                             rating.toStringAsFixed(1),
@@ -1633,10 +2029,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // -------------------------------------------------------------
   Widget _buildHighlightsGrid() {
     final highlights = [
-      {'icon': Icons.verified_rounded, 'title': '100% Authentic', 'sub': 'Lab Certified'},
-      {'icon': Icons.local_shipping_rounded, 'title': 'Fast Delivery', 'sub': 'Dispatch in 24h'},
-      {'icon': Icons.refresh_rounded, 'title': 'Easy Returns', 'sub': '7 Days Policy'},
-      {'icon': Icons.security_rounded, 'title': 'Safe Checkout', 'sub': 'Direct Razorpay'},
+      {
+        'icon': Icons.verified_rounded,
+        'title': '100% Authentic',
+        'sub': 'Lab Certified',
+      },
+      {
+        'icon': Icons.local_shipping_rounded,
+        'title': 'Fast Delivery',
+        'sub': 'Dispatch in 24h',
+      },
+      {
+        'icon': Icons.refresh_rounded,
+        'title': 'Easy Returns',
+        'sub': '7 Days Policy',
+      },
+      {
+        'icon': Icons.security_rounded,
+        'title': 'Safe Checkout',
+        'sub': 'Direct Razorpay',
+      },
     ];
 
     return GridView.builder(
@@ -1666,7 +2078,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(h['icon'] as IconData, color: const Color(0xFF0F172A), size: 18),
+                child: Icon(
+                  h['icon'] as IconData,
+                  color: const Color(0xFF0F172A),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1733,7 +2149,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ],
               ),
-              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 16),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Color(0xFF0F172A),
+                size: 16,
+              ),
             ),
           ),
           Text(
@@ -1762,8 +2182,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ],
               ),
               child: Icon(
-                _isWishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: _isWishlisted ? const Color(0xFFEF4444) : const Color(0xFF0F172A),
+                _isWishlisted
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                color: _isWishlisted
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFF0F172A),
                 size: 18,
               ),
             ),
@@ -1783,7 +2207,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1.5)),
+        border: const Border(
+          top: BorderSide(color: Color(0xFFF1F5F9), width: 1.5),
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0F172A).withValues(alpha: 0.06),
@@ -1811,8 +2237,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           setState(() => _quantity--);
                         }
                       : null,
-                  icon: const Icon(Icons.remove_rounded, size: 18, color: Color(0xFF0F172A)),
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(
+                    Icons.remove_rounded,
+                    size: 18,
+                    color: Color(0xFF0F172A),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   padding: EdgeInsets.zero,
                 ),
                 Text(
@@ -1830,8 +2263,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           setState(() => _quantity++);
                         }
                       : null,
-                  icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF0F172A)),
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: Color(0xFF0F172A),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   padding: EdgeInsets.zero,
                 ),
               ],
@@ -1847,7 +2287,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Container(
                 height: 48,
                 decoration: BoxDecoration(
-                  color: _activeStock > 0 ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+                  color: _activeStock > 0
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFF94A3B8),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     if (_activeStock > 0)
@@ -1861,10 +2303,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.shopping_bag_rounded, color: Colors.white, size: 18),
+                    const Icon(
+                      Icons.shopping_bag_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Text(
-                      _activeStock > 0 ? 'Add to Cart • ₹${totalPrice.toStringAsFixed(0)}' : 'Out of Stock',
+                      _activeStock > 0
+                          ? 'Add to Cart • ₹${totalPrice.toStringAsFixed(0)}'
+                          : 'Out of Stock',
                       style: GoogleFonts.plusJakartaSans(
                         color: Colors.white,
                         fontSize: 13.5,

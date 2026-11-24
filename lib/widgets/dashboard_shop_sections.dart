@@ -24,10 +24,10 @@ class DashboardShopTabContent extends StatefulWidget {
 class _DashboardShopTabContentState extends State<DashboardShopTabContent>
     with TickerProviderStateMixin {
   final MarketplaceHomeLayoutService _layoutService =
-      MarketplaceHomeLayoutService();
-  final BannersBackendService _banService = BannersBackendService();
-  final CategoryBackendService _catService = CategoryBackendService();
-  final ProductsBackendService _prodService = ProductsBackendService();
+      MarketplaceHomeLayoutService.instance;
+  final BannersBackendService _banService = BannersBackendService.instance;
+  final CategoryBackendService _catService = CategoryBackendService.instance;
+  final ProductsBackendService _prodService = ProductsBackendService.instance;
 
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -267,10 +267,17 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
               ),
             ),
         ] else ...[
-          // Render Dynamic Firestore Layout Sections with Staggered Entrance
+          // Render Dynamic Layout Sections with Staggered Entrance
           if (_layoutService.isLoading && activeSections.isEmpty)
             _buildFullDashboardSkeleton()
-          else
+          else if (activeSections.isEmpty) ...[
+            // Fallback default layout sections so Shop tab is never blank
+            if (_banService.banners.isNotEmpty)
+              _renderBannerSection(LayoutSectionModel(id: 'def_ban', title: 'Special Offers', showTitle: false, type: 'banners', layoutMode: 'carousel')),
+            if (_catService.categories.isNotEmpty)
+              _renderCategorySection(LayoutSectionModel(id: 'def_cat', title: 'Shop by Category 🏷️', type: 'categories', layoutMode: 'carousel')),
+            _renderProductSection(LayoutSectionModel(id: 'def_prod', title: 'Trending Essentials 🔥', subtitle: 'Top rated gear loved by athletes', type: 'products', layoutMode: 'grid')),
+          ] else
             ...List.generate(activeSections.length, (index) {
               return StaggeredSlideFade(
                 index: index + 1,
@@ -518,7 +525,7 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
         child: Stack(
           children: [
             Image.network(
-              b.imageUrl,
+              CategoryBackendService.getDisplayableImageUrl(b.imageUrl),
               width: double.infinity,
               height: double.infinity,
               fit: BoxFit.cover,
@@ -667,7 +674,7 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
                               )
                             : (catImage.isNotEmpty
                                   ? Image.network(
-                                      catImage,
+                                      CategoryBackendService.getDisplayableImageUrl(catImage),
                                       width: 58,
                                       height: 58,
                                       fit: BoxFit.cover,
@@ -851,7 +858,7 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
               child: Stack(
                 children: [
                   Image.network(
-                    imageUrl,
+                    CategoryBackendService.getDisplayableImageUrl(imageUrl),
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,
@@ -1258,7 +1265,7 @@ class _DashBannerCarouselWidgetState extends State<_DashBannerCarouselWidget> {
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: Image.network(
-                      b.imageUrl,
+                      CategoryBackendService.getDisplayableImageUrl(b.imageUrl),
                       width: double.infinity,
                       height: double.infinity,
                       fit: BoxFit.cover,

@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'category_backend_service.dart';
+import '../constants/api_constants.dart';
 
 // Aliases for backwards compatibility
 typedef ProductModel = ProductItem;
@@ -122,6 +124,39 @@ class ProductItem {
         additionalImages = additionalImages ?? [],
         variants = variants ?? [];
 
+  factory ProductItem.fromJson(Map<String, dynamic> json) {
+    final rawImages = json['additionalImages'] as List<dynamic>? ?? json['images'] as List<dynamic>? ?? [];
+    final rawVariants = json['variants'] as List<dynamic>? ?? [];
+    final rawTags = json['tags'] as List<dynamic>? ?? [];
+
+    return ProductItem(
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? 'prod_${DateTime.now().millisecondsSinceEpoch}',
+      title: json['title']?.toString() ?? json['name']?.toString() ?? 'Untitled Product',
+      description: json['description']?.toString() ?? '',
+      sku: json['sku']?.toString() ?? 'NF-SKU-000',
+      barcode: json['barcode']?.toString() ?? '',
+      categoryId: json['categoryId']?.toString() ?? '',
+      categoryName: json['categoryName']?.toString() ?? json['category']?.toString() ?? 'General',
+      subcategoryId: json['subcategoryId']?.toString() ?? json['subCategoryId']?.toString() ?? '',
+      subcategoryName: json['subcategoryName']?.toString() ?? json['subCategoryName']?.toString() ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      regularPrice: (json['regularPrice'] as num?)?.toDouble() ?? 0.0,
+      costPerItem: (json['costPerItem'] as num?)?.toDouble() ?? 0.0,
+      stock: (json['stock'] as num?)?.toInt() ?? 0,
+      lowStockThreshold: (json['lowStockThreshold'] as num?)?.toInt() ?? 5,
+      brand: json['brand']?.toString() ?? 'NeuroFit',
+      vendor: json['vendor']?.toString() ?? 'Official Store',
+      tags: rawTags.map((t) => t.toString()).toList(),
+      status: json['status']?.toString() ?? 'active',
+      mainImageUrl: json['mainImageUrl']?.toString() ?? json['imageUrl']?.toString() ?? json['image']?.toString() ?? '',
+      additionalImages: rawImages.map((i) => i.toString()).toList(),
+      variants: rawVariants.map((v) => ProductVariant.fromJson(Map<String, dynamic>.from(v as Map))).toList(),
+      isFeatured: json['isFeatured'] == true,
+      rating: (json['rating'] as num?)?.toDouble() ?? 5.0,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   // Aliases and Compatibility Getters / Setters
   String get productId => id;
   set productId(String val) => id = val;
@@ -169,6 +204,26 @@ class ProductsBackendService extends ChangeNotifier {
   ProductsBackendService._internal() {
     fetchProductsFromFirestore();
     startRealtimeSync();
+    _initSocket();
+  }
+
+  IO.Socket? _socket;
+  void _initSocket() {
+    try {
+      final socketUri = ApiConstants.socketUrl;
+      _socket = IO.io(
+        socketUri,
+        IO.OptionBuilder().setTransports(['websocket', 'polling']).disableAutoConnect().build(),
+      );
+
+      _socket?.connect();
+
+      _socket?.on('product_created', (_) => fetchProductsFromFirestore(silent: true));
+      _socket?.on('product_updated', (_) => fetchProductsFromFirestore(silent: true));
+      _socket?.on('product_deleted', (_) => fetchProductsFromFirestore(silent: true));
+      _socket?.on('products_updated', (_) => fetchProductsFromFirestore(silent: true));
+      _socket?.on('media_uploaded', (_) => fetchProductsFromFirestore(silent: true));
+    } catch (_) {}
   }
 
   Timer? _syncTimer;
@@ -179,7 +234,7 @@ class ProductsBackendService extends ChangeNotifier {
     });
   }
 
-  static const String projectId = "neurofit-52fe0";
+  static const String projectId = "neurofit-63189";
   static const String apiKey = "AIzaSyDcGovQH3Sd_0kdNeSISK6eNCdtjA_g9vg";
   static const String firestoreBase = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents";
 
@@ -192,90 +247,32 @@ class ProductsBackendService extends ChangeNotifier {
   Future<void> fetchProductsFromFirestore({bool silent = false}) async {
     if (!silent) _isLoading = true;
     if (!silent) notifyListeners();
-    _isLoading = true;
-    notifyListeners();
 
-    try {
-      final Uri uri = Uri.parse('$firestoreBase/products?key=$apiKey&pageSize=100');
-      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+    final candidateUrls = ApiConstants.candidateBaseUrls.map((b) => Uri.parse('$b/api/products')).toList();
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final documents = data['documents'] as List<dynamic>? ?? [];
+    for (final url in candidateUrls) {
+      try {
+        final res = await http.get(url).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body);
+          final rawData = (body['data'] ?? body) as List<dynamic>? ?? [];
+          if (rawData.isNotEmpty) {
+            final List<ProductItem> fetched = rawData.map((item) {
+              return ProductItem.fromJson(Map<String, dynamic>.from(item as Map));
+            }).toList();
 
-        final List<ProductItem> fetched = [];
-        for (var doc in documents) {
-          final fields = doc['fields'] as Map<String, dynamic>? ?? {};
-          final name = doc['name'] as String? ?? '';
-          final id = name.split('/').last;
-
-          final variantsList = (fields['variants']?['arrayValue']?['values'] as List<dynamic>?)
-                  ?.map((v) {
-                    final vf = v['mapValue']?['fields'] as Map<String, dynamic>? ?? {};
-                    return ProductVariant(
-                      variantId: vf['variantId']?['stringValue'] ?? '',
-                      name: vf['name']?['stringValue'] ?? '',
-                      price: (vf['price']?['doubleValue'] as num?)?.toDouble() ?? 0.0,
-                      stock: int.tryParse(vf['stock']?['integerValue']?.toString() ?? '0') ?? 0,
-                      sku: vf['sku']?['stringValue'] ?? '',
-                      imageUrl: vf['imageUrl']?['stringValue'] ?? '',
-                    );
-                  }).toList() ??
-              [];
-
-          final tagsList = (fields['tags']?['arrayValue']?['values'] as List<dynamic>?)
-                  ?.map((t) => t['stringValue']?.toString() ?? '')
-                  .where((t) => t.isNotEmpty)
-                  .toList() ??
-              [];
-
-          final addImagesList = (fields['additionalImages']?['arrayValue']?['values'] as List<dynamic>?)
-                  ?.map((img) => img['stringValue']?.toString() ?? '')
-                  .where((img) => img.isNotEmpty)
-                  .toList() ??
-              [];
-
-          fetched.add(ProductItem(
-            id: id,
-            title: fields['title']?['stringValue'] ?? 'Untitled Product',
-            description: fields['description']?['stringValue'] ?? '',
-            sku: fields['sku']?['stringValue'] ?? 'NF-SKU-000',
-            barcode: fields['barcode']?['stringValue'] ?? '',
-            categoryId: fields['categoryId']?['stringValue'] ?? '',
-            categoryName: fields['categoryName']?['stringValue'] ?? 'General',
-            subcategoryId: fields['subcategoryId']?['stringValue'] ?? '',
-            subcategoryName: fields['subcategoryName']?['stringValue'] ?? '',
-            discountId: fields['discountId']?['stringValue'] ?? '',
-            discountCode: fields['discountCode']?['stringValue'] ?? '',
-            price: double.tryParse(fields['price']?['doubleValue']?.toString() ?? fields['price']?['integerValue']?.toString() ?? '0') ?? 0.0,
-            regularPrice: double.tryParse(fields['regularPrice']?['doubleValue']?.toString() ?? fields['regularPrice']?['integerValue']?.toString() ?? '0') ?? 0.0,
-            costPerItem: double.tryParse(fields['costPerItem']?['doubleValue']?.toString() ?? fields['costPerItem']?['integerValue']?.toString() ?? '0') ?? 0.0,
-            stock: int.tryParse(fields['stock']?['integerValue']?.toString() ?? '0') ?? 0,
-            lowStockThreshold: int.tryParse(fields['lowStockThreshold']?['integerValue']?.toString() ?? '5') ?? 5,
-            brand: fields['brand']?['stringValue'] ?? 'NeuroFit',
-            vendor: fields['vendor']?['stringValue'] ?? 'Official Store',
-            tags: tagsList,
-            status: fields['status']?['stringValue'] ?? 'active',
-            mainImageUrl: fields['mainImageUrl']?['stringValue'] ?? '',
-            additionalImages: addImagesList,
-            variants: variantsList,
-            isFeatured: fields['isFeatured']?['booleanValue'] ?? false,
-            rating: (fields['rating']?['doubleValue'] as num?)?.toDouble() ?? 5.0,
-            reviewCount: int.tryParse(fields['reviewCount']?['integerValue']?.toString() ?? '0') ?? 0,
-            weightGrams: (fields['weightGrams']?['doubleValue'] as num?)?.toDouble() ?? 0.0,
-            dimensions: fields['dimensions']?['stringValue'] ?? '',
-          ));
+            _products = fetched;
+            debugPrint('✅ [PRODUCTS LOADED FROM MONGODB ATLAS] ${_products.length} live products');
+            _isLoading = false;
+            notifyListeners();
+            return;
+          }
         }
-
-        _products = fetched;
-        debugPrint('✅ [PRODUCTS LOADED FROM FIRESTORE] ${_products.length} live database products');
-      }
-    } catch (e) {
-      debugPrint('❌ Error loading products: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      } catch (_) {}
     }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<bool> addProduct(ProductItem product, {Uint8List? rawImageBytes, String? imageFileName}) async {

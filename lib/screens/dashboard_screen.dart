@@ -2,8 +2,6 @@ import '../services/products_backend_service.dart';
 import '../services/banners_backend_service.dart';
 import '../services/category_backend_service.dart';
 import '../services/marketplace_home_layout_service.dart';
-import '../services/user_backend_service.dart';
-
 import 'dart:async';
 import 'dart:ui';
 
@@ -12,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
+import '../widgets/neuro_dynamic_island.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/dashboard_workout_sections.dart';
@@ -104,35 +103,40 @@ class _DashboardScreenState extends State<DashboardScreen>
   final List<Map<String, dynamic>> _tourSteps = [
     {
       'title': 'Overview & Daily Health',
-      'desc': 'Track your daily wellness score, steps, active calories, water intake, and habit streaks in one unified place.',
+      'desc':
+          'Track your daily wellness score, steps, active calories, water intake, and habit streaks in one unified place.',
       'categoryIndex': 0,
       'icon': Icons.space_dashboard_rounded,
       'color': Color(0xFF16A34A),
     },
     {
       'title': 'AI Workouts & Training',
-      'desc': 'Discover custom AI workout splits, guided exercise videos, rep counters, and recovery schedules tailored to your goals.',
+      'desc':
+          'Discover custom AI workout splits, guided exercise videos, rep counters, and recovery schedules tailored to your goals.',
       'categoryIndex': 1,
       'icon': Icons.fitness_center_rounded,
       'color': Color(0xFF9333EA),
     },
     {
       'title': 'Nutrition & Meal Tracking',
-      'desc': 'Log your daily meals, track macronutrients (protein, carbs, fats), and follow lab-formulated nutrition plans.',
+      'desc':
+          'Log your daily meals, track macronutrients (protein, carbs, fats), and follow lab-formulated nutrition plans.',
       'categoryIndex': 2,
       'icon': Icons.restaurant_rounded,
       'color': Color(0xFFD97706),
     },
     {
       'title': 'Mental Health & Mindfulness',
-      'desc': 'Practice guided breathwork, stress-relief meditations, sleep stories, and nervous system recovery routines.',
+      'desc':
+          'Practice guided breathwork, stress-relief meditations, sleep stories, and nervous system recovery routines.',
       'categoryIndex': 3,
       'icon': Icons.spa_rounded,
       'color': Color(0xFFE11D48),
     },
     {
       'title': 'Shop & Lab Certified Gear',
-      'desc': 'Order authentic supplements, high-performance athletic apparel, and certified fitness gear with doorstep delivery.',
+      'desc':
+          'Order authentic supplements, high-performance athletic apparel, and certified fitness gear with doorstep delivery.',
       'categoryIndex': 4,
       'icon': Icons.shopping_bag_rounded,
       'color': Color(0xFF0284C7),
@@ -222,7 +226,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 8),
+                          // 0. Top Dynamic Island (Tap to expand/collapse metrics & quick actions)
+                          NeuroDynamicIsland(
+                            themeColor: activeCategory.activeColor,
+                          ),
+
+                          const SizedBox(height: 12),
 
                           // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
                           _buildAnimatedHeader(),
@@ -466,8 +475,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF22C55E)
-                                .withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFF22C55E,
+                            ).withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -763,221 +773,211 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // -------------------------------------------------------------
-  // 2. TOP FIXED CATEGORY TABS (STAGGERED WITH SKELETON LOADING)
+  // 2. TOP CATEGORY TABS (SHADOW ON ACTIVE + SLIDING UNDERLINE)
   // -------------------------------------------------------------
   Widget _buildTopCategoryTabs(_CategoryItem activeCategory) {
-    if (_isOverviewLoading) {
-      return _buildTopCategoryTabsSkeleton();
-    }
+    if (_isOverviewLoading) return _buildTopCategoryTabsSkeleton();
 
     return AnimatedBuilder(
       animation: _entranceController,
       builder: (context, child) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: List.generate(_categories.length, (index) {
-              final item = _categories[index];
-              final isSelected = _selectedCategoryIndex == index;
+        final anim = CurvedAnimation(
+          parent: _entranceController,
+          curve: const Interval(0.05, 0.45, curve: Curves.easeOutCubic),
+        ).value;
 
-              // Staggered reveal for each tab button
-              final startInterval = (0.05 + (index * 0.06)).clamp(0.0, 0.7);
-              final endInterval = (startInterval + 0.35).clamp(0.0, 1.0);
-              final anim = CurvedAnimation(
-                parent: _entranceController,
-                curve: Interval(
-                  startInterval,
-                  endInterval,
-                  curve: Curves.easeOutCubic,
-                ),
-              ).value;
-              final slideY = (1.0 - anim) * 20.0;
+        return Transform.translate(
+          offset: Offset(0, (1.0 - anim) * 16.0),
+          child: Opacity(
+            opacity: anim.clamp(0.0, 1.0),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const count = 5;
+                  const gap = 8.0;
+                  const underlineHeight = 4.0;
+                  const underlineGap = 8.0; // space between cards and line
+                  final cardWidth =
+                      (constraints.maxWidth - ((count - 1) * gap)) / count;
+                  final cardHeight = cardWidth;
+                  final underlineWidth = cardWidth * 0.55;
 
-              return Expanded(
-                child: Transform.translate(
-                  offset: Offset(0, slideY),
-                  child: Opacity(
-                    opacity: anim.clamp(0.0, 1.0),
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        left: index == 0 ? 0 : 2.5,
-                        right: index == _categories.length - 1 ? 0 : 2.5,
-                      ),
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          if (_isDemoActive) {
-                            // If demo is active and user taps the tab, advance demo immediately
-                            _nextDemoStep();
-                          } else {
-                            setState(() {
-                              _selectedCategoryIndex = index;
-                            });
-                          }
-                        },
-                        child: AnimatedBuilder(
-                          animation: _demoPulseController,
-                          builder: (context, child) {
-                            final isDemoHighlighted =
-                                _isDemoActive && _demoStep == index;
-                            final pulseGlow = isDemoHighlighted
-                                ? _demoPulseController.value
-                                : 0.0;
+                  return SizedBox(
+                    height: cardHeight + underlineGap + underlineHeight + 6,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // ---- Cards row ----
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: cardHeight,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: List.generate(count, (index) {
+                              final item = _categories[index];
+                              final isSelected =
+                                  _selectedCategoryIndex == index;
+                              final isDemoHighlighted =
+                                  _isDemoActive && _demoStep == index;
 
-                            return Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
-                                  curve: Curves.easeOutCubic,
-                                  height: (isSelected || isDemoHighlighted)
-                                      ? 88
-                                      : 76,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? activeCategory.subBgColor
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: isDemoHighlighted
-                                          ? item.activeColor
-                                          : (isSelected
-                                                ? activeCategory.activeColor
-                                                      .withValues(alpha: 0.35)
-                                                : const Color(0xFFF1F5F9)),
-                                      width: isDemoHighlighted
-                                          ? 2.5
-                                          : (isSelected ? 1.5 : 1.0),
-                                    ),
-                                    boxShadow: isDemoHighlighted
-                                        ? [
-                                            BoxShadow(
-                                              color: item.activeColor
-                                                  .withValues(
-                                                    alpha:
-                                                        0.35 +
-                                                        (pulseGlow * 0.35),
-                                                  ),
-                                              blurRadius: 16 + (pulseGlow * 8),
-                                              spreadRadius: 2,
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  if (_isDemoActive) {
+                                    _nextDemoStep();
+                                  } else {
+                                    setState(
+                                      () => _selectedCategoryIndex = index,
+                                    );
+                                  }
+                                },
+                                child: AnimatedScale(
+                                  scale: isSelected ? 1.06 : 1.0,
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutBack,
+                                  child: SizedBox(
+                                    width: cardWidth,
+                                    height: cardHeight,
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        // Card — no border, shadow only when active
+                                        AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 280,
+                                          ),
+                                          curve: Curves.easeOutCubic,
+                                          width: cardWidth,
+                                          height: cardHeight,
+                                          clipBehavior: Clip.antiAlias,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              22,
                                             ),
-                                          ]
-                                        : (isSelected
-                                              ? [
-                                                  BoxShadow(
-                                                    color: activeCategory
-                                                        .activeColor
-                                                        .withValues(
-                                                          alpha: 0.12,
-                                                        ),
-                                                    blurRadius: 10,
-                                                    offset: const Offset(0, 4),
-                                                  ),
-                                                ]
-                                              : null),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8.0,
-                                    vertical: 8.0,
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Expanded(
-                                        child: Center(
-                                          child: Image.asset(
-                                            item.imagePath,
-                                            fit: BoxFit.contain,
-                                            errorBuilder:
-                                                (
-                                                  context,
-                                                  error,
-                                                  stackTrace,
-                                                ) => Column(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
+                                            boxShadow: isSelected
+                                                ? [
+                                                    BoxShadow(
+                                                      color: item.activeColor
+                                                          .withValues(
+                                                            alpha: 0.38,
+                                                          ),
+                                                      blurRadius: 16,
+                                                      spreadRadius: 1,
+                                                      offset: const Offset(
+                                                        0,
+                                                        5,
+                                                      ),
+                                                    ),
+                                                  ]
+                                                : const [],
+                                          ),
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(
+                                              milliseconds: 280,
+                                            ),
+                                            opacity: isSelected ? 1.0 : 0.78,
+                                            child: Image.asset(
+                                              item.imagePath,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Center(
+                                                    child: Icon(
                                                       Icons.dashboard_rounded,
-                                                      size: 24,
+                                                      size: 26,
                                                       color: item.activeColor,
                                                     ),
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      item.title,
-                                                      style: const TextStyle(
-                                                        fontSize: 9,
-                                                      ),
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // Demo pulse badge
+                                        if (isDemoHighlighted)
+                                          Positioned(
+                                            top: -10,
+                                            left: 0,
+                                            right: 0,
+                                            child: Center(
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: item.activeColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: item.activeColor
+                                                          .withValues(
+                                                            alpha: 0.6,
+                                                          ),
+                                                      blurRadius: 8,
                                                     ),
                                                   ],
                                                 ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (isSelected || isDemoHighlighted)
-                                        Container(
-                                          margin: const EdgeInsets.only(top: 3),
-                                          width: 24,
-                                          height: 3,
-                                          decoration: BoxDecoration(
-                                            color: isDemoHighlighted
-                                                ? item.activeColor
-                                                : activeCategory.activeColor,
-                                            borderRadius: BorderRadius.circular(
-                                              2,
+                                                child: Text(
+                                                  'TAP 👆',
+                                                  style:
+                                                      GoogleFonts.plusJakartaSans(
+                                                        color: Colors.white,
+                                                        fontSize: 8.5,
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                      ),
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Bouncing "TAP HERE" Badge on the Highlighted Demo Tab
-                                if (isDemoHighlighted)
-                                  Positioned(
-                                    top: -10,
-                                    left: 0,
-                                    right: 0,
-                                    child: Center(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: item.activeColor,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: item.activeColor
-                                                  .withValues(alpha: 0.6),
-                                              blurRadius: 8,
-                                            ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          'TAP 👆',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            color: Colors.white,
-                                            fontSize: 8.5,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ),
+                                      ],
                                     ),
                                   ),
-                              ],
-                            );
-                          },
+                                ),
+                              );
+                            }),
+                          ),
                         ),
-                      ),
+
+                        // ---- Sliding underline under the active tab ----
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          top: cardHeight + underlineGap,
+                          left:
+                              _selectedCategoryIndex * (cardWidth + gap) +
+                              (cardWidth - underlineWidth) / 2,
+                          width: underlineWidth,
+                          height: underlineHeight,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 320),
+                            decoration: BoxDecoration(
+                              color: activeCategory.activeColor,
+                              borderRadius: BorderRadius.circular(3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: activeCategory.activeColor.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              );
-            }),
+                  );
+                },
+              ),
+            ),
           ),
         );
       },
@@ -1021,22 +1021,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // Top Category Tabs Skeleton Shimmer
+  // Skeleton — matches the wider, pod-less layout
   Widget _buildTopCategoryTabsSkeleton() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: List.generate(5, (index) {
           return Expanded(
             child: Padding(
               padding: EdgeInsets.only(
-                left: index == 0 ? 0 : 2.5,
-                right: index == 4 ? 0 : 2.5,
+                left: index == 0 ? 0 : 4,
+                right: index == 4 ? 0 : 4,
               ),
-              child: _buildSkeletonShimmerBox(
-                height: index == 0 ? 86 : 76,
-                borderRadius: 18,
+              child: AspectRatio(
+                aspectRatio: 1.0,
+                child: _buildSkeletonShimmerBox(borderRadius: 22),
               ),
             ),
           );
@@ -1148,8 +1147,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF22C55E)
-                                .withValues(alpha: 0.38),
+                            color: const Color(
+                              0xFF22C55E,
+                            ).withValues(alpha: 0.38),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -1281,8 +1281,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       stops: const [0.0, 0.45, 1.0],
                                       colors: [
                                         const Color(0xFFF0FDF4),
-                                        const Color(0xFFF0FDF4)
-                                            .withValues(alpha: 0.5),
+                                        const Color(
+                                          0xFFF0FDF4,
+                                        ).withValues(alpha: 0.5),
                                         Colors.transparent,
                                       ],
                                     ),
@@ -1351,8 +1352,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       borderRadius: BorderRadius.circular(20),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF16A34A)
-                                              .withValues(alpha: 0.3),
+                                          color: const Color(
+                                            0xFF16A34A,
+                                          ).withValues(alpha: 0.3),
                                           blurRadius: 8,
                                           offset: const Offset(0, 3),
                                         ),
@@ -1511,10 +1513,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                             boxShadow: [
                               BoxShadow(
                                 color: isSelected
-                                    ? const Color(0xFF16A34A)
-                                          .withValues(alpha: 0.18)
-                                    : const Color(0xFF0F172A)
-                                          .withValues(alpha: 0.03),
+                                    ? const Color(
+                                        0xFF16A34A,
+                                      ).withValues(alpha: 0.18)
+                                    : const Color(
+                                        0xFF0F172A,
+                                      ).withValues(alpha: 0.03),
                                 blurRadius: isSelected ? 12 : 6,
                                 offset: const Offset(0, 3),
                               ),
@@ -1606,8 +1610,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0F172A)
-                                .withValues(alpha: 0.08),
+                            color: const Color(
+                              0xFF0F172A,
+                            ).withValues(alpha: 0.08),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -1634,8 +1639,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             border: Border.all(color: const Color(0xFFE2E8F0)),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0F172A)
-                                    .withValues(alpha: 0.06),
+                                color: const Color(
+                                  0xFF0F172A,
+                                ).withValues(alpha: 0.06),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -1673,8 +1679,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             border: Border.all(color: const Color(0xFFE2E8F0)),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0F172A)
-                                    .withValues(alpha: 0.06),
+                                color: const Color(
+                                  0xFF0F172A,
+                                ).withValues(alpha: 0.06),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),

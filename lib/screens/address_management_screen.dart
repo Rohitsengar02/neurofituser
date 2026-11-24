@@ -1,5 +1,6 @@
 import '../services/orders_backend_service.dart';
 import '../services/user_backend_service.dart';
+import '../widgets/skeleton_loader.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
@@ -39,7 +40,47 @@ class AddressModel {
     this.isDefault = false,
   });
 
-  String get fullAddress => '$flat, $building, $area, $city - $pincode';
+  String get fullAddress {
+    final parts = [flat, building, area, city].where((p) => p.trim().isNotEmpty).toList();
+    final addr = parts.join(', ');
+    return pincode.isNotEmpty ? '$addr - $pincode' : addr;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'tag': tag,
+      'name': name,
+      'phone': phone,
+      'flat': flat,
+      'building': building,
+      'area': area,
+      'city': city,
+      'state': 'State',
+      'pincode': pincode,
+      'latitude': latitude,
+      'longitude': longitude,
+      'isDefault': isDefault,
+      'streetAddress': fullAddress,
+    };
+  }
+
+  factory AddressModel.fromMap(Map<String, dynamic> map) {
+    return AddressModel(
+      id: map['id']?.toString() ?? 'addr_${DateTime.now().millisecondsSinceEpoch}',
+      tag: map['tag']?.toString() ?? 'Home',
+      name: map['name']?.toString() ?? map['fullName']?.toString() ?? 'Athlete',
+      phone: map['phone']?.toString() ?? map['phoneNumber']?.toString() ?? '',
+      flat: map['flat']?.toString() ?? map['streetAddress']?.toString() ?? '',
+      building: map['building']?.toString() ?? '',
+      area: map['area']?.toString() ?? '',
+      city: map['city']?.toString() ?? '',
+      pincode: map['pincode']?.toString() ?? '',
+      latitude: map['latitude'] != null ? (map['latitude'] as num).toDouble() : null,
+      longitude: map['longitude'] != null ? (map['longitude'] as num).toDouble() : null,
+      isDefault: map['isDefault'] == true,
+    );
+  }
 }
 
 class AddressManagementScreen extends StatefulWidget {
@@ -70,28 +111,24 @@ class _AddressManagementScreenState extends State<AddressManagementScreen> {
     final user = UserBackendService.instance.currentUser;
     if (user != null && user.uid.isNotEmpty) {
       setState(() => _isLoadingRealAddress = true);
-      final addressData = await OrdersBackendService.instance.fetchUserAddress(user.uid);
-      if (addressData != null && (addressData['streetAddress'] as String? ?? '').isNotEmpty && mounted) {
+      final list = await UserBackendService.instance.getUserAddresses(user.uid);
+      if (mounted) {
         setState(() {
           _savedAddresses.clear();
-          _savedAddresses.add(
-            AddressModel(
-              id: 'addr_real_1',
-              tag: 'Default',
-              name: addressData['fullName'] ?? user.name,
-              phone: addressData['phoneNumber'] ?? user.phone,
-              flat: addressData['streetAddress'] ?? '',
-              building: '',
-              area: '',
-              city: addressData['city'] ?? '',
-              pincode: addressData['pincode'] ?? '',
-              isDefault: true,
-            ),
-          );
-          _selectedAddressId = 'addr_real_1';
+          for (final item in list) {
+            _savedAddresses.add(AddressModel.fromMap(item));
+          }
+          if (_savedAddresses.isNotEmpty) {
+            final defaultAddr = _savedAddresses.firstWhere(
+              (a) => a.id == _selectedAddressId || a.isDefault,
+              orElse: () => _savedAddresses.first,
+            );
+            _selectedAddressId = defaultAddr.id;
+            OrdersBackendService.instance.savedAddress = defaultAddr.toMap();
+          }
+          _isLoadingRealAddress = false;
         });
       }
-      if (mounted) setState(() => _isLoadingRealAddress = false);
     }
   }
 
@@ -105,23 +142,35 @@ class _AddressManagementScreenState extends State<AddressManagementScreen> {
     if (newAddress != null && mounted) {
       final user = UserBackendService.instance.currentUser;
       if (user != null && user.uid.isNotEmpty) {
-        await OrdersBackendService.instance.saveUserAddress(user.uid, {
-          'fullName': newAddress.name.isNotEmpty ? newAddress.name : user.name,
-          'phoneNumber': newAddress.phone.isNotEmpty ? newAddress.phone : user.phone,
-          'streetAddress': '${newAddress.flat}, ${newAddress.building}, ${newAddress.area}'.replaceAll(RegExp(r'^,\s*|,\s*$'), ''),
-          'city': newAddress.city,
-          'state': 'State',
-          'pincode': newAddress.pincode,
-        });
+        // Save into MongoDB user.addresses array & Express API!
+        await UserBackendService.instance.saveUserAddress(user.uid, newAddress.toMap());
+        OrdersBackendService.instance.savedAddress = newAddress.toMap();
       }
+
+      setState(() {
+        _savedAddresses.removeWhere((a) => a.id == newAddress.id);
+        _savedAddresses.insert(0, newAddress);
+        _selectedAddressId = newAddress.id;
+      });
 
       if (mounted) {
         HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Address Saved: ${newAddress.tag} 📍'),
-            backgroundColor: const Color(0xFF15803D),
-            duration: const Duration(seconds: 1),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E), size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Address Saved in Profile with GPS Location! 📍',
+                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF0F172A),
+            duration: const Duration(seconds: 2),
           ),
         );
         Navigator.pop(context, newAddress);
@@ -133,14 +182,8 @@ class _AddressManagementScreenState extends State<AddressManagementScreen> {
     HapticFeedback.selectionClick();
     final user = UserBackendService.instance.currentUser;
     if (user != null && user.uid.isNotEmpty) {
-      await OrdersBackendService.instance.saveUserAddress(user.uid, {
-        'fullName': address.name.isNotEmpty ? address.name : user.name,
-        'phoneNumber': address.phone.isNotEmpty ? address.phone : user.phone,
-        'streetAddress': '${address.flat}, ${address.building}, ${address.area}',
-        'city': address.city,
-        'state': 'State',
-        'pincode': address.pincode,
-      });
+      await UserBackendService.instance.setDefaultAddress(user.uid, address.id);
+      OrdersBackendService.instance.savedAddress = address.toMap();
     }
     if (mounted) {
       Navigator.pop(context, address);
@@ -246,8 +289,8 @@ class _AddressManagementScreenState extends State<AddressManagementScreen> {
           ),
 
           Expanded(
-            child: _isLoadingRealAddress
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)))
+            child: _isLoadingRealAddress && _savedAddresses.isEmpty
+                ? const SkeletonAddressList(count: 4)
                 : _savedAddresses.isEmpty
                     ? Center(
                         child: Padding(
@@ -359,7 +402,48 @@ class _AddressManagementScreenState extends State<AddressManagementScreen> {
                                 ],
                               ),
                             ),
+                            if (addr.latitude != null && addr.longitude != null) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.my_location_rounded, size: 11, color: Color(0xFF16A34A)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'GPS Location 📍',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF16A34A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                             const Spacer(),
+                            GestureDetector(
+                              onTap: () async {
+                                final user = UserBackendService.instance.currentUser;
+                                if (user != null) {
+                                  await UserBackendService.instance.deleteUserAddress(user.uid, addr.id);
+                                  setState(() {
+                                    _savedAddresses.removeWhere((a) => a.id == addr.id);
+                                  });
+                                }
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.only(right: 10.0),
+                                child: Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFF94A3B8)),
+                              ),
+                            ),
                             Container(
                               width: 20,
                               height: 20,
@@ -869,8 +953,16 @@ class _AddressDetailsFormSlider extends StatefulWidget {
 class _AddressDetailsFormSliderState extends State<_AddressDetailsFormSlider> {
   final TextEditingController _flatCtrl = TextEditingController();
   final TextEditingController _buildingCtrl = TextEditingController();
-  final TextEditingController _nameCtrl = TextEditingController(text: 'Rohit Sengar');
-  final TextEditingController _phoneCtrl = TextEditingController(text: '+91 98765 43210');
+  late final TextEditingController _nameCtrl = TextEditingController(
+    text: UserBackendService.instance.currentUser?.name.isNotEmpty == true
+        ? UserBackendService.instance.currentUser!.name
+        : 'Athlete',
+  );
+  late final TextEditingController _phoneCtrl = TextEditingController(
+    text: UserBackendService.instance.currentUser?.phone.isNotEmpty == true
+        ? UserBackendService.instance.currentUser!.phone
+        : '+91 98765 43210',
+  );
 
   String _selectedTag = 'Home';
 

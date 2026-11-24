@@ -100,6 +100,14 @@ class _LoginScreenState extends State<LoginScreen>
       user = await UserBackendService.instance.signInWithRealGoogle();
     } catch (e) {
       debugPrint('Google Sign-In Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google Sign-In Error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
 
     if (!mounted) return;
