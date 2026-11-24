@@ -1,16 +1,17 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../widgets/onboarding/onboarding_kit.dart';
+import '../widgets/questionnaire/ruler_picker.dart';
+import '../widgets/questionnaire/weight_scale_graphic.dart';
+import '../widgets/questionnaire/vertical_ruler_picker.dart';
+import '../widgets/questionnaire/height_body_graphic.dart';
+import '../widgets/questionnaire/animated_goal_icon.dart';
 import 'plan_generation_screen.dart';
 
-/// Eight-step onboarding questionnaire.
-///
-/// Phone: one column with a progress bar, the animated step and a bottom CTA.
-/// Desktop / tablet (>= 900px): a live "your profile" panel on the left with
-/// floating 3D objects, and the step card on the right.
 class QuestionnaireScreen extends StatefulWidget {
   const QuestionnaireScreen({super.key});
 
@@ -18,94 +19,50 @@ class QuestionnaireScreen extends StatefulWidget {
   State<QuestionnaireScreen> createState() => _QuestionnaireScreenState();
 }
 
-class _StepMeta {
-  const _StepMeta(this.lead, this.accent, this.subtitle, this.color, this.icons);
-  final String lead;
-  final String accent;
-  final String subtitle;
-  final Color color;
-  final List<IconData> icons;
-}
-
-const _steps = <_StepMeta>[
-  _StepMeta('Your fitness journey', 'starts here',
-      'Answer 7 quick questions and we will build a plan that fits your body and your goals.',
-      Color(0xFF16A34A), [Icons.bolt_rounded, Icons.favorite_rounded, Icons.fitness_center_rounded]),
-  _StepMeta('Tell us about', 'yourself', 'This helps us tune calories, intensity and recovery for you.',
-      Color(0xFF2563EB), [Icons.person_rounded, Icons.auto_awesome_rounded, Icons.star_rounded]),
-  _StepMeta('How old', 'are you?', 'Age changes how fast you recover and how hard you should train.',
-      Color(0xFF7C3AED), [Icons.cake_rounded, Icons.celebration_rounded, Icons.timer_rounded]),
-  _StepMeta('Your current', 'weight', 'Drag the ruler or use the buttons. You can change it later.',
-      Color(0xFF0891B2), [Icons.monitor_weight_rounded, Icons.water_drop_rounded, Icons.speed_rounded]),
-  _StepMeta('Your target', 'weight', 'Pick a goal weight you would feel great at.',
-      Color(0xFF059669), [Icons.flag_rounded, Icons.trending_down_rounded, Icons.emoji_events_rounded]),
-  _StepMeta('How tall', 'are you?', 'Height lets us work out your BMI and daily energy needs.',
-      Color(0xFF0D9488), [Icons.height_rounded, Icons.straighten_rounded, Icons.accessibility_new_rounded]),
-  _StepMeta('What are your', 'goals?', 'Pick everything that matters to you.',
-      Color(0xFFD97706), [Icons.local_fire_department_rounded, Icons.fitness_center_rounded, Icons.bolt_rounded]),
-  _StepMeta('How active', 'are you?', 'Be honest, we will meet you where you are.',
-      Color(0xFFEA580C), [Icons.directions_run_rounded, Icons.directions_bike_rounded, Icons.pool_rounded]),
-];
-
-const _tiles = <String>[
-  'assets/images/neon_green_dumbbell_1787819274202.jpg',
-  'assets/images/neon_orange_kettlebell_1787819340750.jpg',
-  'assets/images/neon_green_shoe_1787819288631.jpg',
-  'assets/images/neon_orange_heartrate_1787819363247.jpg',
-  'assets/images/neon_green_waterbottle_1787819315145.jpg',
-  'assets/images/neon_orange_proteinshaker_1787819387813.jpg',
-];
-
-String _fmt(double v) => v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
-
-String _feetInches(double cm) {
-  final totalIn = cm / 2.54;
-  var ft = totalIn ~/ 12;
-  var inch = (totalIn - ft * 12).round();
-  if (inch == 12) {
-    ft += 1;
-    inch = 0;
-  }
-  return "$ft' $inch\"";
-}
-
 class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
-  int _currentStep = 0;
-  bool _forward = true;
+  final PageController _pageController = PageController();
+  int _currentStep = 0; // 0 to 7 (corresponding to 1/8 to 8/8)
 
+  // State values
   String _selectedGender = 'Male';
   int _selectedAge = 25;
   double _currentWeight = 70.0;
   double _targetWeight = 60.0;
   double _height = 170.0;
-  String _heightUnit = 'cm';
-  final Set<String> _selectedGoals = {'Lose Weight'};
+  String _heightUnit = 'cm'; // 'cm', 'ft', 'm'
+  String _selectedGoal = 'Lose Weight';
+  Set<String> _selectedGoals = {'Lose Weight'};
   String _selectedActivity = 'Moderately Active';
 
-  _StepMeta get _meta => _steps[_currentStep];
-
-  void _go(int delta) {
-    final next = _currentStep + delta;
-    if (next < 0) {
-      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-      return;
-    }
-    if (next >= _steps.length) {
-      _finish();
-      return;
-    }
+  void _nextPage() {
     HapticFeedback.lightImpact();
-    setState(() {
-      _forward = delta > 0;
-      _currentStep = next;
-    });
+    if (_currentStep < 7) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
+      );
+    } else {
+      // Completed Flow -> Open Cinematic AI Plan Generation Screen
+      _showCompletionDialog();
+    }
   }
 
-  void _finish() {
-    HapticFeedback.mediumImpact();
-    Navigator.of(context).pushReplacement(
+  void _previousPage() {
+    HapticFeedback.lightImpact();
+    if (_currentStep > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
+      );
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _showCompletionDialog() {
+    HapticFeedback.heavyImpact();
+    Navigator.of(context).push(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 700),
         pageBuilder: (context, animation, secondaryAnimation) => PlanGenerationScreen(
           gender: _selectedGender,
           age: _selectedAge,
@@ -115,1513 +72,2902 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           goals: _selectedGoals.toList(),
           activityLevel: _selectedActivity,
         ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Layout
-  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    final color = _meta.color;
     return Scaffold(
-      backgroundColor: OnbColors.base,
-      body: AuroraBackground(
-        colors: [color, OnbColors.lime, Color.lerp(color, Colors.white, 0.2)!],
-        child: Stack(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: DriftingIcons(key: ValueKey(_currentStep), icons: _meta.icons, color: color, count: 6),
-            ),
-            SafeArea(
-              child: LayoutBuilder(builder: (context, box) {
-                final wide = box.maxWidth >= 900;
-                return wide ? _wideLayout(box) : _phoneLayout(box);
-              }),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+            // Top Bar: Back Button, Step indicator & Segmented Progress
+            _buildTopBar(),
 
-  Widget _phoneLayout(BoxConstraints box) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: box.maxWidth < 380 ? 16 : 22),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              _topBar(),
-              const SizedBox(height: 8),
-              Expanded(child: _stage()),
-              _bottomBar(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _wideLayout(BoxConstraints box) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
-      child: Row(
-        children: [
-          Expanded(flex: 5, child: _SidePanel(state: this)),
-          const SizedBox(width: 32),
-          Expanded(
-            flex: 6,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: 560, maxHeight: math.min(box.maxHeight, 820)),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: Colors.white),
-                    boxShadow: [
-                      BoxShadow(color: _meta.color.withValues(alpha: 0.12), blurRadius: 60, offset: const Offset(0, 24)),
-                    ],
-                  ),
-                  padding: const EdgeInsets.fromLTRB(28, 22, 28, 0),
-                  child: Column(
-                    children: [
-                      _topBar(),
-                      const SizedBox(height: 8),
-                      Expanded(child: _stage()),
-                      _bottomBar(),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _topBar() {
-    final color = _meta.color;
-    return Row(
-      children: [
-        AnimatedOpacity(
-          duration: const Duration(milliseconds: 250),
-          opacity: _currentStep == 0 && !Navigator.of(context).canPop() ? 0.0 : 1.0,
-          child: RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, onTap: () => _go(-1), size: 42),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Row(
-            children: List.generate(_steps.length, (i) {
-              final done = i <= _currentStep;
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      height: 6,
-                      color: OnbColors.line,
-                      alignment: Alignment.centerLeft,
-                      child: AnimatedFractionallySizedBox(
-                        duration: Duration(milliseconds: 380 + i * 20),
-                        curve: Curves.easeOutCubic,
-                        widthFactor: done ? 1 : 0,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 380),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [color, Color.lerp(color, OnbColors.lime, 0.5)!]),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        const SizedBox(width: 14),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 380),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text('${_currentStep + 1} of ${_steps.length}',
-              style: onbFont(size: 12.5, weight: FontWeight.w700, color: color)),
-        ),
-      ],
-    );
-  }
-
-  Widget _bottomBar() {
-    final last = _currentStep == _steps.length - 1;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 18),
-      child: GlowButton(
-        label: last ? 'Get Started' : 'Next',
-        icon: last ? Icons.rocket_launch_rounded : Icons.arrow_forward_rounded,
-        color: _meta.color,
-        onTap: () => _go(1),
-      ),
-    );
-  }
-
-  Widget _stage() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 480),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (current, previous) =>
-          Stack(fit: StackFit.expand, children: [...previous, if (current != null) current]),
-      transitionBuilder: (child, anim) {
-        final incoming = child.key == ValueKey(_currentStep);
-        final dir = _forward ? 1.0 : -1.0;
-        final begin = Offset((incoming ? 0.18 : -0.18) * dir, 0);
-        return FadeTransition(
-          opacity: anim,
-          child: SlideTransition(position: Tween(begin: begin, end: Offset.zero).animate(anim), child: child),
-        );
-      },
-      child: KeyedSubtree(key: ValueKey(_currentStep), child: _stepPage(_currentStep)),
-    );
-  }
-
-  Widget _stepPage(int step) {
-    final meta = _steps[step];
-    return LayoutBuilder(builder: (context, box) {
-      return SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: box.maxHeight),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (step != 0) ...[
-                  _Header(meta: meta, compact: box.maxHeight < 560),
-                  SizedBox(height: box.maxHeight < 560 ? 16 : 26),
-                ],
-                _stepBody(step, box),
-              ],
-            ),
-          ),
-        ),
-      );
-    });
-  }
-
-  Widget _stepBody(int step, BoxConstraints box) {
-    switch (step) {
-      case 0:
-        return _WelcomeStep(meta: _steps[0], maxHeight: box.maxHeight);
-      case 1:
-        return _genderStep();
-      case 2:
-        return _ageStep();
-      case 3:
-        return _currentWeightStep();
-      case 4:
-        return _targetWeightStep();
-      case 5:
-        return _heightStep();
-      case 6:
-        return _goalsStep();
-      default:
-        return _activityStep();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Steps
-  // ---------------------------------------------------------------------------
-  Widget _genderStep() {
-    final color = _meta.color;
-    Widget card(String g, IconData icon, String note, int i, {bool wide = false}) => Reveal(
-          delay: Duration(milliseconds: 80 + i * 90),
-          child: _ChoiceCard(
-            selected: _selectedGender == g,
-            color: color,
-            onTap: () => setState(() => _selectedGender = g),
-            horizontal: wide,
-            icon: icon,
-            title: g,
-            subtitle: note,
-          ),
-        );
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: card('Male', Icons.male_rounded, 'He / him', 0)),
-            const SizedBox(width: 14),
-            Expanded(child: card('Female', Icons.female_rounded, 'She / her', 1)),
-          ],
-        ),
-        const SizedBox(height: 14),
-        card('Other', Icons.diversity_3_rounded, 'Prefer to self-describe', 2, wide: true),
-      ],
-    );
-  }
-
-  Widget _ageStep() {
-    final color = _meta.color;
-    final group = _selectedAge < 18
-        ? 'Teen'
-        : _selectedAge < 30
-            ? 'Young adult'
-            : _selectedAge < 45
-                ? 'Adult'
-                : _selectedAge < 60
-                    ? 'Prime'
-                    : 'Golden years';
-    return _MeasureBlock(
-      color: color,
-      fraction: (_selectedAge - 13) / (80 - 13),
-      value: BigValue(text: '$_selectedAge', unit: 'yrs', color: color),
-      chips: [_InfoChip(icon: Icons.auto_awesome_rounded, text: group, color: color)],
-      ruler: SnapRuler(
-        min: 13,
-        max: 80,
-        step: 1,
-        value: _selectedAge.toDouble(),
-        majorEvery: 5,
-        tickSpacing: 16,
-        color: color,
-        onChanged: (v) => setState(() => _selectedAge = v.round()),
-      ),
-      onMinus: () => setState(() => _selectedAge = math.max(13, _selectedAge - 1)),
-      onPlus: () => setState(() => _selectedAge = math.min(80, _selectedAge + 1)),
-    );
-  }
-
-  Widget _currentWeightStep() {
-    final color = _meta.color;
-    final bmi = _currentWeight / math.pow(_height / 100, 2);
-    final bmiLabel = bmi < 18.5
-        ? 'Underweight'
-        : bmi < 25
-            ? 'Healthy'
-            : bmi < 30
-                ? 'Overweight'
-                : 'Obese';
-    return _MeasureBlock(
-      color: color,
-      fraction: (_currentWeight - 30) / 170,
-      value: BigValue(text: _fmt(_currentWeight), unit: 'kg', color: color),
-      chips: [
-        _InfoChip(icon: Icons.swap_horiz_rounded, text: '${(_currentWeight * 2.20462).round()} lb', color: color),
-        _InfoChip(icon: Icons.monitor_heart_rounded, text: 'BMI ${bmi.toStringAsFixed(1)} · $bmiLabel', color: color),
-      ],
-      ruler: SnapRuler(
-        min: 30,
-        max: 200,
-        step: 0.5,
-        value: _currentWeight,
-        majorEvery: 10,
-        tickSpacing: 10,
-        color: color,
-        onChanged: (v) => setState(() => _currentWeight = v),
-      ),
-      onMinus: () => setState(() => _currentWeight = math.max(30, _currentWeight - 0.5)),
-      onPlus: () => setState(() => _currentWeight = math.min(200, _currentWeight + 0.5)),
-    );
-  }
-
-  Widget _targetWeightStep() {
-    final color = _meta.color;
-    final diff = _targetWeight - _currentWeight;
-    final weeks = (diff.abs() / 0.5).ceil();
-    final verb = diff < 0 ? 'Lose' : 'Gain';
-    return _MeasureBlock(
-      color: color,
-      fraction: (_targetWeight - 30) / 170,
-      value: BigValue(text: _fmt(_targetWeight), unit: 'kg', color: color),
-      chips: [
-        _InfoChip(
-          icon: diff == 0 ? Icons.balance_rounded : (diff < 0 ? Icons.trending_down_rounded : Icons.trending_up_rounded),
-          text: diff == 0 ? 'Maintain weight' : '$verb ${_fmt(diff.abs())} kg',
-          color: color,
-        ),
-        if (diff != 0)
-          _InfoChip(icon: Icons.event_available_rounded, text: '~$weeks weeks at a healthy pace', color: color),
-      ],
-      ruler: SnapRuler(
-        min: 30,
-        max: 200,
-        step: 0.5,
-        value: _targetWeight,
-        majorEvery: 10,
-        tickSpacing: 10,
-        color: color,
-        onChanged: (v) => setState(() => _targetWeight = v),
-      ),
-      onMinus: () => setState(() => _targetWeight = math.max(30, _targetWeight - 0.5)),
-      onPlus: () => setState(() => _targetWeight = math.min(200, _targetWeight + 0.5)),
-      extra: _WeightCompare(current: _currentWeight, target: _targetWeight, color: color),
-    );
-  }
-
-  Widget _heightStep() {
-    final color = _meta.color;
-    final ft = _heightUnit == 'ft';
-    return Column(
-      children: [
-        Reveal(
-          delay: const Duration(milliseconds: 60),
-          child: _UnitToggle(
-            options: const ['cm', 'ft'],
-            value: _heightUnit,
-            color: color,
-            onChanged: (u) => setState(() => _heightUnit = u),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Reveal(
-          delay: const Duration(milliseconds: 140),
-          child: SizedBox(
-            height: 220,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _HeightFigure(heightCm: _height, color: color),
-                const SizedBox(width: 22),
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 60),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        FittedBox(
-                          child: BigValue(
-                            text: ft ? _feetInches(_height) : _height.round().toString(),
-                            unit: ft ? '' : 'cm',
-                            color: color,
-                            size: 60,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _InfoChip(
-                          icon: Icons.swap_vert_rounded,
-                          text: ft ? '${_height.round()} cm' : _feetInches(_height),
-                          color: color,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Reveal(
-          delay: const Duration(milliseconds: 220),
-          child: _RulerRow(
-            color: color,
-            onMinus: () => setState(() => _height = math.max(120, _height - 1)),
-            onPlus: () => setState(() => _height = math.min(220, _height + 1)),
-            ruler: SnapRuler(
-              key: ValueKey(_heightUnit),
-              min: 120,
-              max: 220,
-              step: 1,
-              value: _height,
-              majorEvery: 10,
-              tickSpacing: 12,
-              color: color,
-              labelFor: ft ? (v) => _feetInches(v).replaceAll(' ', '') : null,
-              onChanged: (v) => setState(() => _height = v),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _goalsStep() {
-    final color = _meta.color;
-    const goals = [
-      ('Lose Weight', 'Burn fat & tone body', Icons.local_fire_department_rounded, Color(0xFFEF4444)),
-      ('Build Muscle', 'Gain strength & mass', Icons.fitness_center_rounded, Color(0xFF7C3AED)),
-      ('Keep Fit', 'Boost health & cardio', Icons.favorite_rounded, Color(0xFF0EA5E9)),
-      ('Boost Energy', 'All-day endurance', Icons.bolt_rounded, Color(0xFFF59E0B)),
-    ];
-    return LayoutBuilder(builder: (context, box) {
-      final cols = box.maxWidth < 300 ? 1 : 2;
-      final w = (box.maxWidth - (cols - 1) * 14) / cols;
-      return Wrap(
-        spacing: 14,
-        runSpacing: 14,
-        children: [
-          for (var i = 0; i < goals.length; i++)
-            SizedBox(
-              width: w,
-              child: Reveal(
-                delay: Duration(milliseconds: 80 + i * 80),
-                child: _ChoiceCard(
-                  selected: _selectedGoals.contains(goals[i].$1),
-                  color: color,
-                  accent: goals[i].$4,
-                  icon: goals[i].$3,
-                  title: goals[i].$1,
-                  subtitle: goals[i].$2,
-                  onTap: () => setState(() {
-                    final g = goals[i].$1;
-                    if (_selectedGoals.contains(g)) {
-                      if (_selectedGoals.length > 1) _selectedGoals.remove(g);
-                    } else {
-                      _selectedGoals.add(g);
-                    }
-                  }),
-                ),
-              ),
-            ),
-          SizedBox(
-            width: box.maxWidth,
-            child: Text(
-              '${_selectedGoals.length} selected · pick as many as you like',
-              textAlign: TextAlign.center,
-              style: onbFont(size: 12.5, color: OnbColors.muted, weight: FontWeight.w600),
-            ),
-          ),
-        ],
-      );
-    });
-  }
-
-  Widget _activityStep() {
-    final color = _meta.color;
-    const levels = [
-      ('Sedentary', 'Desk job / no workout', Icons.weekend_rounded),
-      ('Lightly Active', '1–2 light workouts/wk', Icons.directions_walk_rounded),
-      ('Moderately Active', '3–5 active workouts/wk', Icons.directions_run_rounded),
-      ('Very Active', '6–7 intense sessions/wk', Icons.sports_gymnastics_rounded),
-    ];
-    return Column(
-      children: [
-        for (var i = 0; i < levels.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Reveal(
-              delay: Duration(milliseconds: 80 + i * 80),
-              offset: const Offset(0.15, 0),
-              child: _ActivityRow(
-                title: levels[i].$1,
-                subtitle: levels[i].$2,
-                icon: levels[i].$3,
-                level: i + 1,
-                color: color,
-                selected: _selectedActivity == levels[i].$1,
-                onTap: () => setState(() => _selectedActivity = levels[i].$1),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// =============================================================================
-// Pieces
-// =============================================================================
-
-class _Header extends StatelessWidget {
-  const _Header({required this.meta, this.compact = false});
-  final _StepMeta meta;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = compact ? 26.0 : 32.0;
-    final style = onbFont(size: size, weight: FontWeight.w800, height: 1.12, spacing: -0.8);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Reveal(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.end,
-            children: [
-              Text('${meta.lead} ', style: style),
-              GradientText(meta.accent,
-                  style: style, colors: [meta.color, Color.lerp(meta.color, OnbColors.lime, 0.65)!]),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Reveal(
-          delay: const Duration(milliseconds: 70),
-          child: Text(meta.subtitle, style: onbFont(size: compact ? 13.5 : 15, color: OnbColors.body, height: 1.45)),
-        ),
-      ],
-    );
-  }
-}
-
-class _WelcomeStep extends StatelessWidget {
-  const _WelcomeStep({required this.meta, required this.maxHeight});
-  final _StepMeta meta;
-  final double maxHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final heroH = (maxHeight * 0.42).clamp(180.0, 300.0);
-    final tile = (heroH * 0.26).clamp(48.0, 74.0);
-    final style = onbFont(size: maxHeight < 560 ? 28 : 34, weight: FontWeight.w800, height: 1.1, spacing: -1);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Reveal(
-          scale: 0.92,
-          duration: const Duration(milliseconds: 700),
-          child: SizedBox(
-            height: heroH + tile * 0.5,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  left: tile * 0.45,
-                  right: tile * 0.45,
-                  top: tile * 0.25,
-                  bottom: tile * 0.25,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF14532D), Color(0xFF16A34A)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(color: meta.color.withValues(alpha: 0.30), blurRadius: 40, offset: const Offset(0, 18)),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.asset('assets/images/questionnaire_hero.jpg', fit: BoxFit.cover),
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0x00000000), Color(0xAA000000)],
-                              stops: [0.45, 1],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 18,
-                          bottom: 16,
-                          right: 18,
-                          child: Row(
-                            children: [
-                              const _PulseDot(color: OnbColors.lime),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text('Personal plan in under a minute',
-                                    style: onbFont(size: 13, weight: FontWeight.w700, color: Colors.white)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(left: 0, top: 0, child: FloatingTile(asset: _tiles[0], size: tile, phase: 0)),
-                Positioned(right: 0, top: heroH * 0.18, child: FloatingTile(asset: _tiles[1], size: tile * 0.9, phase: 1.6)),
-                Positioned(left: tile * 0.1, bottom: heroH * 0.22, child: FloatingTile(asset: _tiles[3], size: tile * 0.78, phase: 3.1)),
-                Positioned(right: tile * 0.2, bottom: 0, child: FloatingTile(asset: _tiles[4], size: tile * 0.84, phase: 4.4)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 22),
-        Reveal(
-          delay: const Duration(milliseconds: 160),
-          child: Wrap(
-            children: [
-              Text('${meta.lead} ', style: style),
-              GradientText(meta.accent, style: style, colors: [meta.color, OnbColors.lime]),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Reveal(
-          delay: const Duration(milliseconds: 230),
-          child: Text(meta.subtitle, style: onbFont(size: 15, color: OnbColors.body, height: 1.45)),
-        ),
-        const SizedBox(height: 18),
-        for (final (i, f) in const [
-          (Icons.tune_rounded, 'Built around you', 'Workouts sized to your level'),
-          (Icons.restaurant_rounded, 'Smart nutrition', 'Calories and macros that fit your goal'),
-          (Icons.insights_rounded, 'Track progress', 'See every win, week by week'),
-        ].indexed)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Reveal(
-              delay: Duration(milliseconds: 300 + i * 90),
-              offset: const Offset(0.12, 0),
-              child: _FeatureRow(icon: f.$1, title: f.$2, subtitle: f.$3, color: meta.color),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _FeatureRow extends StatelessWidget {
-  const _FeatureRow({required this.icon, required this.title, required this.subtitle, required this.color});
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: OnbColors.line),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(13)),
-            child: Icon(icon, color: color, size: 21),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: onbFont(size: 14.5, weight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: onbFont(size: 12.5, color: OnbColors.body)),
-              ],
-            ),
-          ),
-          Icon(Icons.check_circle_rounded, color: color.withValues(alpha: 0.85), size: 20),
-        ],
-      ),
-    );
-  }
-}
-
-class _PulseDot extends StatefulWidget {
-  const _PulseDot({required this.color});
-  final Color color;
-
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 16,
-      height: 16,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) => Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 8 + 8 * _c.value,
-              height: 8 + 8 * _c.value,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.color.withValues(alpha: 0.5 * (1 - _c.value)),
-              ),
-            ),
-            Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Selectable card used for gender and goals.
-class _ChoiceCard extends StatefulWidget {
-  const _ChoiceCard({
-    required this.selected,
-    required this.color,
-    required this.onTap,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.accent,
-    this.horizontal = false,
-  });
-
-  final bool selected;
-  final Color color;
-  final Color? accent;
-  final VoidCallback onTap;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool horizontal;
-
-  @override
-  State<_ChoiceCard> createState() => _ChoiceCardState();
-}
-
-class _ChoiceCardState extends State<_ChoiceCard> {
-  bool _hover = false;
-  bool _down = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.color;
-    final accent = widget.accent ?? c;
-    final sel = widget.selected;
-    final iconBubble = AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOutBack,
-      width: widget.horizontal ? 48 : 60,
-      height: widget.horizontal ? 48 : 60,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: sel ? LinearGradient(colors: [accent, Color.lerp(accent, Colors.black, 0.2)!]) : null,
-        color: sel ? null : accent.withValues(alpha: 0.1),
-        boxShadow: sel ? [BoxShadow(color: accent.withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6))] : null,
-      ),
-      child: AnimatedRotation(
-        turns: sel ? 0 : -0.05,
-        duration: const Duration(milliseconds: 400),
-        child: Icon(widget.icon, color: sel ? Colors.white : accent, size: widget.horizontal ? 24 : 30),
-      ),
-    );
-    final check = AnimatedScale(
-      scale: sel ? 1 : 0.0,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutBack,
-      child: Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-        child: const Icon(Icons.check_rounded, color: Colors.white, size: 14),
-      ),
-    );
-    final texts = Column(
-      crossAxisAlignment: widget.horizontal ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(widget.title, style: onbFont(size: 16, weight: FontWeight.w800), textAlign: TextAlign.center),
-        const SizedBox(height: 3),
-        Text(widget.subtitle,
-            style: onbFont(size: 12.5, color: OnbColors.body),
-            textAlign: widget.horizontal ? TextAlign.start : TextAlign.center),
-      ],
-    );
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _down = true),
-        onTapCancel: () => setState(() => _down = false),
-        onTapUp: (_) => setState(() => _down = false),
-        onTap: () {
-          HapticFeedback.selectionClick();
-          widget.onTap();
-        },
-        child: Semantics(
-          button: true,
-          selected: sel,
-          label: widget.title,
-          child: AnimatedScale(
-            scale: _down ? 0.96 : (_hover ? 1.02 : 1),
-            duration: const Duration(milliseconds: 160),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              padding: widget.horizontal ? const EdgeInsets.all(14) : const EdgeInsets.fromLTRB(14, 20, 14, 18),
-              decoration: BoxDecoration(
-                color: sel ? Color.lerp(Colors.white, c, 0.07) : Colors.white.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: sel ? c : OnbColors.line, width: sel ? 2 : 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: sel ? c.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.04),
-                    blurRadius: sel ? 24 : 12,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: widget.horizontal
-                  ? Row(children: [iconBubble, const SizedBox(width: 14), Expanded(child: texts), check])
-                  : Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Center(child: iconBubble),
-                            const SizedBox(height: 12),
-                            SizedBox(width: double.infinity, child: texts),
-                          ],
-                        ),
-                        Positioned(right: -4, top: -8, child: check),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Value ring + chips + ruler with -/+ steppers. Used for age and weights.
-class _MeasureBlock extends StatelessWidget {
-  const _MeasureBlock({
-    required this.color,
-    required this.fraction,
-    required this.value,
-    required this.chips,
-    required this.ruler,
-    required this.onMinus,
-    required this.onPlus,
-    this.extra,
-  });
-
-  final Color color;
-  final double fraction;
-  final Widget value;
-  final List<Widget> chips;
-  final Widget ruler;
-  final VoidCallback onMinus;
-  final VoidCallback onPlus;
-  final Widget? extra;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Reveal(
-          scale: 0.85,
-          duration: const Duration(milliseconds: 650),
-          child: _ValueRing(fraction: fraction, color: color, child: FittedBox(child: value)),
-        ),
-        const SizedBox(height: 16),
-        Reveal(
-          delay: const Duration(milliseconds: 120),
-          child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: chips),
-        ),
-        if (extra != null) ...[
-          const SizedBox(height: 16),
-          Reveal(delay: const Duration(milliseconds: 170), child: extra!),
-        ],
-        const SizedBox(height: 18),
-        Reveal(
-          delay: const Duration(milliseconds: 220),
-          child: _RulerRow(color: color, ruler: ruler, onMinus: onMinus, onPlus: onPlus),
-        ),
-      ],
-    );
-  }
-}
-
-class _RulerRow extends StatelessWidget {
-  const _RulerRow({required this.color, required this.ruler, required this.onMinus, required this.onPlus});
-  final Color color;
-  final Widget ruler;
-  final VoidCallback onMinus;
-  final VoidCallback onPlus;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: OnbColors.line),
-      ),
-      child: Row(
-        children: [
-          RoundIconButton(icon: Icons.remove_rounded, onTap: onMinus, size: 40, color: color),
-          Expanded(child: ruler),
-          RoundIconButton(icon: Icons.add_rounded, onTap: onPlus, size: 40, color: color),
-        ],
-      ),
-    );
-  }
-}
-
-class _ValueRing extends StatelessWidget {
-  const _ValueRing({required this.fraction, required this.color, required this.child});
-  final double fraction;
-  final Color color;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: fraction.clamp(0.0, 1.0)),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
-      builder: (context, f, inner) => SizedBox(
-        width: 210,
-        height: 210,
-        child: CustomPaint(painter: _RingPainter(f, color), child: inner),
-      ),
-      child: Padding(padding: const EdgeInsets.all(40), child: Center(child: child)),
-    );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  _RingPainter(this.f, this.color);
-  final double f;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.shortestSide / 2 - 10;
-    const start = math.pi * 0.75;
-    const sweep = math.pi * 1.5;
-    final rect = Rect.fromCircle(center: c, radius: r);
-
-    canvas.drawCircle(c, r - 14, Paint()..color = Colors.white.withValues(alpha: 0.9));
-    canvas.drawCircle(
-      c,
-      r - 14,
-      Paint()
-        ..color = color.withValues(alpha: 0.10)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-    final track = Paint()
-      ..color = color.withValues(alpha: 0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, start, sweep, false, track);
-    final prog = Paint()
-      ..shader = SweepGradient(
-        startAngle: start,
-        endAngle: start + sweep,
-        colors: [Color.lerp(color, OnbColors.lime, 0.6)!, color],
-      ).createShader(rect)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, start, math.max(0.001, sweep * f), false, prog);
-
-    final a = start + sweep * f;
-    final knob = c + Offset(math.cos(a), math.sin(a)) * r;
-    canvas.drawCircle(knob, 11, Paint()..color = color.withValues(alpha: 0.25));
-    canvas.drawCircle(knob, 8, Paint()..color = Colors.white);
-    canvas.drawCircle(knob, 5, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) => old.f != f || old.color != color;
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.text, required this.color});
-  final IconData icon;
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(text,
-                overflow: TextOverflow.ellipsis,
-                style: onbFont(size: 12.5, weight: FontWeight.w700, color: OnbColors.ink)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WeightCompare extends StatelessWidget {
-  const _WeightCompare({required this.current, required this.target, required this.color});
-  final double current;
-  final double target;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxV = math.max(current, target);
-    Widget bar(String label, double v, Color c) => Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: onbFont(size: 12, color: OnbColors.muted, weight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  height: 10,
-                  color: OnbColors.line,
-                  alignment: Alignment.centerLeft,
-                  child: AnimatedFractionallySizedBox(
-                    duration: const Duration(milliseconds: 420),
-                    curve: Curves.easeOutCubic,
-                    widthFactor: (v / maxV).clamp(0.05, 1.0),
-                    child: Container(
-                        decoration: BoxDecoration(gradient: LinearGradient(colors: [c.withValues(alpha: 0.6), c]))),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text('${_fmt(v)} kg', style: onbFont(size: 13, weight: FontWeight.w800)),
-            ],
-          ),
-        );
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: OnbColors.line),
-      ),
-      child: Row(
-        children: [
-          bar('Now', current, OnbColors.muted),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(Icons.arrow_forward_rounded, color: OnbColors.muted, size: 18),
-          ),
-          bar('Goal', target, color),
-        ],
-      ),
-    );
-  }
-}
-
-class _UnitToggle extends StatelessWidget {
-  const _UnitToggle({required this.options, required this.value, required this.color, required this.onChanged});
-  final List<String> options;
-  final String value;
-  final Color color;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final idx = options.indexOf(value).clamp(0, options.length - 1);
-    const w = 76.0;
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: OnbColors.line),
-        ),
-        child: SizedBox(
-          width: w * options.length,
-          height: 38,
-          child: Stack(
-            children: [
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutBack,
-                left: idx * w,
-                top: 0,
-                bottom: 0,
-                width: w,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(26),
-                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                ),
-              ),
-              Row(
+            // Swipable / Animated Content Area
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(), // Only navigate through button/back
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentStep = index;
+                  });
+                },
                 children: [
-                  for (final o in options)
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        onChanged(o);
-                      },
-                      child: SizedBox(
-                        width: w,
-                        child: Center(
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 200),
-                            style: onbFont(
-                              size: 14,
-                              weight: FontWeight.w700,
-                              color: o == value ? Colors.white : OnbColors.body,
-                            ),
-                            child: Text(o.toUpperCase()),
-                          ),
-                        ),
-                      ),
-                    ),
+                  _buildStep1(),
+                  _buildStep2(),
+                  _buildStep3(),
+                  _buildStep4(),
+                  _buildStep5(),
+                  _buildStep6(),
+                  _buildStep7(),
+                  _buildStep8(),
                 ],
               ),
-            ],
-          ),
+            ),
+
+            // Bottom Navigation Button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+              child: _buildBottomButton(),
+            ),
+          ],
         ),
       ),
     );
   }
-}
 
-/// A person silhouette that grows with the chosen height, next to a scale.
-class _HeightFigure extends StatelessWidget {
-  const _HeightFigure({required this.heightCm, required this.color});
-  final double heightCm;
-  final Color color;
+  // Dynamic curated colors per step
+  static const List<Color> _stepColors = [
+    Color(0xFF22C55E), // Step 1: Welcome (Vivid Neon Green)
+    Color(0xFF3B82F6), // Step 2: Gender (Cyber Electric Blue)
+    Color(0xFF8B5CF6), // Step 3: Age (Royal Purple)
+    Color(0xFF06B6D4), // Step 4: Current Weight (Cyan)
+    Color(0xFF10B981), // Step 5: Target Weight (Emerald)
+    Color(0xFF14B8A6), // Step 6: Height (Teal Green)
+    Color(0xFFF59E0B), // Step 7: Goal (Amber Gold)
+    Color(0xFFF97316), // Step 8: Activity (Neon Orange)
+  ];
 
-  @override
-  Widget build(BuildContext context) {
-    final t = ((heightCm - 120) / 100).clamp(0.0, 1.0);
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: t),
-      duration: const Duration(milliseconds: 380),
-      curve: Curves.easeOutBack,
-      builder: (context, v, _) {
-        final h = 120 + 90 * v;
-        return SizedBox(
-          width: 110,
-          height: 220,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              Positioned.fill(child: CustomPaint(painter: _ScalePainter(color))),
-              Positioned(
-                bottom: h - 2,
-                left: 0,
-                right: 0,
-                child: Container(height: 2, color: color.withValues(alpha: 0.6)),
-              ),
-              Positioned(
-                bottom: 0,
-                child: Container(
-                  width: 70,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    borderRadius: const BorderRadius.all(Radius.elliptical(35, 5)),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 2,
-                child: ShaderMask(
-                  blendMode: BlendMode.srcIn,
-                  shaderCallback: (r) => LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color.lerp(color, OnbColors.lime, 0.5)!, color],
-                  ).createShader(r),
-                  child: SizedBox(
-                    height: h,
-                    child: const FittedBox(
-                      fit: BoxFit.fitHeight,
-                      child: Icon(Icons.accessibility_new_rounded, size: 100),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
+  // -------------------------------------------------------------
+  // TOP BAR
+  // -------------------------------------------------------------
+  Widget _buildTopBar() {
+    final currentColor = _stepColors[_currentStep % _stepColors.length];
 
-class _ScalePainter extends CustomPainter {
-  _ScalePainter(this.color);
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = color.withValues(alpha: 0.25)
-      ..strokeWidth = 1.5;
-    for (var i = 0; i <= 20; i++) {
-      final y = size.height - 2 - i * (size.height - 10) / 20;
-      final w = i % 5 == 0 ? 12.0 : 6.0;
-      canvas.drawLine(Offset(0, y), Offset(w, y), p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ScalePainter old) => old.color != color;
-}
-
-class _ActivityRow extends StatefulWidget {
-  const _ActivityRow({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.level,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final int level;
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_ActivityRow> createState() => _ActivityRowState();
-}
-
-class _ActivityRowState extends State<_ActivityRow> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.color;
-    final sel = widget.selected;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          widget.onTap();
-        },
-        child: Semantics(
-          button: true,
-          selected: sel,
-          label: widget.title,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            transform: Matrix4.translationValues(sel ? 6 : (_hover ? 3 : 0), 0, 0),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: sel ? Color.lerp(Colors.white, c, 0.07) : Colors.white.withValues(alpha: 0.88),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: sel ? c : OnbColors.line, width: sel ? 2 : 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: sel ? c.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.03),
-                  blurRadius: sel ? 22 : 10,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: sel ? c : c.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(widget.icon, color: sel ? Colors.white : c, size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.title, style: onbFont(size: 15, weight: FontWeight.w800)),
-                      const SizedBox(height: 2),
-                      Text(widget.subtitle, style: onbFont(size: 12.5, color: OnbColors.body)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 28,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: List.generate(4, (i) {
-                      final on = i < widget.level;
-                      return AnimatedContainer(
-                        duration: Duration(milliseconds: 250 + i * 70),
-                        curve: Curves.easeOutBack,
-                        margin: const EdgeInsets.only(left: 3),
-                        width: 5,
-                        height: sel ? 8.0 + i * 6 : 6.0 + i * 4,
-                        decoration: BoxDecoration(
-                          color: on ? (sel ? c : c.withValues(alpha: 0.45)) : OnbColors.line,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Desktop-only left panel: floating objects and a live summary of answers.
-class _SidePanel extends StatelessWidget {
-  const _SidePanel({required this.state});
-  final _QuestionnaireScreenState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = state;
-    final color = s._meta.color;
-    final step = s._currentStep;
-    final rows = <(IconData, String, String, int)>[
-      (Icons.person_rounded, 'Gender', s._selectedGender, 1),
-      (Icons.cake_rounded, 'Age', '${s._selectedAge} years', 2),
-      (Icons.monitor_weight_rounded, 'Weight', '${_fmt(s._currentWeight)} kg', 3),
-      (Icons.flag_rounded, 'Target', '${_fmt(s._targetWeight)} kg', 4),
-      (Icons.height_rounded, 'Height', s._heightUnit == 'ft' ? _feetInches(s._height) : '${s._height.round()} cm', 5),
-      (Icons.emoji_events_rounded, 'Goals', s._selectedGoals.join(', '), 6),
-      (Icons.directions_run_rounded, 'Activity', s._selectedActivity, 7),
-    ];
-    return LayoutBuilder(builder: (context, box) {
-      final tile = (box.maxWidth * 0.14).clamp(56.0, 92.0);
-      return Stack(
-        clipBehavior: Clip.none,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+      child: Column(
         children: [
-          Positioned(left: box.maxWidth * 0.02, top: box.maxHeight * 0.04, child: FloatingTile(asset: _tiles[0], size: tile, phase: 0)),
-          Positioned(right: box.maxWidth * 0.06, top: box.maxHeight * 0.02, child: FloatingTile(asset: _tiles[1], size: tile * 0.8, phase: 1.2)),
-          Positioned(right: 0, top: box.maxHeight * 0.42, child: FloatingTile(asset: _tiles[2], size: tile * 0.9, phase: 2.4)),
-          Positioned(left: box.maxWidth * 0.05, bottom: box.maxHeight * 0.04, child: FloatingTile(asset: _tiles[5], size: tile * 0.85, phase: 3.6)),
-          Positioned(right: box.maxWidth * 0.12, bottom: 0, child: FloatingTile(asset: _tiles[4], size: tile * 0.7, phase: 4.8)),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: SingleChildScrollView(
-                child: Column(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Circular Back Button
+              GestureDetector(
+                onTap: _previousPage,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: Color(0xFF141518),
+                    size: 20,
+                  ),
+                ),
+              ),
+
+              // Animated Step Counter Pill with Step Color Accent
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                decoration: BoxDecoration(
+                  color: currentColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: currentColor.withValues(alpha: 0.30),
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.asset('assets/images/app_logo.png', width: 40, height: 40, fit: BoxFit.cover),
-                        ),
-                        const SizedBox(width: 10),
-                        Text('NeuroFit', style: onbFont(size: 20, weight: FontWeight.w800)),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    Text('Your profile', style: onbFont(size: 30, weight: FontWeight.w800, spacing: -0.8)),
-                    const SizedBox(height: 6),
-                    Text('Updates live as you answer.', style: onbFont(size: 14.5, color: OnbColors.body)),
-                    const SizedBox(height: 18),
                     Container(
-                      padding: const EdgeInsets.all(6),
+                      width: 7,
+                      height: 7,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.white),
-                      ),
-                      child: Column(
-                        children: [
-                          for (final r in rows)
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 350),
-                              margin: const EdgeInsets.symmetric(vertical: 2),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: r.$4 == step ? color.withValues(alpha: 0.10) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                children: [
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 350),
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: r.$4 < step ? OnbColors.green : (r.$4 == step ? color : OnbColors.line),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(r.$4 < step ? Icons.check_rounded : r.$1,
-                                        size: 17, color: r.$4 <= step ? Colors.white : OnbColors.muted),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(r.$2, style: onbFont(size: 13.5, color: OnbColors.body, weight: FontWeight.w600)),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: AnimatedOpacity(
-                                      duration: const Duration(milliseconds: 300),
-                                      opacity: r.$4 <= step ? 1 : 0.35,
-                                      child: Text(
-                                        r.$4 <= step ? r.$3 : '—',
-                                        textAlign: TextAlign.right,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: onbFont(size: 13.5, weight: FontWeight.w800),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                        color: currentColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: currentColor.withValues(alpha: 0.8),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: Text(
+                        'STEP ${_currentStep + 1} / 8',
+                        key: ValueKey<int>(_currentStep),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: currentColor,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+
+              const SizedBox(width: 38), // Balance the back button
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 8 Segmented Progress Indicators with Animated Colors & Glowing Active Track
+          Row(
+            children: List.generate(8, (index) {
+              final isPassed = index < _currentStep;
+              final isCurrent = index == _currentStep;
+              final segColor = _stepColors[index];
+
+              return Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
+                  height: isCurrent ? 5.5 : 4.0,
+                  margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                  decoration: BoxDecoration(
+                    color: isPassed
+                        ? segColor
+                        : (isCurrent ? currentColor : const Color(0xFFE2E8F0)),
+                    gradient: (isPassed || isCurrent)
+                        ? LinearGradient(
+                            colors: [
+                              segColor,
+                              segColor.withValues(alpha: isCurrent ? 0.85 : 0.95),
+                            ],
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: isCurrent
+                        ? [
+                            BoxShadow(
+                              color: currentColor.withValues(alpha: 0.5),
+                              blurRadius: 8,
+                              spreadRadius: 0.5,
+                              offset: const Offset(0, 1),
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              );
+            }),
           ),
         ],
-      );
-    });
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 1: Let's Get Started!
+  // -------------------------------------------------------------
+  Widget _buildStep1() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Edge-to-Edge Hero Image without shadow, and top/bottom white linear gradients
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(
+                'assets/images/questionnaire_hero.jpg',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: const Color(0xFFF3F4F6),
+                  child: const Icon(
+                    Icons.fitness_center_rounded,
+                    size: 64,
+                    color: Color(0xFF16A34A),
+                  ),
+                ),
+              ),
+              // Top White Linear Gradient
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 60,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white,
+                        Color(0xB3FFFFFF),
+                        Color(0x00FFFFFF),
+                      ],
+                      stops: [0.0, 0.4, 1.0],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+              // Bottom White Linear Gradient
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 70,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0x00FFFFFF),
+                        Color(0xB3FFFFFF),
+                        Colors.white,
+                      ],
+                      stops: [0.0, 0.5, 1.0],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Bottom Left-Aligned Staggered Animated Text matching Onboarding Screen 1
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 14.0, 24.0, 10.0),
+          child: _Step1StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 2: What's your gender?
+  // -------------------------------------------------------------
+  Widget _buildStep2() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGenderCard(
+                          title: 'Male',
+                          symbol: '♂',
+                          symbolColor: const Color(0xFF16A34A),
+                          isSelected: _selectedGender == 'Male',
+                          index: 0,
+                          onTap: () {
+                            setState(() => _selectedGender = 'Male');
+                            Future.delayed(
+                              const Duration(milliseconds: 400),
+                              _nextPage,
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildGenderCard(
+                          title: 'Female',
+                          symbol: '♀',
+                          symbolColor: const Color(0xFF94A3B8),
+                          isSelected: _selectedGender == 'Female',
+                          index: 1,
+                          onTap: () {
+                            setState(() => _selectedGender = 'Female');
+                            Future.delayed(
+                              const Duration(milliseconds: 400),
+                              _nextPage,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _buildGenderCard(
+                      title: 'Other',
+                      symbol: '⚧',
+                      symbolColor: const Color(0xFFF59E0B),
+                      isSelected: _selectedGender == 'Other',
+                      index: 2,
+                      onTap: () {
+                        setState(() => _selectedGender = 'Other');
+                        Future.delayed(
+                          const Duration(milliseconds: 400),
+                          _nextPage,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 14.0, 24.0, 10.0),
+          child: _Step2StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenderCard({
+    required String title,
+    required String symbol,
+    required Color symbolColor,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required int index,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 700),
+      curve: Interval(index * 0.15, 1.0, curve: Curves.easeOutCubic),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 40 * (1 - value)),
+          child: Opacity(opacity: math.max(0.001, value), child: child),
+        );
+      },
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          height: 160,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFFF0FDF4)
+                : const Color(0xFFFAFAFB),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF16A34A)
+                  : const Color(0xFFF1F3F5),
+              width: isSelected ? 2.0 : 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isSelected
+                    ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.02),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                symbol,
+                style: TextStyle(
+                  fontSize: 54,
+                  fontWeight: FontWeight.w900,
+                  color: isSelected ? const Color(0xFF16A34A) : symbolColor,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? const Color(0xFF141518)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 3: How old are you?
+  // -------------------------------------------------------------
+  Widget _buildStep3() {
+    final int yearsLeft = math.max(0, 85 - _selectedAge);
+    final int bonusYears = 5; // Example constant
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 24),
+                
+                // Top Center Big Number (Years Spent)
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (Widget child, Animation<double> animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.0, -0.5),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    _selectedAge.toString(),
+                    key: ValueKey<int>(_selectedAge),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 84,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3B82F6), // Blue
+                      letterSpacing: -2.0,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'years old',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+                
+                const SizedBox(height: 48),
+
+                // Cards row (Remaining / Bonus) just above ruler with Staggered Animation
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      // Card 1: Remaining
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF94A3B8).withValues(alpha: 0.15),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.hourglass_bottom_rounded, size: 20, color: Color(0xFF64748B)),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Remaining',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 300),
+                                child: Text(
+                                  '$yearsLeft yrs',
+                                  key: ValueKey<int>(yearsLeft),
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+
+                      // Card 2: Fitness Bonus
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)], // Light Blue Gradient
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.health_and_safety_rounded, size: 20, color: Color(0xFF3B82F6)),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Fitness Bonus',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF3B82F6),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '+$bonusYears yrs',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1D4ED8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 64),
+
+                // Horizontal Ruler for Age moved to bottom, just above title
+                RulerPicker(
+                  minValue: 14.0,
+                  maxValue: 90.0,
+                  initialValue: _selectedAge.toDouble(),
+                  step: 1.0,
+                  tickSpacing: 42.0, // Wider spacing so numbers like 1, 2, 3 don't overlap
+                  unit: 'years',
+                  pointerColor: const Color(0xFF3B82F6), // Blue Theme
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedAge = val.toInt();
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+
+        // Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 14.0, 24.0, 10.0),
+          child: _Step3StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 4: What's your current weight?
+  // -------------------------------------------------------------
+  Widget _buildStep4() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              // Weight Scale Graphic
+              Center(child: WeightScaleGraphic(weight: _currentWeight)),
+              const SizedBox(height: 48),
+
+              // Horizontal Ruler
+              RulerPicker(
+                minValue: 40.0,
+                maxValue: 140.0,
+                initialValue: _currentWeight,
+                step: 0.5,
+                tickSpacing: 42.0,
+                unit: 'kg',
+                pointerColor: const Color(0xFF3B82F6), // Blue Theme
+                onChanged: (val) {
+                  setState(() {
+                    _currentWeight = val;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+
+        // Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 14.0, 24.0, 10.0),
+          child: _Step4StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 5: What's your target weight?
+  // -------------------------------------------------------------
+  Widget _buildStep5() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              // Weight Scale Graphic
+              Center(
+                child: WeightScaleGraphic(
+                  weight: _targetWeight,
+                  isNeonGreen: true, // Neon Green Theme
+                ),
+              ),
+              const SizedBox(height: 48),
+
+              // Horizontal Ruler
+              RulerPicker(
+                minValue: 40.0,
+                maxValue: 140.0,
+                initialValue: _targetWeight,
+                step: 0.5,
+                tickSpacing: 42.0,
+                unit: 'kg',
+                pointerColor: const Color(0xFF22C55E), // Neon Green Theme
+                onChanged: (val) {
+                  setState(() {
+                    _targetWeight = val;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+
+        // Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 14.0, 24.0, 10.0),
+          child: _Step5StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 6: What's your height?
+  // -------------------------------------------------------------
+  Widget _buildStep6() {
+    // Current display value and limits depending on selected unit
+    double minValue = 120.0;
+    double maxValue = 230.0;
+    double step = 1.0;
+    double rulerValue = _height;
+
+    if (_heightUnit == 'm') {
+      minValue = 1.20;
+      maxValue = 2.30;
+      step = 0.01;
+      rulerValue = (_height / 100.0);
+    } else if (_heightUnit == 'ft') {
+      minValue = 4.0;
+      maxValue = 7.5;
+      step = 0.1;
+      rulerValue = (_height / 30.48);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Top Unit Selector Bar (cm, feet, meter)
+        Padding(
+          padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 4.0, bottom: 4.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildUnitOption('cm', 'cm'),
+                    _buildUnitOption('ft', 'feet'),
+                    _buildUnitOption('m', 'meter'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Middle Area: Body Graphic (Left) & Vertical Ruler (Right, 0 right padding)
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left: Interactive Growing Body Graphic
+              Expanded(
+                child: HeightBodyGraphic(
+                  heightCm: _height,
+                  minHeightCm: 120.0,
+                  maxHeightCm: 230.0,
+                  activeUnit: _heightUnit,
+                  themeColor: const Color(0xFF22C55E),
+                ),
+              ),
+
+              // Right: Vertical Ruler (attached to right screen edge)
+              VerticalRulerPicker(
+                minValue: minValue,
+                maxValue: maxValue,
+                initialValue: rulerValue,
+                step: step,
+                unit: _heightUnit,
+                pointerColor: const Color(0xFF22C55E),
+                tickSpacing: 16.0,
+                onChanged: (val) {
+                  setState(() {
+                    if (_heightUnit == 'm') {
+                      _height = (val * 100.0).clamp(120.0, 230.0);
+                    } else if (_heightUnit == 'ft') {
+                      _height = (val * 30.48).clamp(120.0, 230.0);
+                    } else {
+                      _height = val.clamp(120.0, 230.0);
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // 3. Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 14.0, 24.0, 10.0),
+          child: _Step6StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnitOption(String unitKey, String label) {
+    final isSelected = _heightUnit == unitKey;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _heightUnit = unitKey;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 7: What's your fitness goal?
+  // -------------------------------------------------------------
+  Widget _buildStep7() {
+    final goals = [
+      {
+        'title': 'Lose Weight',
+        'subtitle': 'Burn fat & tone body',
+        'type': GoalType.loseWeight,
+        'tag': 'FAT BURN',
+        'color': const Color(0xFF22C55E),
+      },
+      {
+        'title': 'Build Muscle',
+        'subtitle': 'Gain strength & mass',
+        'type': GoalType.buildMuscle,
+        'tag': 'STRENGTH',
+        'color': const Color(0xFF3B82F6),
+      },
+      {
+        'title': 'Keep Fit',
+        'subtitle': 'Boost health & cardio',
+        'type': GoalType.improveFitness,
+        'tag': 'VITALITY',
+        'color': const Color(0xFFEC4899),
+      },
+      {
+        'title': 'Boost Energy',
+        'subtitle': 'All-day endurance',
+        'type': GoalType.boostEnergy,
+        'tag': 'STAMINA',
+        'color': const Color(0xFFF59E0B),
+      },
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Spacer(),
+
+        // 2x2 Grid of Animated Goal Cards positioned just above bottom title
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: goals.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              childAspectRatio: 0.94,
+            ),
+            itemBuilder: (context, index) {
+              final goal = goals[index];
+              final title = goal['title'] as String;
+              final subtitle = goal['subtitle'] as String;
+              final tag = goal['tag'] as String;
+              final type = goal['type'] as GoalType;
+              final color = goal['color'] as Color;
+              final isSelected = _selectedGoals.contains(title);
+
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (_selectedGoals.contains(title)) {
+                      if (_selectedGoals.length > 1) {
+                        _selectedGoals.remove(title);
+                      }
+                    } else {
+                      _selectedGoals.add(title);
+                    }
+                    _selectedGoal = _selectedGoals.first;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white, // Clean Pure White (No active tint or dark colors)
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isSelected ? color : const Color(0xFFF1F5F9),
+                      width: isSelected ? 2.0 : 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isSelected
+                            ? color.withValues(alpha: 0.14)
+                            : const Color(0xFF64748B).withValues(alpha: 0.06),
+                        blurRadius: isSelected ? 16 : 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Card Top Row: Tag & Selection Checkmark
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Tag Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected
+                                    ? color.withValues(alpha: 0.3)
+                                    : const Color(0xFFF1F5F9),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              tag,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                                color: isSelected ? color : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+
+                          // Selected Circle Checkmark
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? color : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected ? color : const Color(0xFFCBD5E1),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: isSelected
+                                ? const Icon(
+                                    Icons.check_rounded,
+                                    size: 13,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                        ],
+                      ),
+
+                      // Center: Virtual Animated Icon
+                      Center(
+                        child: AnimatedGoalIcon(
+                          goalType: type,
+                          isSelected: isSelected,
+                          primaryColor: color,
+                          size: 50,
+                        ),
+                      ),
+
+                      // Bottom: Title & Subtitle
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 0.0, 24.0, 10.0),
+          child: _Step7StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // STEP 8: How active are you?
+  // -------------------------------------------------------------
+  Widget _buildStep8() {
+    final activityLevels = [
+      {
+        'title': 'Sedentary',
+        'subtitle': 'Desk job / no workout',
+        'tag': 'LEVEL 1',
+        'icon': Icons.nightlife_rounded,
+        'color': const Color(0xFF64748B),
+      },
+      {
+        'title': 'Lightly Active',
+        'subtitle': '1–2 light workouts/wk',
+        'tag': 'LEVEL 2',
+        'icon': Icons.directions_walk_rounded,
+        'color': const Color(0xFF3B82F6),
+      },
+      {
+        'title': 'Moderately Active',
+        'subtitle': '3–5 active workouts/wk',
+        'tag': 'LEVEL 3',
+        'icon': Icons.directions_run_rounded,
+        'color': const Color(0xFF22C55E),
+      },
+      {
+        'title': 'Very Active',
+        'subtitle': '6–7 intense sessions/wk',
+        'tag': 'LEVEL 4',
+        'icon': Icons.local_fire_department_rounded,
+        'color': const Color(0xFFF97316),
+      },
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Spacer(),
+
+        // 2x2 Grid of Activity Cards (Single Select, Pure White, Just above bottom title)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: activityLevels.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              childAspectRatio: 0.94,
+            ),
+            itemBuilder: (context, index) {
+              final level = activityLevels[index];
+              final title = level['title'] as String;
+              final subtitle = level['subtitle'] as String;
+              final tag = level['tag'] as String;
+              final icon = level['icon'] as IconData;
+              final color = level['color'] as Color;
+              final isSelected = _selectedActivity == title;
+
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _selectedActivity = title);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white, // Clean Pure White (No active tint or dark colors)
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isSelected ? color : const Color(0xFFF1F5F9),
+                      width: isSelected ? 2.0 : 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isSelected
+                            ? color.withValues(alpha: 0.14)
+                            : const Color(0xFF64748B).withValues(alpha: 0.06),
+                        blurRadius: isSelected ? 16 : 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Card Top Row: Level Tag & Radio/Checkmark
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Tag Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected
+                                    ? color.withValues(alpha: 0.3)
+                                    : const Color(0xFFF1F5F9),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              tag,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                                color: isSelected ? color : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+
+                          // Single Selection Radio Checkmark
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? color : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected ? color : const Color(0xFFCBD5E1),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: isSelected
+                                ? const Icon(
+                                    Icons.check_rounded,
+                                    size: 13,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                        ],
+                      ),
+
+                      // Center: Animated Activity Icon
+                      Center(
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            border: Border.all(
+                              color: isSelected
+                                  ? color.withValues(alpha: 0.4)
+                                  : const Color(0xFFF1F5F9),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: isSelected
+                                    ? color.withValues(alpha: 0.18)
+                                    : const Color(0xFF94A3B8).withValues(alpha: 0.08),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            icon,
+                            color: isSelected ? color : const Color(0xFF64748B),
+                            size: 26,
+                          ),
+                        ),
+                      ),
+
+                      // Bottom: Title & Subtitle
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Bottom Left-Aligned Staggered Animated Text
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24.0, 0.0, 24.0, 10.0),
+          child: _Step8StaggeredText(),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // SHARED HEADER HELPER
+  // -------------------------------------------------------------
+  Widget _buildHeader({
+    required String blackText,
+    required String highlightText,
+    required String subtitle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            text: blackText,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF141518),
+              letterSpacing: -0.8,
+              height: 1.18,
+            ),
+            children: [
+              TextSpan(
+                text: highlightText,
+                style: const TextStyle(color: Color(0xFF16A34A)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13.5,
+            color: const Color(0xFF6B7280),
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // BOTTOM BUTTON
+  // -------------------------------------------------------------
+  Widget _buildBottomButton() {
+    final isLastStep = _currentStep == 7;
+    return GestureDetector(
+      onTap: _nextPage,
+      child: Container(
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          color: const Color(0xFF141518),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              isLastStep ? 'Get Started' : 'Next',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const _AnimatedArrow(),
+          ],
+        ),
+      ),
+    );
   }
 }
+
+class _Step1StaggeredText extends StatefulWidget {
+  const _Step1StaggeredText();
+
+  @override
+  State<_Step1StaggeredText> createState() => _Step1StaggeredTextState();
+}
+
+class _Step1StaggeredTextState extends State<_Step1StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final headingFontSize = (screenWidth * 0.088).clamp(28.0, 36.0);
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_revealController, _badgePulseController]),
+      builder: (context, child) {
+        final progress = _revealController.value;
+
+        // Line 1: 0.0 -> 0.45
+        final l1 = ((progress - 0.0) / 0.45).clamp(0.0, 1.0);
+        final l1Slide = (1.0 - l1) * 20.0;
+        final l1Blur = math.max(0.001, (1.0 - l1) * 12.0);
+
+        // Line 2: 0.25 -> 0.70
+        final l2 = ((progress - 0.25) / 0.45).clamp(0.0, 1.0);
+        final l2Slide = (1.0 - l2) * 20.0;
+        final l2Blur = math.max(0.001, (1.0 - l2) * 12.0);
+
+        // Line 3: 0.50 -> 0.95
+        final l3 = ((progress - 0.50) / 0.45).clamp(0.0, 1.0);
+        final l3Slide = (1.0 - l3) * 20.0;
+        final l3Blur = math.max(0.001, (1.0 - l3) * 12.0);
+
+        // Subtitle: 0.65 -> 1.0
+        final l4 = ((progress - 0.65) / 0.35).clamp(0.0, 1.0);
+        final l4Slide = (1.0 - l4) * 16.0;
+        final l4Blur = math.max(0.001, (1.0 - l4) * 10.0);
+
+        final double pulseScale = 1.0 + (_badgePulseController.value * 0.08);
+        final double wobbleAngle =
+            math.sin(_badgePulseController.value * math.pi) * 0.08;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "Let's get"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "Let's get",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "fitness [Dumbbell Badge] started"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'fitness',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Dumbbell Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF22C55E),
+                                    Color(0xFF16A34A),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.fitness_center_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+                        Text(
+                          'started',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 3: "for your goals"
+            Transform.translate(
+              offset: Offset(0, l3Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l3Blur, sigmaY: l3Blur),
+                child: Opacity(
+                  opacity: l3,
+                  child: Text(
+                    'for your goals',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Subtitle
+            Transform.translate(
+              offset: Offset(0, l4Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l4Blur, sigmaY: l4Blur),
+                child: Opacity(
+                  opacity: l4,
+                  child: Text(
+                    "Your fitness journey begins here.\nWe'll personalize everything for you.",
+                    textAlign: TextAlign.left,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13.5,
+                      color: const Color(0xFF6B7280),
+                      height: 1.45,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Step2StaggeredText extends StatefulWidget {
+  const _Step2StaggeredText({Key? key}) : super(key: key);
+
+  @override
+  State<_Step2StaggeredText> createState() => _Step2StaggeredTextState();
+}
+
+class _Step2StaggeredTextState extends State<_Step2StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final headingFontSize = (screenWidth * 0.088).clamp(28.0, 36.0);
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_revealController, _badgePulseController]),
+      builder: (context, child) {
+        final progress = _revealController.value;
+
+        // Line 1: 0.0 -> 0.45
+        final l1 = ((progress - 0.0) / 0.45).clamp(0.0, 1.0);
+        final l1Slide = (1.0 - l1) * 20.0;
+        final l1Blur = math.max(0.001, (1.0 - l1) * 12.0);
+
+        // Line 2: 0.25 -> 0.70
+        final l2 = ((progress - 0.25) / 0.45).clamp(0.0, 1.0);
+        final l2Slide = (1.0 - l2) * 20.0;
+        final l2Blur = math.max(0.001, (1.0 - l2) * 12.0);
+
+        final double pulseScale = 1.0 + (_badgePulseController.value * 0.08);
+        final double wobbleAngle =
+            math.sin(_badgePulseController.value * math.pi) * 0.08;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "What's your"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "What's your",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "gender [Icon] ?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'gender',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFF59E0B),
+                                    Color(0xFFD97706),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.person_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+                        Text(
+                          '?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AnimatedArrow extends StatefulWidget {
+  const _AnimatedArrow({Key? key}) : super(key: key);
+
+  @override
+  State<_AnimatedArrow> createState() => _AnimatedArrowState();
+}
+
+class _AnimatedArrowState extends State<_AnimatedArrow>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(_controller.value * 6, 0),
+          child: child,
+        );
+      },
+      child: const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+    );
+  }
+}
+
+class _Step3StaggeredText extends StatefulWidget {
+  const _Step3StaggeredText({Key? key}) : super(key: key);
+
+  @override
+  State<_Step3StaggeredText> createState() => _Step3StaggeredTextState();
+}
+
+class _Step3StaggeredTextState extends State<_Step3StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final headingFontSize = (screenWidth * 0.088).clamp(28.0, 36.0);
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_revealController, _badgePulseController]),
+      builder: (context, child) {
+        final progress = _revealController.value;
+
+        // Line 1: 0.0 -> 0.45
+        final l1 = ((progress - 0.0) / 0.45).clamp(0.0, 1.0);
+        final l1Slide = (1.0 - l1) * 20.0;
+        final l1Blur = math.max(0.001, (1.0 - l1) * 12.0);
+
+        // Line 2: 0.25 -> 0.70
+        final l2 = ((progress - 0.25) / 0.45).clamp(0.0, 1.0);
+        final l2Slide = (1.0 - l2) * 20.0;
+        final l2Blur = math.max(0.001, (1.0 - l2) * 12.0);
+
+        final double pulseScale = 1.0 + (_badgePulseController.value * 0.08);
+        final double wobbleAngle =
+            math.sin(_badgePulseController.value * math.pi) * 0.08;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "How old"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "How old",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "are [Icon] you?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'are',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF8B5CF6),
+                                    Color(0xFF6D28D9),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.cake_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+                        Text(
+                          'you?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Step4StaggeredText extends StatefulWidget {
+  const _Step4StaggeredText({super.key});
+
+  @override
+  State<_Step4StaggeredText> createState() => _Step4StaggeredTextState();
+}
+
+class _Step4StaggeredTextState extends State<_Step4StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+  late AnimationController _badgeWobbleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _badgeWobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    // Initial delay before starting the text reveal
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _revealController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    _badgeWobbleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double headingFontSize = 42.0;
+
+    return AnimatedBuilder(
+      animation: _revealController,
+      builder: (context, child) {
+        // Line 1: "What's your"
+        final l1 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic),
+        ).value;
+        final l1Slide = 30 * (1 - l1);
+        final l1Blur = 8 * (1 - l1);
+
+        // Line 2: "current [Icon] weight?"
+        final l2 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.15, 0.55, curve: Curves.easeOutCubic),
+        ).value;
+        final l2Slide = 30 * (1 - l2);
+        final l2Blur = 8 * (1 - l2);
+
+        // Badge Animations
+        final pulseScale = Tween<double>(begin: 1.0, end: 1.05).evaluate(
+          CurvedAnimation(
+            parent: _badgePulseController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+        final wobbleAngle = Tween<double>(begin: -0.05, end: 0.05).evaluate(
+          CurvedAnimation(
+            parent: _badgeWobbleController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "What's your"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "What's your",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "current [Icon] weight?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'current',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF3B82F6),
+                                    Color(0xFF2563EB),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.monitor_weight_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+                        Text(
+                          'weight?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Step5StaggeredText extends StatefulWidget {
+  const _Step5StaggeredText({super.key});
+
+  @override
+  State<_Step5StaggeredText> createState() => _Step5StaggeredTextState();
+}
+
+class _Step5StaggeredTextState extends State<_Step5StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+  late AnimationController _badgeWobbleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _badgeWobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    // Initial delay before starting the text reveal
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _revealController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    _badgeWobbleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double headingFontSize = 42.0;
+
+    return AnimatedBuilder(
+      animation: _revealController,
+      builder: (context, child) {
+        // Line 1: "What's your"
+        final l1 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic),
+        ).value;
+        final l1Slide = 30 * (1 - l1);
+        final l1Blur = 8 * (1 - l1);
+
+        // Line 2: "target [Icon] weight?"
+        final l2 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.15, 0.55, curve: Curves.easeOutCubic),
+        ).value;
+        final l2Slide = 30 * (1 - l2);
+        final l2Blur = 8 * (1 - l2);
+
+        // Badge Animations
+        final pulseScale = Tween<double>(begin: 1.0, end: 1.05).evaluate(
+          CurvedAnimation(
+            parent: _badgePulseController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+        final wobbleAngle = Tween<double>(begin: -0.05, end: 0.05).evaluate(
+          CurvedAnimation(
+            parent: _badgeWobbleController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "What's your"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "What's your",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "target [Icon] weight?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'target',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF22C55E),
+                                    Color(0xFF16A34A),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.ads_click_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+                        Text(
+                          'weight?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Step6StaggeredText extends StatefulWidget {
+  const _Step6StaggeredText({super.key});
+
+  @override
+  State<_Step6StaggeredText> createState() => _Step6StaggeredTextState();
+}
+
+class _Step6StaggeredTextState extends State<_Step6StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+  late AnimationController _badgeWobbleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _badgeWobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _revealController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    _badgeWobbleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double headingFontSize = 42.0;
+
+    return AnimatedBuilder(
+      animation: _revealController,
+      builder: (context, child) {
+        // Line 1: "What's your"
+        final l1 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic),
+        ).value;
+        final l1Slide = 30 * (1 - l1);
+        final l1Blur = 8 * (1 - l1);
+
+        // Line 2: "[Icon] height?"
+        final l2 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.15, 0.55, curve: Curves.easeOutCubic),
+        ).value;
+        final l2Slide = 30 * (1 - l2);
+        final l2Blur = 8 * (1 - l2);
+
+        // Badge Animations
+        final pulseScale = Tween<double>(begin: 1.0, end: 1.05).evaluate(
+          CurvedAnimation(
+            parent: _badgePulseController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+        final wobbleAngle = Tween<double>(begin: -0.05, end: 0.05).evaluate(
+          CurvedAnimation(
+            parent: _badgeWobbleController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "What's your"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "What's your",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "[Icon] height?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF22C55E),
+                                    Color(0xFF16A34A),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.height_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        Text(
+                          'height?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Step7StaggeredText extends StatefulWidget {
+  const _Step7StaggeredText({super.key});
+
+  @override
+  State<_Step7StaggeredText> createState() => _Step7StaggeredTextState();
+}
+
+class _Step7StaggeredTextState extends State<_Step7StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+  late AnimationController _badgeWobbleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _badgeWobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _revealController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    _badgeWobbleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double headingFontSize = 42.0;
+
+    return AnimatedBuilder(
+      animation: _revealController,
+      builder: (context, child) {
+        // Line 1: "What's your"
+        final l1 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic),
+        ).value;
+        final l1Slide = 30 * (1 - l1);
+        final l1Blur = 8 * (1 - l1);
+
+        // Line 2: "fitness [Icon] goal?"
+        final l2 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.15, 0.55, curve: Curves.easeOutCubic),
+        ).value;
+        final l2Slide = 30 * (1 - l2);
+        final l2Blur = 8 * (1 - l2);
+
+        // Badge Animations
+        final pulseScale = Tween<double>(begin: 1.0, end: 1.05).evaluate(
+          CurvedAnimation(
+            parent: _badgePulseController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+        final wobbleAngle = Tween<double>(begin: -0.05, end: 0.05).evaluate(
+          CurvedAnimation(
+            parent: _badgeWobbleController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "What's your"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "What's your",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "fitness [Icon] goal?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'fitness',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF22C55E),
+                                    Color(0xFF16A34A),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.emoji_events_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        Text(
+                          'goal?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Step8StaggeredText extends StatefulWidget {
+  const _Step8StaggeredText({super.key});
+
+  @override
+  State<_Step8StaggeredText> createState() => _Step8StaggeredTextState();
+}
+
+class _Step8StaggeredTextState extends State<_Step8StaggeredText>
+    with TickerProviderStateMixin {
+  late AnimationController _revealController;
+  late AnimationController _badgePulseController;
+  late AnimationController _badgeWobbleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _badgePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _badgeWobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _revealController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    _badgePulseController.dispose();
+    _badgeWobbleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double headingFontSize = 42.0;
+
+    return AnimatedBuilder(
+      animation: _revealController,
+      builder: (context, child) {
+        // Line 1: "How active"
+        final l1 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic),
+        ).value;
+        final l1Slide = 30 * (1 - l1);
+        final l1Blur = 8 * (1 - l1);
+
+        // Line 2: "are [Icon] you?"
+        final l2 = CurvedAnimation(
+          parent: _revealController,
+          curve: const Interval(0.15, 0.55, curve: Curves.easeOutCubic),
+        ).value;
+        final l2Slide = 30 * (1 - l2);
+        final l2Blur = 8 * (1 - l2);
+
+        // Badge Animations
+        final pulseScale = Tween<double>(begin: 1.0, end: 1.05).evaluate(
+          CurvedAnimation(
+            parent: _badgePulseController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+        final wobbleAngle = Tween<double>(begin: -0.05, end: 0.05).evaluate(
+          CurvedAnimation(
+            parent: _badgeWobbleController,
+            curve: Curves.easeInOutSine,
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Line 1: "How active"
+            Transform.translate(
+              offset: Offset(0, l1Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l1Blur, sigmaY: l1Blur),
+                child: Opacity(
+                  opacity: l1,
+                  child: Text(
+                    "How active",
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: headingFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: -1.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Line 2: "are [Icon] you?"
+            Transform.translate(
+              offset: Offset(0, l2Slide),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: l2Blur, sigmaY: l2Blur),
+                child: Opacity(
+                  opacity: l2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'are',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Animated Badge
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Transform.rotate(
+                            angle: wobbleAngle,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF22C55E),
+                                    Color(0xFF16A34A),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.directions_run_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        Text(
+                          'you?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: headingFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF141518),
+                            letterSpacing: -1.2,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+
+
