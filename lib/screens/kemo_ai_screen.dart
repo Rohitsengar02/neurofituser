@@ -344,7 +344,7 @@ class _KemoAiScreenState extends State<KemoAiScreen>
   Widget _hero(bool chatting, double heroH) {
     return LayoutBuilder(
       builder: (context, c) {
-        final kemoH = chatting ? 130.0 : math.min(250.0, c.maxHeight * 0.66);
+        final kemoH = chatting ? 120.0 : math.min(250.0, c.maxHeight * 0.66);
         return Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.bottomCenter,
@@ -352,14 +352,13 @@ class _KemoAiScreenState extends State<KemoAiScreen>
             AnimatedPositioned(
               duration: const Duration(milliseconds: 520),
               curve: Curves.easeOutCubic,
-              bottom: 8,
-              left: chatting ? 12 : (c.maxWidth - kemoH * 0.82) / 2,
+              bottom: chatting ? 20 : 16,
+              left: chatting ? 16 : (c.maxWidth - kemoH * 0.78) / 2,
               child: AnimatedBuilder(
                 animation: _talk,
-                builder: (context, _) => KemoBody(
-                  height: kemoH,
+                builder: (context, _) => KemoFace(
+                  size: kemoH * 0.78,
                   emotion: _emotion,
-                  walking: !_thinking,
                   talk: _talk.value,
                 ),
               ),
@@ -374,7 +373,7 @@ class _KemoAiScreenState extends State<KemoAiScreen>
               )
             else
               Positioned(
-                left: 12 + kemoH * 0.82 + 6,
+                left: 16 + kemoH * 0.78 + 10,
                 right: 16,
                 top: 18,
                 child: AnimatedSwitcher(

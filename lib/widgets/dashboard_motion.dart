@@ -75,6 +75,11 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
     _c = AnimationController(vsync: this, duration: widget.duration);
     _a = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
     WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+    // Layout can still move after the first frame (images loading, skeletons
+    // swapping out) without any scroll event, so look again a few times.
+    for (final ms in const [250, 700, 1400, 2600]) {
+      Future.delayed(Duration(milliseconds: ms), _check);
+    }
   }
 
   @override
@@ -123,25 +128,19 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildAnimated() {
-    return AnimatedBuilder(
-      animation: _a,
-      child: widget.child,
-      builder: (context, child) {
-        // Keep the same widget tree at every step so the child's state is
-        // never rebuilt from scratch when the animation finishes.
-        final v = _a.value;
-        return Opacity(
-          opacity: v.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, widget.offset * (1 - v)),
-            child: Transform.scale(
-              scale: 0.965 + 0.035 * v,
-              alignment: Alignment.topCenter,
-              child: child,
-            ),
-          ),
-        );
-      },
+    // Same widget tree at every step so the child's state is never rebuilt.
+    // FadeTransition + a plain translate are cheap to composite while
+    // scrolling.
+    return FadeTransition(
+      opacity: _a,
+      child: AnimatedBuilder(
+        animation: _a,
+        child: widget.child,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, widget.offset * (1 - _a.value)),
+          child: child,
+        ),
+      ),
     );
   }
 }

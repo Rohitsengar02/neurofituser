@@ -323,9 +323,9 @@ class _ShopHomeSectionsState extends State<ShopHomeSections> {
               ),
               // Kemo peeking over the search bar
               Positioned(
-                right: 4,
-                bottom: 30,
-                child: KemoBody(height: kemoH, walking: false),
+                right: 8,
+                bottom: 40,
+                child: KemoFace(size: kemoH * 0.66),
               ),
               Positioned(
                 left: 0,

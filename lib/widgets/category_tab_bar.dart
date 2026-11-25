@@ -35,80 +35,53 @@ class CategoryTabBar extends StatefulWidget {
     this.highlightIndex,
   });
 
-  /// Width of one tab for a given screen width (about 4.3 tabs visible on
-  /// phones, all five on wider screens).
-  static double tabWidthFor(double maxWidth, int count) {
-    final fitAll = (maxWidth - 24) / count;
-    if (fitAll >= 92) return fitAll.clamp(92.0, 120.0);
-    return ((maxWidth - 16) / 4.3).clamp(74.0, 96.0);
-  }
+  /// Width of one tab: all tabs always fit in one row.
+  static double tabWidthFor(double maxWidth, int count) =>
+      ((maxWidth - 2 * _CategoryTabBarState._sidePad -
+                  (count - 1) * _CategoryTabBarState._gap) /
+              count)
+          .clamp(48.0, 96.0);
 
-  static double heightFor(double tabWidth) => tabWidth * 0.78 + 34;
+  static double heightFor(double tabWidth) =>
+      (tabWidth * 0.56 + 30).clamp(56.0, 84.0);
 
   @override
   State<CategoryTabBar> createState() => _CategoryTabBarState();
 }
 
 class _CategoryTabBarState extends State<CategoryTabBar> {
-  final ScrollController _scroll = ScrollController();
-  double _tabW = 86;
   static const double _gap = 6;
   static const double _sidePad = 12;
-
-  @override
-  void didUpdateWidget(covariant CategoryTabBar old) {
-    super.didUpdateWidget(old);
-    if (old.selectedIndex != widget.selectedIndex) _scrollToSelected();
-  }
-
-  void _scrollToSelected() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
-      final pos = _scroll.position;
-      final center = _sidePad +
-          widget.selectedIndex * (_tabW + _gap) +
-          _tabW / 2 -
-          pos.viewportDimension / 2;
-      _scroll.animateTo(
-        center.clamp(0.0, pos.maxScrollExtent),
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        _tabW = CategoryTabBar.tabWidthFor(c.maxWidth, widget.tabs.length);
-        final h = CategoryTabBar.heightFor(_tabW);
-        return SizedBox(
-          height: h + 4,
-          child: ListView.separated(
-            controller: _scroll,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            clipBehavior: Clip.none,
-            padding: const EdgeInsets.symmetric(horizontal: _sidePad),
-            itemCount: widget.tabs.length,
-            separatorBuilder: (_, __) => const SizedBox(width: _gap),
-            itemBuilder: (context, i) => _FolderTab(
-              data: widget.tabs[i],
-              width: _tabW,
-              height: h,
-              selected: i == widget.selectedIndex,
-              highlighted: widget.highlightIndex == i,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                widget.onSelected(i);
-              },
+        final tabW = CategoryTabBar.tabWidthFor(c.maxWidth, widget.tabs.length);
+        final h = CategoryTabBar.heightFor(tabW);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: _sidePad),
+          child: SizedBox(
+            height: h + 2,
+            child: Row(
+              children: [
+                for (var i = 0; i < widget.tabs.length; i++) ...[
+                  if (i > 0) const SizedBox(width: _gap),
+                  Expanded(
+                    child: _FolderTab(
+                      data: widget.tabs[i],
+                      width: tabW,
+                      height: h,
+                      selected: i == widget.selectedIndex,
+                      highlighted: widget.highlightIndex == i,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        widget.onSelected(i);
+                      },
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         );
@@ -170,7 +143,7 @@ class _FolderTabState extends State<_FolderTab>
     final d = widget.data;
     final w = widget.width;
     final h = widget.height;
-    final iconSize = w * 0.62;
+    final iconSize = (h - 26).clamp(26.0, 52.0);
     final darkAccent = HSLColor.fromColor(d.color)
         .withLightness(
             (HSLColor.fromColor(d.color).lightness - 0.12).clamp(0.0, 1.0))
@@ -208,7 +181,7 @@ class _FolderTabState extends State<_FolderTab>
                   ),
                   // 3D icon, lifts and bounces when selected
                   Positioned(
-                    top: 7,
+                    top: 4,
                     left: 0,
                     right: 0,
                     child: AnimatedBuilder(
@@ -243,14 +216,14 @@ class _FolderTabState extends State<_FolderTab>
                   // Optional badge, sitting on the icon's bottom edge
                   if (d.badge != null)
                     Positioned(
-                      top: 7 + iconSize - 16,
+                      top: 4 + iconSize - 12,
                       left: 0,
                       right: 0,
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2.5,
+                            horizontal: 4,
+                            vertical: 1.5,
                           ),
                           decoration: BoxDecoration(
                             color: d.color,
@@ -268,7 +241,7 @@ class _FolderTabState extends State<_FolderTab>
                             d.badge!,
                             style: GoogleFonts.plusJakartaSans(
                               color: Colors.white,
-                              fontSize: 9.5,
+                              fontSize: 7.5,
                               fontWeight: FontWeight.w900,
                               height: 1.1,
                             ),
@@ -278,16 +251,16 @@ class _FolderTabState extends State<_FolderTab>
                     ),
                   // Label
                   Positioned(
-                    left: 4,
-                    right: 4,
-                    bottom: 9,
+                    left: 3,
+                    right: 3,
+                    bottom: 6,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
                         d.label,
                         maxLines: 1,
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
+                          fontSize: 11.5,
                           fontWeight:
                               t > 0.5 ? FontWeight.w800 : FontWeight.w600,
                           color: Color.lerp(
@@ -320,9 +293,9 @@ class _FolderTabPainter extends CustomPainter {
   Path _shape(Size s, {required double flare}) {
     final w = s.width;
     final h = s.height;
-    const top = 9.0; // how much narrower the top is than the foot
-    const r = 20.0; // top corner radius
-    const foot = 14.0; // height of the curved foot
+    final top = w * 0.07; // how much narrower the top is than the foot
+    final r = (w * 0.2).clamp(10.0, 18.0); // top corner radius
+    const foot = 10.0; // height of the curved foot
     final p = Path()..moveTo(-flare, h);
     p.quadraticBezierTo(1, h, 2, h - foot);
     p.lineTo(top, r);
@@ -336,7 +309,7 @@ class _FolderTabPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final flare = 12.0 * t;
+    final flare = 7.0 * t;
     final body = _shape(size, flare: flare);
     final filled = Path.from(body)..close();
 

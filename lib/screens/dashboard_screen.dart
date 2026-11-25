@@ -12,15 +12,14 @@ import 'package:video_player/video_player.dart';
 
 import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
-import '../widgets/dashboard_highlights.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/kemo.dart';
+import '../widgets/tabs_v2/overview_tab.dart';
+import '../widgets/tabs_v2/workouts_tab.dart';
+import '../widgets/tabs_v2/nutrition_tab.dart';
+import '../widgets/tabs_v2/wellness_tab.dart';
 import 'kemo_ai_screen.dart';
 import '../widgets/dashboard_3d_icons.dart';
-import '../widgets/dashboard_overview_sections.dart';
-import '../widgets/dashboard_workout_sections.dart';
-import '../widgets/dashboard_nutrition_sections.dart';
-import '../widgets/dashboard_mental_health_sections.dart';
 import '../widgets/dashboard_shop_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
@@ -194,6 +193,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         setState(() {
           _isOverviewLoading = false;
         });
+        _shimmerController.stop();
         _entranceController.forward(from: 0.0);
 
         // Eagerly preload all Shop Products, Banners, and Images in the background
@@ -298,88 +298,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 child: KeyedSubtree(
                                   key: ValueKey<int>(_selectedCategoryIndex),
                                   child: _selectedCategoryIndex == 1
-                                      ? const DashboardWorkoutTabContent()
+                                      ? const WorkoutsTabV2()
                                       : _selectedCategoryIndex == 2
-                                      ? const DashboardNutritionTabContent()
+                                      ? const NutritionTabV2()
                                       : _selectedCategoryIndex == 3
-                                      ? const DashboardMentalHealthTabContent()
+                                      ? const WellnessTabV2()
                                       : _selectedCategoryIndex == 4
                                       ? const DashboardShopTabContent()
-                                      : Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const SizedBox(height: 18),
-
-                                            // Search Bar & "Transform Yourself" Card
-                                            _buildAnimatedSearchAndTransformRow(),
-
-                                            const SizedBox(height: 18),
-
-                                            // Hero Banner Card ("Stay Consistent, See Results!")
-                                            _buildAnimatedHeroBanner(),
-
-                                            const SizedBox(height: 16),
-
-                                            // Overview Image Carousel Cards (Image Only, No Text)
-                                            Reveal(
-                                              child:
-                                                  _buildOverviewCategoryCardsCarousel(),
-                                            ),
-
-                                            const SizedBox(height: 20),
-
-                                            // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
-                                            Reveal(
-                                              child:
-                                                  _buildAnimatedOverviewBentoGrid(),
-                                            ),
-
-                                            const SizedBox(height: 24),
-
-                                            // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
-                                            Reveal(
-                                              child:
-                                                  _buildAnimatedProgressCarousel(),
-                                            ),
-
-                                            // Show extended sections only on Overview Tab (Index 0)
-                                            if (_selectedCategoryIndex ==
-                                                0) ...[
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child: WeeklyActivityCard(),
-                                              ),
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child: TodaysPlanSection(),
-                                              ),
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child:
-                                                    NutritionSummarySection(),
-                                              ),
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child: WaterIntakeSection(),
-                                              ),
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child: MindMoodSection(),
-                                              ),
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child: AchievementsSection(),
-                                              ),
-                                              const SizedBox(height: 24),
-                                              const Reveal(
-                                                child: ArticlesTipsSection(),
-                                              ),
-                                            ],
-
-                                            const SizedBox(height: 20),
-                                          ],
-                                        ),
+                                      : const OverviewTabV2(),
                                 ),
                               ),
                             ],
@@ -718,7 +644,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           curve: const Interval(0.0, 0.45, curve: Curves.easeOutCubic),
         ).value;
         final slideY = 24.0 * (1 - anim);
-        final blur = 8.0 * (1 - anim);
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -728,8 +653,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               Expanded(
                 child: Transform.translate(
                   offset: Offset(0, slideY),
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                  child: RepaintBoundary(
                     child: Opacity(
                       opacity: anim.clamp(0.0, 1.0),
                       child: Column(
