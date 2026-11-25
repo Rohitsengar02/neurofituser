@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'onboarding_screen.dart';
+import '../widgets/kemo.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,62 +14,32 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
-  late AnimationController _logoController;
-  late AnimationController _pulseController;
-  late AnimationController _fadeController;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  // One timeline drives the whole intro: Kemo pops in, slides left,
+  // and the NEUROFIT wordmark is wiped in from behind Kemo.
+  late final AnimationController _t = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
 
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-  late Animation<double> _textFadeAnimation;
+  static const _green = Color(0xFF16A34A);
+  static const _ink = Color(0xFF0F172A);
 
   @override
   void initState() {
     super.initState();
     _requestNotificationPermission();
-
-    // Logo entrance animation (scale + fade)
-    _logoController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-
-    _scaleAnimation = CurvedAnimation(
-      parent: _logoController,
-      curve: Curves.easeOutBack,
-    );
-
-    _opacityAnimation = CurvedAnimation(
-      parent: _logoController,
-      curve: const Interval(0.0, 0.7, curve: Curves.easeIn),
-    );
-
-    // Continuous glow pulse animation
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-
-    // Text & bottom branding fade in
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-
-    _textFadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeIn,
-    );
-
-    // Sequence trigger
-    _logoController.forward();
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) _fadeController.forward();
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _t.forward();
     });
 
     // Check User Authentication: If user is registered / logged in -> go DIRECTLY to Dashboard
-    UserBackendService.instance.checkAuthStatus().then((_) {
-      Future.delayed(const Duration(milliseconds: 1600), () {
+    Future.wait([
+      UserBackendService.instance.checkAuthStatus(),
+      Future.delayed(const Duration(milliseconds: 2900)),
+    ]).then((_) {
+      Future.delayed(Duration.zero, () {
         if (!mounted) return;
 
         Widget targetScreen = const OnboardingScreen();
@@ -109,173 +80,160 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
-    _logoController.dispose();
-    _pulseController.dispose();
-    _fadeController.dispose();
+    _t.dispose();
     super.dispose();
   }
 
+  double _seg(double a, double b, [Curve c = Curves.easeOutCubic]) =>
+      c.transform(((_t.value - a) / (b - a)).clamp(0.0, 1.0));
+
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    final kemo = (w * 0.22).clamp(64.0, 96.0);
+    final font = (w * 0.105).clamp(30.0, 48.0);
+    final word = GoogleFonts.plusJakartaSans(
+      fontSize: font,
+      fontWeight: FontWeight.w900,
+      letterSpacing: 1.5,
+      height: 1,
+    );
+    final wordPainter = TextPainter(
+      text: TextSpan(text: 'NEUROFIT', style: word),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final wordW = wordPainter.width;
+    const gap = 12.0;
+    final total = kemo + gap + wordW;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF06090E),
-        body: Stack(
-          children: [
-            // 1. Ambient Background Glowing Spheres
-            Positioned(
-              top: -80,
-              right: -60,
-              child: Container(
-                width: 280,
-                height: 280,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF16A34A).withValues(alpha: 0.18),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -100,
-              left: -80,
-              child: Container(
-                width: 320,
-                height: 320,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF22C55E).withValues(alpha: 0.12),
-                ),
-              ),
-            ),
-
-            // 2. Center Brand Presentation
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Animated Logo with Glowing Halo
-                  ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: FadeTransition(
-                      opacity: _opacityAnimation,
-                      child: AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          final glow = _pulseController.value * 16.0;
-
-                          return Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFF000000),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF22C55E).withValues(alpha: 0.45),
-                                  blurRadius: 28 + glow,
-                                  spreadRadius: 2,
-                                ),
-                                BoxShadow(
-                                  color: const Color(0xFF16A34A).withValues(alpha: 0.3),
-                                  blurRadius: 40 + glow,
-                                  spreadRadius: 6,
-                                ),
-                              ],
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(60),
-                              child: Image.asset(
-                                'assets/images/app_logo.png',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          );
-                        },
+        backgroundColor: Colors.white,
+        body: AnimatedBuilder(
+          animation: _t,
+          builder: (context, _) {
+            final pop = _seg(0.0, 0.28, Curves.easeOutBack);
+            final slide = _seg(0.30, 0.58, Curves.easeInOutCubic);
+            final wipe = _seg(0.40, 0.78);
+            final tag = _seg(0.72, 0.95);
+            // Kemo starts centred, then moves to the left of the wordmark.
+            final kemoX = (total / 2 - kemo / 2) * slide;
+            return Stack(
+              children: [
+                // soft green glow behind the logo
+                Center(
+                  child: Opacity(
+                    opacity: pop * 0.9,
+                    child: Container(
+                      width: total * 1.3,
+                      height: kemo * 2.4,
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          colors: [
+                            const Color(0xFFD9F99D).withValues(alpha: 0.55),
+                            Colors.white.withValues(alpha: 0),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 28),
-
-                  // Brand Name: NEUROFIT
-                  FadeTransition(
-                    opacity: _textFadeAnimation,
-                    child: Column(
+                ),
+                Center(
+                  child: SizedBox(
+                    width: total,
+                    height: kemo * 1.25,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
                       children: [
-                        RichText(
-                          text: TextSpan(
-                            text: 'NEURO',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: 4.0,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: 'FIT',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF4ADE80),
-                                  letterSpacing: 4.0,
+                        // Wordmark, revealed left-to-right as Kemo moves away.
+                        Positioned(
+                          left: kemo + gap,
+                          child: ClipRect(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: wipe,
+                              child: Transform.translate(
+                                offset: Offset(-18 * (1 - wipe), 0),
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: 'NEURO',
+                                        style: word.copyWith(color: _ink),
+                                      ),
+                                      TextSpan(
+                                        text: 'FIT',
+                                        style: word.copyWith(color: _green),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'AI-POWERED HOLISTIC WELLNESS',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF94A3B8),
-                            letterSpacing: 2.5,
+                        Transform.translate(
+                          offset: Offset(-kemoX, 0),
+                          child: Transform.scale(
+                            scale: pop,
+                            child: SizedBox(
+                              width: kemo,
+                              height: kemo,
+                              child: KemoFace(
+                                size: kemo,
+                                emotion: wipe > 0.95
+                                    ? KemoEmotion.excited
+                                    : KemoEmotion.happy,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            // 3. Bottom Loading Indicator & Version
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: FadeTransition(
-                opacity: _textFadeAnimation,
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        strokeCap: StrokeCap.round,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF22C55E)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'v2.4.0 • Made with Precision',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-            ),
-          ],
+                Align(
+                  alignment: const Alignment(0, 0.22),
+                  child: Opacity(
+                    opacity: tag,
+                    child: Transform.translate(
+                      offset: Offset(0, 10 * (1 - tag)),
+                      child: Text(
+                        'Your AI fitness buddy',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: const Alignment(0, 0.86),
+                  child: Opacity(
+                    opacity: tag,
+                    child: SizedBox(
+                      width: 120,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          minHeight: 4,
+                          backgroundColor: const Color(0xFFF1F5F9),
+                          valueColor: const AlwaysStoppedAnimation(_green),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

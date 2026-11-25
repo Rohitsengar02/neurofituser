@@ -14,7 +14,7 @@ import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/kemo.dart';
-import '../widgets/tabs_v2/overview_v3.dart';
+import '../widgets/tabs_v2/overview_v4.dart';
 import '../widgets/tabs_v2/workouts_tab.dart';
 import '../widgets/tabs_v2/nutrition_tab.dart';
 import '../widgets/tabs_v2/wellness_tab.dart';
@@ -58,10 +58,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     _CategoryItem(
       title: 'Overview',
       imagePath: 'assets/images/top tabs/overview.png',
-      bgColor: const Color(0xFFE8F8EE), // Light Green
-      subBgColor: const Color(0xFFF0FDF4),
-      activeColor: const Color(0xFF16A34A),
-      heroColor: const Color(0xFFC4F57A),
+      bgColor: const Color(0xFFEFE9FF), // Lavender
+      subBgColor: const Color(0xFFF8F5FF),
+      activeColor: const Color(0xFF6D28D9),
+      heroColor: const Color(0xFFD6C6FF),
     ),
     _CategoryItem(
       title: 'Workouts',
@@ -305,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       ? const WellnessTabV2()
                                       : _selectedCategoryIndex == 4
                                       ? const DashboardShopTabContent()
-                                      : const OverviewTabV3(),
+                                      : const OverviewTabV4(),
                                 ),
                               ),
                             ],
