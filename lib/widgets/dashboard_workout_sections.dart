@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'dashboard_motion.dart';
+import 'dashboard_highlights.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
@@ -136,11 +138,12 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
 
       await _waitForData(sec);
       if (!mounted) break;
-      await _precache(_imagesFor(sec).take(3));
+      // Only the first screens wait briefly for images; the rest fill in.
+      if (_revealed.length < 2) await _precache(_imagesFor(sec).take(2));
       if (!mounted) break;
 
       setState(() => _revealed.add(sec.id));
-      await Future.delayed(const Duration(milliseconds: 90));
+      await Future.delayed(const Duration(milliseconds: 50));
     }
     _revealing = false;
   }
@@ -171,7 +174,7 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
     await Future.wait(targets.map((u) {
       try {
         return precacheImage(_provider(u, width: 720), context)
-            .timeout(const Duration(milliseconds: 700), onTimeout: () {});
+            .timeout(const Duration(milliseconds: 350), onTimeout: () {});
       } catch (_) {
         return Future.value();
       }
@@ -248,7 +251,9 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
       children: [
         const SizedBox(height: 16),
         _searchBar(),
-        const SizedBox(height: 22),
+        const SizedBox(height: 18),
+        const Reveal(child: WorkoutWeekGoalCard()),
+        const SizedBox(height: 24),
         for (final sec in sections) ...[
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 420),
@@ -267,7 +272,10 @@ class _DashboardWorkoutTabContentState extends State<DashboardWorkoutTabContent>
             child: _revealed.contains(sec.id)
                 ? KeyedSubtree(
                     key: ValueKey('on_${sec.id}'),
-                    child: RepaintBoundary(child: _section(sec)),
+                    child: Reveal(
+                      offset: 20,
+                      child: RepaintBoundary(child: _section(sec)),
+                    ),
                   )
                 : KeyedSubtree(
                     key: ValueKey('sk_${sec.id}'),

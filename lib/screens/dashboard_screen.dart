@@ -10,7 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
-import '../widgets/neuro_dynamic_island.dart';
+import '../widgets/neuro_island_dock.dart';
+import '../widgets/dashboard_motion.dart';
+import '../widgets/dashboard_highlights.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/dashboard_workout_sections.dart';
@@ -88,6 +90,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     ),
   ];
 
+  static const List<String> _tabLabels = [
+    'Overview',
+    'Workouts',
+    'Nutrition',
+    'Wellness',
+    'Shop',
+  ];
+
+  final ValueNotifier<bool> _pageScrolling = ValueNotifier<bool>(false);
   bool _isOverviewLoading = true;
   late AnimationController _shimmerController;
 
@@ -162,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
 
     // Initial skeleton loading simulation, then check for first-time user tour
-    Future.delayed(const Duration(milliseconds: 850), () {
+    Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) {
         setState(() {
           _isOverviewLoading = false;
@@ -181,6 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _demoPulseController.dispose();
     _shimmerController.dispose();
     _entranceController.dispose();
+    _pageScrolling.dispose();
     super.dispose();
   }
 
@@ -218,109 +230,160 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ? const SocialScreen()
                   : _selectedBottomNavIndex == 4
                   ? const ProfileScreen()
-                  : SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(
-                        bottom: 110,
-                      ), // Space for floating bottom nav
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 0. Top Dynamic Island (Tap to expand/collapse metrics & quick actions)
-                          NeuroDynamicIsland(
-                            themeColor: activeCategory.activeColor,
-                          ),
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: (n) {
+                        if (n.metrics.axis != Axis.vertical) return false;
+                        if (n is ScrollStartNotification ||
+                            n is ScrollUpdateNotification) {
+                          _pageScrolling.value = true;
+                        } else if (n is ScrollEndNotification) {
+                          _pageScrolling.value = false;
+                        }
+                        return false;
+                      },
+                      child: RevealScope(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(
+                            bottom: 110,
+                          ), // Space for floating bottom nav
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 14),
 
-                          const SizedBox(height: 12),
+                              // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
+                              _buildAnimatedHeader(),
 
-                          // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
-                          _buildAnimatedHeader(),
+                              const SizedBox(height: 16),
 
-                          const SizedBox(height: 16),
+                              // 2. Fixed Top Category Tabs
+                              _buildTopCategoryTabs(activeCategory),
 
-                          // 2. Fixed Top Category Tabs
-                          _buildTopCategoryTabs(activeCategory),
-
-                          // 3. Smooth Animated Switcher for Tab Content
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 350),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder: (child, animation) {
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0.04, 0.0),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: KeyedSubtree(
-                              key: ValueKey<int>(_selectedCategoryIndex),
-                              child: _selectedCategoryIndex == 1
-                                  ? const DashboardWorkoutTabContent()
-                                  : _selectedCategoryIndex == 2
-                                  ? const DashboardNutritionTabContent()
-                                  : _selectedCategoryIndex == 3
-                                  ? const DashboardMentalHealthTabContent()
-                                  : _selectedCategoryIndex == 4
-                                  ? const DashboardShopTabContent()
-                                  : Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const SizedBox(height: 18),
-
-                                        // Search Bar & "Transform Yourself" Card
-                                        _buildAnimatedSearchAndTransformRow(),
-
-                                        const SizedBox(height: 18),
-
-                                        // Hero Banner Card ("Stay Consistent, See Results!")
-                                        _buildAnimatedHeroBanner(),
-
-                                        const SizedBox(height: 16),
-
-                                        // Overview Image Carousel Cards (Image Only, No Text)
-                                        _buildOverviewCategoryCardsCarousel(),
-
-                                        const SizedBox(height: 20),
-
-                                        // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
-                                        _buildAnimatedOverviewBentoGrid(),
-
-                                        const SizedBox(height: 24),
-
-                                        // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
-                                        _buildAnimatedProgressCarousel(),
-
-                                        // Show extended sections only on Overview Tab (Index 0)
-                                        if (_selectedCategoryIndex == 0) ...[
-                                          const SizedBox(height: 24),
-                                          const TodaysPlanSection(),
-                                          const SizedBox(height: 24),
-                                          const NutritionSummarySection(),
-                                          const SizedBox(height: 24),
-                                          const WaterIntakeSection(),
-                                          const SizedBox(height: 24),
-                                          const MindMoodSection(),
-                                          const SizedBox(height: 24),
-                                          const AchievementsSection(),
-                                          const SizedBox(height: 24),
-                                          const ArticlesTipsSection(),
-                                        ],
-
-                                        const SizedBox(height: 20),
-                                      ],
+                              // 3. Smooth Animated Switcher for Tab Content
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 350),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, animation) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0.04, 0.0),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
                                     ),
-                            ),
+                                  );
+                                },
+                                child: KeyedSubtree(
+                                  key: ValueKey<int>(_selectedCategoryIndex),
+                                  child: _selectedCategoryIndex == 1
+                                      ? const DashboardWorkoutTabContent()
+                                      : _selectedCategoryIndex == 2
+                                      ? const DashboardNutritionTabContent()
+                                      : _selectedCategoryIndex == 3
+                                      ? const DashboardMentalHealthTabContent()
+                                      : _selectedCategoryIndex == 4
+                                      ? const DashboardShopTabContent()
+                                      : Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const SizedBox(height: 18),
+
+                                            // Search Bar & "Transform Yourself" Card
+                                            _buildAnimatedSearchAndTransformRow(),
+
+                                            const SizedBox(height: 18),
+
+                                            // Hero Banner Card ("Stay Consistent, See Results!")
+                                            _buildAnimatedHeroBanner(),
+
+                                            const SizedBox(height: 16),
+
+                                            // Overview Image Carousel Cards (Image Only, No Text)
+                                            Reveal(
+                                              child:
+                                                  _buildOverviewCategoryCardsCarousel(),
+                                            ),
+
+                                            const SizedBox(height: 20),
+
+                                            // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
+                                            Reveal(
+                                              child:
+                                                  _buildAnimatedOverviewBentoGrid(),
+                                            ),
+
+                                            const SizedBox(height: 24),
+
+                                            // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
+                                            Reveal(
+                                              child:
+                                                  _buildAnimatedProgressCarousel(),
+                                            ),
+
+                                            // Show extended sections only on Overview Tab (Index 0)
+                                            if (_selectedCategoryIndex ==
+                                                0) ...[
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child: WeeklyActivityCard(),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child: TodaysPlanSection(),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child:
+                                                    NutritionSummarySection(),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child: WaterIntakeSection(),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child: MindMoodSection(),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child: AchievementsSection(),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Reveal(
+                                                child: ArticlesTipsSection(),
+                                              ),
+                                            ],
+
+                                            const SizedBox(height: 20),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
+
+              // Docked island on the right edge (home only). Tap to open
+              // the full panel with today's stats and quick actions.
+              if (_selectedBottomNavIndex == 0)
+                Positioned.fill(
+                  child: NeuroIslandDock(
+                    accent: activeCategory.activeColor,
+                    scrolling: _pageScrolling,
+                    onSelectTab: (i) {
+                      if (i >= 0 && i < _categories.length) {
+                        setState(() => _selectedCategoryIndex = i);
+                      }
+                    },
+                  ),
+                ),
 
               // Bottom Floating Navigation Bar
               Positioned(
@@ -679,13 +742,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                           const SizedBox(height: 2),
                           Row(
                             children: [
-                              Text(
+                              Flexible(
+                                child: Text(
                                 'Ready to crush your goals today?',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF64748B),
                                 ),
+                              ),
                               ),
                               const Icon(
                                 Icons.keyboard_arrow_down_rounded,
@@ -796,15 +863,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                 builder: (context, constraints) {
                   const count = 5;
                   const gap = 8.0;
-                  const underlineHeight = 4.0;
-                  const underlineGap = 8.0; // space between cards and line
+                  const labelHeight = 20.0;
+                  const underlineGap = 9.0; // space between cards and label
                   final cardWidth =
-                      (constraints.maxWidth - ((count - 1) * gap)) / count;
+                      ((constraints.maxWidth - ((count - 1) * gap)) / count)
+                          .clamp(0.0, 84.0);
                   final cardHeight = cardWidth;
-                  final underlineWidth = cardWidth * 0.55;
+                  final labelWidth = cardWidth + 12;
+                  final slot = (constraints.maxWidth - cardWidth) / (count - 1);
 
                   return SizedBox(
-                    height: cardHeight + underlineGap + underlineHeight + 6,
+                    height: cardHeight + underlineGap + labelHeight + 4,
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
@@ -945,30 +1014,66 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ),
                         ),
 
-                        // ---- Sliding underline under the active tab ----
+                        // ---- Sliding label pill under the active tab ----
                         AnimatedPositioned(
-                          duration: const Duration(milliseconds: 320),
-                          curve: Curves.easeOutCubic,
+                          duration: const Duration(milliseconds: 380),
+                          curve: Curves.easeOutBack,
                           top: cardHeight + underlineGap,
                           left:
-                              _selectedCategoryIndex * (cardWidth + gap) +
-                              (cardWidth - underlineWidth) / 2,
-                          width: underlineWidth,
-                          height: underlineHeight,
+                              (_selectedCategoryIndex * slot +
+                                      (cardWidth - labelWidth) / 2)
+                                  .clamp(
+                                    0.0,
+                                    constraints.maxWidth - labelWidth,
+                                  ),
+                          width: labelWidth,
+                          height: labelHeight,
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 320),
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: activeCategory.activeColor,
-                              borderRadius: BorderRadius.circular(3),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Color.lerp(
+                                    activeCategory.activeColor,
+                                    Colors.white,
+                                    0.15,
+                                  )!,
+                                  activeCategory.activeColor,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
                               boxShadow: [
                                 BoxShadow(
                                   color: activeCategory.activeColor.withValues(
-                                    alpha: 0.55,
+                                    alpha: 0.45,
                                   ),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
+                            ),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              transitionBuilder: (c, a) => FadeTransition(
+                                opacity: a,
+                                child: ScaleTransition(scale: a, child: c),
+                              ),
+                              child: FittedBox(
+                                key: ValueKey(_selectedCategoryIndex),
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _tabLabels[_selectedCategoryIndex],
+                                  maxLines: 1,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.1,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1363,13 +1468,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(
+                                        Flexible(
+                                          child: Text(
                                           'Explore Plans',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: GoogleFonts.plusJakartaSans(
                                             fontSize: 11.5,
                                             fontWeight: FontWeight.w800,
                                             color: Colors.white,
                                           ),
+                                        ),
                                         ),
                                         const SizedBox(width: 5),
                                         const Icon(

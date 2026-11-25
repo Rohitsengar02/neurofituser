@@ -3,6 +3,8 @@ import '../widgets/staggered_slide_fade.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'dashboard_motion.dart';
+import 'dashboard_highlights.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -56,7 +58,7 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
     _prodService.addListener(_onUpdate);
 
     // Safety timeout: If network is slow, unlock skeleton after max 3.5s
-    _safetyTimeoutTimer = Timer(const Duration(milliseconds: 1200), () {
+    _safetyTimeoutTimer = Timer(const Duration(milliseconds: 900), () {
       if (mounted && !_isTop4SectionsLoaded) {
         setState(() => _isTop4SectionsLoaded = true);
       }
@@ -234,6 +236,15 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
 
         const SizedBox(height: 14),
 
+        if (_searchQuery.isEmpty) ...[
+          const StaggeredSlideFade(
+            index: 1,
+            duration: Duration(milliseconds: 450),
+            child: FlashDealStrip(),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         // 2. SEARCH MODE OR REAL-TIME LAYOUT CMS SECTIONS (Staggered Entrance)
         if (_searchQuery.isNotEmpty) ...[
           Padding(
@@ -279,10 +290,8 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
             _renderProductSection(LayoutSectionModel(id: 'def_prod', title: 'Trending Essentials 🔥', subtitle: 'Top rated gear loved by athletes', type: 'products', layoutMode: 'grid')),
           ] else
             ...List.generate(activeSections.length, (index) {
-              return StaggeredSlideFade(
-                index: index + 1,
-                delay: const Duration(milliseconds: 60),
-                duration: const Duration(milliseconds: 450),
+              return Reveal(
+                delay: Duration(milliseconds: 60 * (index + 2)),
                 child: _renderDynamicSection(activeSections[index]),
               );
             }),
@@ -341,8 +350,8 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
                   (i) => Column(
                     children: [
                       Container(
-                        width: 58,
-                        height: 58,
+                        width: 52,
+                        height: 52,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Color.lerp(

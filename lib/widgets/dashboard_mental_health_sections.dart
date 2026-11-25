@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'dashboard_motion.dart';
+import 'dashboard_highlights.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -60,7 +62,7 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
     );
 
     // Simulate skeleton loading
-    Timer(const Duration(milliseconds: 650), () {
+    Timer(const Duration(milliseconds: 550), () {
       if (mounted) {
         setState(() => _isLoading = false);
         _staggerController.forward();
@@ -82,28 +84,10 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
     required double endInterval,
     required Widget child,
   }) {
-    return AnimatedBuilder(
-      animation: _staggerController,
-      builder: (context, _) {
-        final anim = CurvedAnimation(
-          parent: _staggerController,
-          curve: Interval(startInterval, endInterval, curve: Curves.easeOutCubic),
-        ).value;
-
-        final blurVal = ((1 - anim) * 12.0).clamp(0.0, 12.0);
-        final slideY = (24.0 * (1 - anim));
-
-        return Transform.translate(
-          offset: Offset(0, slideY),
-          child: Opacity(
-            opacity: anim.clamp(0.0, 1.0),
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
-              child: child,
-            ),
-          ),
-        );
-      },
+    // Sections already on screen cascade in; the rest rise in as you scroll.
+    return Reveal(
+      delay: Duration(milliseconds: (startInterval * 700).round()),
+      child: child,
     );
   }
 
@@ -123,6 +107,15 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
           startInterval: 0.0,
           endInterval: 0.16,
           child: _buildTodayMindHeroSection(),
+        ),
+
+        const SizedBox(height: 20),
+
+        // One-minute calm with a breathing orb
+        _buildStaggeredSection(
+          startInterval: 0.05,
+          endInterval: 0.2,
+          child: const CalmMomentCard(),
         ),
 
         const SizedBox(height: 24),
@@ -337,11 +330,11 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
+                Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Good evening, Rohit 👋",
+                      '${DateTime.now().hour < 12 ? 'Good morning' : DateTime.now().hour < 17 ? 'Good afternoon' : 'Good evening'}, Rohit 👋',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
@@ -359,7 +352,7 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
                       ),
                     ),
                   ],
-                ),
+                ))),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
                   decoration: BoxDecoration(
@@ -392,7 +385,10 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
                 final mood = _moodList[index];
                 final isSelected = _selectedMoodIndex == index;
 
-                return GestureDetector(
+                return Flexible(
+                  child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: GestureDetector(
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() => _selectedMoodIndex = index);
@@ -409,7 +405,9 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
                         width: isSelected ? 1.5 : 1.0,
                       ),
                     ),
-                    child: Column(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
                       children: [
                         Text(mood['emoji'] as String, style: const TextStyle(fontSize: 22)),
                         const SizedBox(height: 3),
@@ -423,6 +421,9 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
                         ),
                       ],
                     ),
+                    ),
+                  ),
+                  ),
                   ),
                 );
               }),
@@ -531,19 +532,25 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
+          Flexible(
+            child: Row(
             children: [
               Text(icon, style: const TextStyle(fontSize: 14)),
               const SizedBox(width: 6),
-              Text(
+              Flexible(
+                child: Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF64748B),
                 ),
               ),
+              ),
             ],
+          ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -836,7 +843,8 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
               ),
               const SizedBox(height: 20),
               // Action Buttons
-              Row(
+              Wrap(
+                runSpacing: 10,
                 children: [
                   GestureDetector(
                     onTap: () => HapticFeedback.lightImpact(),
@@ -1973,7 +1981,7 @@ class _InteractiveBreathingCardState extends State<_InteractiveBreathingCard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
+              Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -2001,7 +2009,7 @@ class _InteractiveBreathingCardState extends State<_InteractiveBreathingCard>
                     ),
                   ),
                 ],
-              ),
+              ))),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(

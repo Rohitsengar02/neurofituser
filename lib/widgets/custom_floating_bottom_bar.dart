@@ -47,30 +47,40 @@ class CustomFloatingBottomBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(30),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Row(
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    // Tighter pills on narrow phones so all icons fit.
+                    final compact = box.maxWidth < 230;
+                    return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildCapsuleItem(
                       index: 0,
                       icon: Icons.home_rounded,
                       unselectedIcon: Icons.home_outlined,
+                      compact: compact,
                     ),
                     _buildCapsuleItem(
                       index: 1,
                       icon: Icons.directions_walk_rounded,
                       unselectedIcon: Icons.directions_walk_outlined,
+                      compact: compact,
                     ),
                     _buildCapsuleItem(
                       index: 2,
                       icon: Icons.sports_gymnastics_rounded,
                       unselectedIcon: Icons.sports_gymnastics_rounded,
+                      compact: compact,
                     ),
                     _buildCapsuleItem(
                       index: 3,
                       icon: Icons.people_rounded,
                       unselectedIcon: Icons.people_outline_rounded,
+                      compact: compact,
                     ),
                   ],
+                );
+                  },
                 ),
               ),
             ),
@@ -133,6 +143,7 @@ class CustomFloatingBottomBar extends StatelessWidget {
     required int index,
     required IconData icon,
     required IconData unselectedIcon,
+    bool compact = false,
   }) {
     final isSelected = selectedIndex == index;
 
@@ -146,7 +157,7 @@ class CustomFloatingBottomBar extends StatelessWidget {
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 18 : 12,
+          horizontal: compact ? (isSelected ? 12 : 7) : (isSelected ? 18 : 12),
           vertical: 8,
         ),
         decoration: BoxDecoration(
