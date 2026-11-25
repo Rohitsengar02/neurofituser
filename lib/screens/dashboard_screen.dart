@@ -14,6 +14,8 @@ import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
 import '../widgets/dashboard_highlights.dart';
 import '../widgets/category_tab_bar.dart';
+import '../widgets/kemo.dart';
+import 'kemo_ai_screen.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/dashboard_workout_sections.dart';
@@ -60,6 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       bgColor: const Color(0xFFE8F8EE), // Light Green
       subBgColor: const Color(0xFFF0FDF4),
       activeColor: const Color(0xFF16A34A),
+      heroColor: const Color(0xFFC4F57A),
     ),
     _CategoryItem(
       title: 'Workouts',
@@ -67,6 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       bgColor: const Color(0xFFF5EEFF), // Light Purple
       subBgColor: const Color(0xFFFAF5FF),
       activeColor: const Color(0xFF9333EA),
+      heroColor: const Color(0xFFD4B8FF),
     ),
     _CategoryItem(
       title: 'Nutrition',
@@ -74,6 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       bgColor: const Color(0xFFFEF7E6), // Light Yellow / Cream
       subBgColor: const Color(0xFFFFFBEB),
       activeColor: const Color(0xFFD97706),
+      heroColor: const Color(0xFFFFDE6B),
     ),
     _CategoryItem(
       title: 'Mental Health',
@@ -81,6 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       bgColor: const Color(0xFFFFEEF1), // Light Pink
       subBgColor: const Color(0xFFFFF1F2),
       activeColor: const Color(0xFFE11D48),
+      heroColor: const Color(0xFFFFB8C8),
     ),
     _CategoryItem(
       title: 'Shop',
@@ -88,6 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       bgColor: const Color(0xFFEBF5FF), // Light Blue
       subBgColor: const Color(0xFFF0F9FF),
       activeColor: const Color(0xFF0284C7),
+      heroColor: const Color(0xFF9FD8FF),
     ),
   ];
 
@@ -213,16 +220,18 @@ class _DashboardScreenState extends State<DashboardScreen>
       backgroundColor:
           Colors.transparent, // Background handled by AnimatedContainer
       body: AnimatedContainer(
-        duration: const Duration(milliseconds: 350),
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            stops: const [0.0, 0.45, 1.0],
+            stops: const [0.0, 0.2, 0.42, 0.7],
             colors: [
-              activeCategory.bgColor, // Slightly darker/richer shade
-              activeCategory.subBgColor, // Fading to pastel shade
-              const Color(0xFFFBFBFD), // Blending into clean background
+              activeCategory.heroColor, // Vivid tab colour at the top
+              activeCategory.bgColor, // Softening
+              activeCategory.subBgColor, // Pastel
+              const Color(0xFFFBFBFD), // Clean background
             ],
           ),
         ),
@@ -840,6 +849,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
+              // Kemo, the AI buddy: tap to chat
+              _KemoHeaderButton(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(context, KemoAiScreen.route());
+                },
               ),
             ],
           ),
@@ -2319,12 +2336,16 @@ class _CategoryItem {
   final Color subBgColor;
   final Color activeColor;
 
+  /// Vivid colour at the very top of the page, fading into [bgColor].
+  final Color heroColor;
+
   _CategoryItem({
     required this.title,
     required this.imagePath,
     required this.bgColor,
     required this.subBgColor,
     required this.activeColor,
+    required this.heroColor,
   });
 }
 
@@ -2650,6 +2671,100 @@ class _OverviewBentoVideoPlayerState extends State<_OverviewBentoVideoPlayer> {
               ? _controller!.value.size.height
               : 400,
           child: VideoPlayer(_controller!),
+        ),
+      ),
+    );
+  }
+}
+
+/// Round Kemo avatar in the header with an "Ask me" bubble that pops in now
+/// and then.
+class _KemoHeaderButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _KemoHeaderButton({required this.onTap});
+
+  @override
+  State<_KemoHeaderButton> createState() => _KemoHeaderButtonState();
+}
+
+class _KemoHeaderButtonState extends State<_KemoHeaderButton> {
+  bool _showHint = false;
+  Timer? _timer;
+  int _tick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 4200), (_) {
+      if (!mounted) return;
+      _tick++;
+      setState(() => _showHint = _tick % 3 == 1);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PressScale(
+      onTap: widget.onTap,
+      child: SizedBox(
+        width: 46,
+        height: 46,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Hero(tag: 'kemo-face', child: KemoFace(size: 46)),
+            // online dot
+            Positioned(
+              right: 1,
+              bottom: 2,
+              child: Container(
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: -20,
+              child: IgnorePointer(
+                child: AnimatedScale(
+                  scale: _showHint ? 1 : 0,
+                  alignment: Alignment.topRight,
+                  duration: const Duration(milliseconds: 380),
+                  curve: _showHint ? Curves.elasticOut : Curves.easeIn,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF14210C),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Ask Kemo',
+                      maxLines: 1,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFB8FF3D),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

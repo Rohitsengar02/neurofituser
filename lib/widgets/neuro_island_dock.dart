@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../screens/ai_coach_screen.dart';
+import '../screens/kemo_ai_screen.dart';
 import '../screens/date_nutrition_detail_screen.dart';
 import '../screens/steps_screen.dart';
 import '../screens/streak_detail_screen.dart';
@@ -1202,9 +1202,9 @@ class _NeuroIslandPanelState extends State<NeuroIslandPanel>
       ),
       _QA(
         Icons.auto_awesome_rounded,
-        'AI Coach',
-        const Color(0xFF7C3AED),
-        () => _go(const AiCoachScreen()),
+        'Ask Kemo',
+        const Color(0xFF3DDC12),
+        () => _go(const KemoAiScreen()),
       ),
       _QA(
         Icons.person_rounded,
