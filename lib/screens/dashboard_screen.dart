@@ -13,6 +13,7 @@ import 'package:video_player/video_player.dart';
 import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
 import '../widgets/dashboard_highlights.dart';
+import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/dashboard_workout_sections.dart';
@@ -99,6 +100,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   ];
 
   final ValueNotifier<bool> _pageScrolling = ValueNotifier<bool>(false);
+  static const List<String> _tabIcons = [
+    'assets/images/top tabs/icons/overview.png',
+    'assets/images/top tabs/icons/workout.png',
+    'assets/images/top tabs/icons/nutrition.png',
+    'assets/images/top tabs/icons/wellness.png',
+    'assets/images/top tabs/icons/shop.png',
+  ];
+
   bool _isOverviewLoading = true;
   late AnimationController _shimmerController;
 
@@ -852,240 +861,31 @@ class _DashboardScreenState extends State<DashboardScreen>
           parent: _entranceController,
           curve: const Interval(0.05, 0.45, curve: Curves.easeOutCubic),
         ).value;
-
         return Transform.translate(
           offset: Offset(0, (1.0 - anim) * 16.0),
-          child: Opacity(
-            opacity: anim.clamp(0.0, 1.0),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14.0),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const count = 5;
-                  const gap = 8.0;
-                  const labelHeight = 20.0;
-                  const underlineGap = 9.0; // space between cards and label
-                  final cardWidth =
-                      ((constraints.maxWidth - ((count - 1) * gap)) / count)
-                          .clamp(0.0, 84.0);
-                  final cardHeight = cardWidth;
-                  final labelWidth = cardWidth + 12;
-                  final slot = (constraints.maxWidth - cardWidth) / (count - 1);
-
-                  return SizedBox(
-                    height: cardHeight + underlineGap + labelHeight + 4,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // ---- Cards row ----
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: cardHeight,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: List.generate(count, (index) {
-                              final item = _categories[index];
-                              final isSelected =
-                                  _selectedCategoryIndex == index;
-                              final isDemoHighlighted =
-                                  _isDemoActive && _demoStep == index;
-
-                              return GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  if (_isDemoActive) {
-                                    _nextDemoStep();
-                                  } else {
-                                    setState(
-                                      () => _selectedCategoryIndex = index,
-                                    );
-                                  }
-                                },
-                                child: AnimatedScale(
-                                  scale: isSelected ? 1.06 : 1.0,
-                                  duration: const Duration(milliseconds: 280),
-                                  curve: Curves.easeOutBack,
-                                  child: SizedBox(
-                                    width: cardWidth,
-                                    height: cardHeight,
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        // Card — no border, shadow only when active
-                                        AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 280,
-                                          ),
-                                          curve: Curves.easeOutCubic,
-                                          width: cardWidth,
-                                          height: cardHeight,
-                                          clipBehavior: Clip.antiAlias,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              22,
-                                            ),
-                                            boxShadow: isSelected
-                                                ? [
-                                                    BoxShadow(
-                                                      color: item.activeColor
-                                                          .withValues(
-                                                            alpha: 0.38,
-                                                          ),
-                                                      blurRadius: 16,
-                                                      spreadRadius: 1,
-                                                      offset: const Offset(
-                                                        0,
-                                                        5,
-                                                      ),
-                                                    ),
-                                                  ]
-                                                : const [],
-                                          ),
-                                          child: AnimatedOpacity(
-                                            duration: const Duration(
-                                              milliseconds: 280,
-                                            ),
-                                            opacity: isSelected ? 1.0 : 0.78,
-                                            child: Image.asset(
-                                              item.imagePath,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  Center(
-                                                    child: Icon(
-                                                      Icons.dashboard_rounded,
-                                                      size: 26,
-                                                      color: item.activeColor,
-                                                    ),
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-
-                                        // Demo pulse badge
-                                        if (isDemoHighlighted)
-                                          Positioned(
-                                            top: -10,
-                                            left: 0,
-                                            right: 0,
-                                            child: Center(
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 2,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: item.activeColor,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: item.activeColor
-                                                          .withValues(
-                                                            alpha: 0.6,
-                                                          ),
-                                                      blurRadius: 8,
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Text(
-                                                  'TAP 👆',
-                                                  style:
-                                                      GoogleFonts.plusJakartaSans(
-                                                        color: Colors.white,
-                                                        fontSize: 8.5,
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-
-                        // ---- Sliding label pill under the active tab ----
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 380),
-                          curve: Curves.easeOutBack,
-                          top: cardHeight + underlineGap,
-                          left:
-                              (_selectedCategoryIndex * slot +
-                                      (cardWidth - labelWidth) / 2)
-                                  .clamp(
-                                    0.0,
-                                    constraints.maxWidth - labelWidth,
-                                  ),
-                          width: labelWidth,
-                          height: labelHeight,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 320),
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Color.lerp(
-                                    activeCategory.activeColor,
-                                    Colors.white,
-                                    0.15,
-                                  )!,
-                                  activeCategory.activeColor,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: activeCategory.activeColor.withValues(
-                                    alpha: 0.45,
-                                  ),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 260),
-                              transitionBuilder: (c, a) => FadeTransition(
-                                opacity: a,
-                                child: ScaleTransition(scale: a, child: c),
-                              ),
-                              child: FittedBox(
-                                key: ValueKey(_selectedCategoryIndex),
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  _tabLabels[_selectedCategoryIndex],
-                                  maxLines: 1,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: Colors.white,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
+          child: Opacity(opacity: anim.clamp(0.0, 1.0), child: child),
         );
       },
+      child: CategoryTabBar(
+        tabs: [
+          for (var i = 0; i < _categories.length; i++)
+            CategoryTabData(
+              label: _tabLabels[i],
+              iconPath: _tabIcons[i],
+              color: _categories[i].activeColor,
+              badge: i == 4 ? '40% OFF' : null,
+            ),
+        ],
+        selectedIndex: _selectedCategoryIndex,
+        highlightIndex: _isDemoActive ? _demoStep : null,
+        onSelected: (index) {
+          if (_isDemoActive) {
+            _nextDemoStep();
+          } else {
+            setState(() => _selectedCategoryIndex = index);
+          }
+        },
+      ),
     );
   }
 
@@ -1128,26 +928,33 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Skeleton — matches the wider, pod-less layout
   Widget _buildTopCategoryTabsSkeleton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14.0),
-      child: Row(
-        children: List.generate(5, (index) {
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: index == 0 ? 0 : 4,
-                right: index == 4 ? 0 : 4,
-              ),
-              child: AspectRatio(
-                aspectRatio: 1.0,
-                child: _buildSkeletonShimmerBox(borderRadius: 22),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = CategoryTabBar.tabWidthFor(c.maxWidth, 5);
+        final h = CategoryTabBar.heightFor(w);
+        return SizedBox(
+          height: h + 4,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: 5,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (_, __) => SizedBox(
+              width: w,
+              height: h,
+              child: _buildSkeletonShimmerBox(
+                width: w,
+                height: h,
+                borderRadius: 20,
               ),
             ),
-          );
-        }),
-      ),
+          ),
+        );
+      },
     );
   }
+
 
   // -------------------------------------------------------------
   // 3. SEARCH & TRANSFORM YOURSELF ROW (STAGGERED SLIDE WITH SKELETON)
