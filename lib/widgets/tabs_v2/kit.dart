@@ -595,7 +595,7 @@ class IconArt extends StatelessWidget {
       child: ClipRect(
         child: Align(
           alignment: Alignment.topCenter,
-          heightFactor: 0.8,
+          heightFactor: 0.7,
           child: Image.asset(
             path,
             width: size / 0.8,
