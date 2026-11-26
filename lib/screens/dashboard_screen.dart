@@ -14,11 +14,12 @@ import '../widgets/side_island.dart';
 import '../widgets/overview_glass.dart';
 import '../widgets/overview_home_cards.dart';
 import '../widgets/ios_header.dart';
+import '../widgets/workout_tab_v2.dart';
+import '../widgets/smooth_scroll.dart';
 import '../widgets/nutrition_tab_v2.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
-import '../widgets/dashboard_workout_sections.dart';
 import '../widgets/dashboard_mental_health_sections.dart';
 import '../widgets/dashboard_shop_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
@@ -46,6 +47,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
+  final _smoothScroll = SmoothScrollController();
   int _selectedCategoryIndex =
       0; // 0: Overview, 1: Workouts, 2: Nutrition, 3: Mental Health, 4: Shop
   int _selectedOverviewCardIndex = 0;
@@ -181,6 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
+    _smoothScroll.dispose();
     _demoCountdownTimer?.cancel();
     _demoPulseController.dispose();
     _shimmerController.dispose();
@@ -223,7 +226,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   : _selectedBottomNavIndex == 4
                   ? const ProfileScreen()
                   : SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
+                      controller: _smoothScroll,
+                      physics: const BouncingScrollPhysics(
+                        decelerationRate: ScrollDecelerationRate.fast,
+                      ),
                       padding: const EdgeInsets.only(
                         bottom: 110,
                       ), // Space for floating bottom nav
@@ -231,7 +237,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           // Furry blurred circles and doodles drift behind
                           // the whole Overview, header included.
-                          if (_selectedCategoryIndex == 0)
+                          if (_selectedCategoryIndex <= 1)
                             const Positioned.fill(child: FurBlobsBackdrop()),
                           Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,7 +288,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             child: KeyedSubtree(
                               key: ValueKey<int>(_selectedCategoryIndex),
                               child: _selectedCategoryIndex == 1
-                                  ? const DashboardWorkoutTabContent()
+                                  ? const WorkoutTabV2()
                                   : _selectedCategoryIndex == 2
                                   ? const NutritionTabV2()
                                   : _selectedCategoryIndex == 3
