@@ -451,10 +451,9 @@ class _ProgressWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = data;
-    return GlassPanel(
+    return _GlowBorderPanel(
       radius: 30,
       padding: const EdgeInsets.all(14),
-      tint: d.tint,
       child: LayoutBuilder(builder: (context, c) {
         final roomy = c.maxWidth > 230;
         final left = SizedBox(
@@ -505,6 +504,92 @@ class _ProgressWidget extends StatelessWidget {
           ],
         );
       }),
+    );
+  }
+}
+
+/// iPhone-style widget: green glass fill (like the Workouts card) inside a
+/// slowly turning gradient border that glows softly.
+class _GlowBorderPanel extends StatefulWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  final double radius;
+  const _GlowBorderPanel({required this.child, required this.padding, this.radius = 30});
+
+  @override
+  State<_GlowBorderPanel> createState() => _GlowBorderPanelState();
+}
+
+class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerProviderStateMixin {
+  late final AnimationController _spin =
+      AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.radius;
+    return AnimatedBuilder(
+      animation: _spin,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(r - 2),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: widget.padding,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(r - 2),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFECFCCB).withValues(alpha: 0.95),
+                  const Color(0xFFD9F99D).withValues(alpha: 0.9),
+                  const Color(0xFFBEF264).withValues(alpha: 0.85),
+                ],
+              ),
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
+      builder: (context, inner) {
+        final g = SweepGradient(
+          colors: const [
+            Color(0xFF22C55E),
+            Color(0xFFD9F99D),
+            Color(0xFFFFFFFF),
+            Color(0xFF5EEAD4),
+            Color(0xFF84CC16),
+            Color(0xFF22C55E),
+          ],
+          transform: GradientRotation(_spin.value * 2 * math.pi),
+        );
+        return Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(r),
+            gradient: g,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF65A30D).withValues(alpha: 0.22),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: const Color(0xFFBEF264).withValues(alpha: 0.35),
+                blurRadius: 12,
+                spreadRadius: -2,
+              ),
+            ],
+          ),
+          child: inner,
+        );
+      },
     );
   }
 }

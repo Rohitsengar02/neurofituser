@@ -13,6 +13,7 @@ import 'package:video_player/video_player.dart';
 import '../widgets/side_island.dart';
 import '../widgets/overview_glass.dart';
 import '../widgets/overview_home_cards.dart';
+import '../widgets/ios_header.dart';
 import '../widgets/nutrition_tab_v2.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
@@ -233,7 +234,28 @@ class _DashboardScreenState extends State<DashboardScreen>
                           const SizedBox(height: 14),
 
                           // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
-                          _buildAnimatedHeader(),
+                          IosHeader(
+                            name: 'Rohit',
+                            streak: 12,
+                            onStreak: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StreakDetailScreen(),
+                              ),
+                            ),
+                            onAvatar: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ProfileScreen(),
+                              ),
+                            ),
+                            onTransform: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const TransformScreen(),
+                              ),
+                            ),
+                          ),
 
                           const SizedBox(height: 16),
 
@@ -271,12 +293,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const SizedBox(height: 18),
-
-                                        // Search Bar & "Transform Yourself" Card
-                                        _buildAnimatedSearchAndTransformRow(),
-
-                                        const SizedBox(height: 18),
+                                        const SizedBox(height: 14),
 
                                         // Furry blurred circles and doodles drift
                                         // behind the white Overview cards.

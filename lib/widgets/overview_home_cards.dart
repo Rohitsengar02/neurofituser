@@ -26,8 +26,19 @@ const _amber = Color(0xFFF59E0B);
 const _pink = Color(0xFFEC4899);
 const Curve _spring = Cubic(0.2, 1.18, 0.32, 1);
 
-TextStyle _t(double s, {FontWeight w = FontWeight.w600, Color c = _ink, double? h, double? ls}) =>
-    GoogleFonts.plusJakartaSans(fontSize: s, fontWeight: w, color: c, height: h, letterSpacing: ls);
+TextStyle _t(
+  double s, {
+  FontWeight w = FontWeight.w600,
+  Color c = _ink,
+  double? h,
+  double? ls,
+}) => GoogleFonts.plusJakartaSans(
+  fontSize: s,
+  fontWeight: w,
+  color: c,
+  height: h,
+  letterSpacing: ls,
+);
 
 /// Opens [page] with an iOS-style zoom growing out of the tapped widget.
 void _openFrom(BuildContext context, Widget page) {
@@ -36,7 +47,10 @@ void _openFrom(BuildContext context, Widget page) {
   var origin = Alignment.center;
   if (box != null && box.hasSize) {
     final c = box.localToGlobal(box.size.center(Offset.zero));
-    origin = Alignment((c.dx / size.width) * 2 - 1, (c.dy / size.height) * 2 - 1);
+    origin = Alignment(
+      (c.dx / size.width) * 2 - 1,
+      (c.dy / size.height) * 2 - 1,
+    );
   }
   Navigator.of(context).push(iosZoomRoute(page, origin));
 }
@@ -91,9 +105,16 @@ class _Rise extends StatelessWidget {
       child: child,
       builder: (context, t, c) {
         final o = t.clamp(0.0, 1.0);
-        Widget w = Transform.translate(offset: Offset(0, 34 * (1 - t)), child: c);
+        Widget w = Transform.translate(
+          offset: Offset(0, 34 * (1 - t)),
+          child: c,
+        );
         final b = (1 - o) * 10;
-        if (b > 0.2) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
+        if (b > 0.2)
+          w = ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b),
+            child: w,
+          );
         return Opacity(opacity: o, child: w);
       },
     );
@@ -105,7 +126,13 @@ class _NeuCard extends StatefulWidget {
   final Widget child;
   final Widget Function()? page;
   final EdgeInsets padding;
-  const _NeuCard({required this.child, this.page, this.padding = const EdgeInsets.all(18)});
+  final bool glass;
+  const _NeuCard({
+    required this.child,
+    this.page,
+    this.padding = const EdgeInsets.all(18),
+    this.glass = false,
+  });
 
   @override
   State<_NeuCard> createState() => _NeuCardState();
@@ -129,34 +156,75 @@ class _NeuCardState extends State<_NeuCard> {
         scale: _down ? 0.965 : 1,
         duration: Duration(milliseconds: _down ? 110 : 450),
         curve: _down ? Curves.easeOut : _spring,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        child: widget.glass ? _glassBody() : _solidBody(),
+      ),
+    );
+  }
+
+  Widget _glassBody() => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(28),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF7D948A).withValues(alpha: _down ? 0.10 : 0.16),
+          offset: Offset(0, _down ? 6 : 12),
+          blurRadius: 28,
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
           padding: widget.padding,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white, width: 1.4),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.white.withValues(alpha: 0.95),
-                offset: const Offset(-7, -7),
-                blurRadius: 18,
-              ),
-              BoxShadow(
-                color: const Color(0xFF7D948A).withValues(alpha: _down ? 0.14 : 0.22),
-                offset: Offset(8, _down ? 6 : 12),
-                blurRadius: _down ? 16 : 26,
-              ),
-            ],
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.62),
+                Colors.white.withValues(alpha: 0.32),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.85),
+              width: 1.3,
+            ),
           ),
           child: widget.child,
         ),
       ),
-    );
-  }
+    ),
+  );
+
+  Widget _solidBody() => AnimatedContainer(
+    duration: const Duration(milliseconds: 200),
+    padding: widget.padding,
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(28),
+      border: Border.all(color: Colors.white, width: 1.4),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.white.withValues(alpha: 0.95),
+          offset: const Offset(-7, -7),
+          blurRadius: 18,
+        ),
+        BoxShadow(
+          color: const Color(0xFF7D948A).withValues(alpha: _down ? 0.14 : 0.22),
+          offset: Offset(8, _down ? 6 : 12),
+          blurRadius: _down ? 16 : 26,
+        ),
+      ],
+    ),
+    child: widget.child,
+  );
 }
 
-Widget _cardHead(String title, IconData icon, Color c, {String? trailing}) => Row(
+Widget _cardHead(String title, IconData icon, Color c, {String? trailing}) =>
+    Row(
       children: [
         Container(
           width: 34,
@@ -169,16 +237,26 @@ Widget _cardHead(String title, IconData icon, Color c, {String? trailing}) => Ro
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(title,
-              maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(15.5, w: FontWeight.w800, ls: -0.2)),
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _t(15.5, w: FontWeight.w800, ls: -0.2),
+          ),
         ),
         if (trailing != null)
-          Text(trailing, style: _t(12, w: FontWeight.w600, c: _faint)),
+          Text(
+            trailing,
+            style: _t(12, w: FontWeight.w600, c: _faint),
+          ),
         const SizedBox(width: 6),
         Container(
           width: 30,
           height: 30,
-          decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFF3F5F4)),
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color(0xFFF3F5F4),
+          ),
           child: const Icon(Icons.north_east_rounded, size: 15, color: _ink),
         ),
       ],
@@ -191,7 +269,13 @@ class _Count extends StatelessWidget {
   final int decimals;
   final String suffix;
   final bool group;
-  const _Count(this.value, this.style, {this.decimals = 0, this.suffix = '', this.group = false});
+  const _Count(
+    this.value,
+    this.style, {
+    this.decimals = 0,
+    this.suffix = '',
+    this.group = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +332,9 @@ class DottedLineChart extends StatelessWidget {
           SizedBox(
             height: height,
             width: double.infinity,
-            child: CustomPaint(painter: _DottedLinePainter(values, color, p, label)),
+            child: CustomPaint(
+              painter: _DottedLinePainter(values, color, p, label),
+            ),
           ),
           if (xLabels != null) ...[
             const SizedBox(height: 6),
@@ -256,11 +342,17 @@ class DottedLineChart extends StatelessWidget {
               children: [
                 for (var i = 0; i < xLabels!.length; i++)
                   Expanded(
-                    child: Text(xLabels![i],
-                        textAlign: TextAlign.center,
-                        style: _t(10.5,
-                            w: i == xLabels!.length - 1 ? FontWeight.w800 : FontWeight.w600,
-                            c: i == xLabels!.length - 1 ? _ink : _faint)),
+                    child: Text(
+                      xLabels![i],
+                      textAlign: TextAlign.center,
+                      style: _t(
+                        10.5,
+                        w: i == xLabels!.length - 1
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        c: i == xLabels!.length - 1 ? _ink : _faint,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -292,7 +384,8 @@ class _DottedLinePainter extends CustomPainter {
     ];
 
     // Dotted grid.
-    final grid = Paint()..color = const Color(0xFF94A3B8).withValues(alpha: 0.25);
+    final grid = Paint()
+      ..color = const Color(0xFF94A3B8).withValues(alpha: 0.25);
     for (var g = 0; g < 4; g++) {
       final y = top + h * g / 3;
       for (var x = 2.0; x < size.width; x += 7) {
@@ -312,7 +405,12 @@ class _DottedLinePainter extends CustomPainter {
     final drawn = metric.length * p;
 
     // Soft fill under the drawn part.
-    final reveal = Rect.fromLTWH(0, 0, pts.first.dx + (pts.last.dx - pts.first.dx) * p, size.height);
+    final reveal = Rect.fromLTWH(
+      0,
+      0,
+      pts.first.dx + (pts.last.dx - pts.first.dx) * p,
+      size.height,
+    );
     canvas.save();
     canvas.clipRect(reveal);
     final fill = Path.from(path)
@@ -342,33 +440,42 @@ class _DottedLinePainter extends CustomPainter {
       if (pts[i].dx > reveal.right) break;
       canvas.drawCircle(pts[i], 2.6, Paint()..color = Colors.white);
       canvas.drawCircle(
-          pts[i],
-          2.6,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.4
-            ..color = c.withValues(alpha: 0.6));
+        pts[i],
+        2.6,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = c.withValues(alpha: 0.6),
+      );
     }
 
     // Highlight the latest value.
     if (p > 0.97) {
       final last = pts.last;
-      canvas.drawLine(Offset(last.dx, last.dy + 8), Offset(last.dx, size.height),
-          Paint()
-            ..color = c.withValues(alpha: 0.25)
-            ..strokeWidth = 1.2);
+      canvas.drawLine(
+        Offset(last.dx, last.dy + 8),
+        Offset(last.dx, size.height),
+        Paint()
+          ..color = c.withValues(alpha: 0.25)
+          ..strokeWidth = 1.2,
+      );
       canvas.drawCircle(last, 11, Paint()..color = c.withValues(alpha: 0.18));
       canvas.drawCircle(last, 6, Paint()..color = Colors.white);
       canvas.drawCircle(last, 4, Paint()..color = c);
       if (label != null) {
         final tp = TextPainter(
-          text: TextSpan(text: label, style: _t(11, w: FontWeight.w800, c: Colors.white)),
+          text: TextSpan(
+            text: label,
+            style: _t(11, w: FontWeight.w800, c: Colors.white),
+          ),
           textDirection: TextDirection.ltr,
         )..layout();
         final w = tp.width + 16;
         final left = (last.dx - w / 2).clamp(0.0, size.width - w);
         final r = RRect.fromRectAndRadius(
-            Rect.fromLTWH(left, last.dy - 36, w, 22), const Radius.circular(11));
+          Rect.fromLTWH(left, last.dy - 36, w, 22),
+          const Radius.circular(11),
+        );
         canvas.drawRRect(r, Paint()..color = _ink);
         tp.paint(canvas, Offset(left + 8, last.dy - 36 + (22 - tp.height) / 2));
       }
@@ -383,7 +490,22 @@ class _DottedLinePainter extends CustomPainter {
 //  1. WORKOUT STREAK HERO (full bleed, square corners)
 // =====================================================================
 
-const _streakMinutes = <double>[32.0, 40, 28, 45, 38, 0, 42, 50, 36, 44, 30, 46, 41, 48];
+const _streakMinutes = <double>[
+  32.0,
+  40,
+  28,
+  45,
+  38,
+  0,
+  42,
+  50,
+  36,
+  44,
+  30,
+  46,
+  41,
+  48,
+];
 const _todayPlan = [
   ('Bench Press', '4 × 10', Icons.fitness_center_rounded),
   ('Incline Dumbbell Press', '3 × 12', Icons.fitness_center_rounded),
@@ -398,91 +520,147 @@ class StreakHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Builder(builder: (context) {
-      return GestureDetector(
-        onTap: () => _openFrom(context, const _StreakDetailPage()),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF7D948A).withValues(alpha: 0.14),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
+    return Builder(
+      builder: (context) {
+        return GestureDetector(
+          onTap: () => _openFrom(context, const _StreakDetailPage()),
+          child: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.58),
+                      Colors.white.withValues(alpha: 0.34),
+                    ],
+                  ),
+                  border: Border.symmetric(
+                    horizontal: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'WORKOUT STREAK',
+                          style: _t(
+                            11.5,
+                            w: FontWeight.w800,
+                            c: _faint,
+                            ls: 1.4,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.local_fire_department_rounded,
+                                size: 15,
+                                color: _orange,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '12 day streak',
+                                style: _t(12, w: FontWeight.w800, c: _orange),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Day ',
+                          style: _t(30, w: FontWeight.w300, c: _ink, h: 1),
+                        ),
+                        _Count(13, _t(44, w: FontWeight.w800, h: 1, ls: -1.5)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: Text(
+                              'of 30 · Muscle Builder',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(12.5, w: FontWeight.w600, c: _muted),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Upper Body Push · 45 min · 6 exercises',
+                      style: _t(13.5, w: FontWeight.w600, c: _muted),
+                    ),
+                    const SizedBox(height: 16),
+                    const DottedLineChart(
+                      values: _streakMinutes,
+                      color: _green,
+                      label: '48 min',
+                      height: 118,
+                    ),
+                    const SizedBox(height: 14),
+                    const _WeekStrip(),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PrimaryButton(
+                            icon: Icons.play_arrow_rounded,
+                            label: 'Continue Day 13',
+                            onTap: () =>
+                                _openFrom(context, const _StreakDetailPage()),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          height: 50,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Plan',
+                            style: _t(14, w: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Text('WORKOUT STREAK', style: _t(11.5, w: FontWeight.w800, c: _faint, ls: 1.4)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: _orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.local_fire_department_rounded, size: 15, color: _orange),
-                    const SizedBox(width: 4),
-                    Text('12 day streak', style: _t(12, w: FontWeight.w800, c: _orange)),
-                  ]),
-                ),
-              ]),
-              const SizedBox(height: 14),
-              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('Day ', style: _t(30, w: FontWeight.w300, c: _ink, h: 1)),
-                _Count(13, _t(44, w: FontWeight.w800, h: 1, ls: -1.5)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 5),
-                    child: Text('of 30 · Muscle Builder',
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(12.5, w: FontWeight.w600, c: _muted)),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 6),
-              Text('Upper Body Push · 45 min · 6 exercises', style: _t(13.5, w: FontWeight.w600, c: _muted)),
-              const SizedBox(height: 16),
-              const DottedLineChart(
-                values: _streakMinutes,
-                color: _green,
-                label: '48 min',
-                height: 118,
-              ),
-              const SizedBox(height: 14),
-              const _WeekStrip(),
-              const SizedBox(height: 16),
-              Row(children: [
-                Expanded(
-                  child: _PrimaryButton(
-                    icon: Icons.play_arrow_rounded,
-                    label: 'Continue Day 13',
-                    onTap: () => _openFrom(context, const _StreakDetailPage()),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  height: 50,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text('Plan', style: _t(14, w: FontWeight.w700)),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -498,40 +676,55 @@ class _WeekStrip extends StatelessWidget {
       children: [
         for (var i = 0; i < 7; i++)
           Expanded(
-            child: Column(children: [
-              Text(days[i], style: _t(11, w: FontWeight.w700, c: i == today ? _ink : _faint)),
-              const SizedBox(height: 6),
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 1),
-                duration: Duration(milliseconds: 500 + i * 90),
-                curve: _spring,
-                builder: (_, s, c) => Transform.scale(scale: s, child: c),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: i == today
-                        ? _ink
-                        : done[i]
-                            ? _green.withValues(alpha: 0.12)
-                            : const Color(0xFFF3F4F6),
-                    border: i > today ? Border.all(color: const Color(0xFFE5E7EB)) : null,
-                  ),
-                  child: Icon(
-                    i == today
-                        ? Icons.play_arrow_rounded
-                        : done[i]
-                            ? Icons.check_rounded
-                            : i < today
-                                ? Icons.close_rounded
-                                : null,
-                    size: 15,
-                    color: i == today ? Colors.white : done[i] ? _green : _faint,
+            child: Column(
+              children: [
+                Text(
+                  days[i],
+                  style: _t(
+                    11,
+                    w: FontWeight.w700,
+                    c: i == today ? _ink : _faint,
                   ),
                 ),
-              ),
-            ]),
+                const SizedBox(height: 6),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: Duration(milliseconds: 500 + i * 90),
+                  curve: _spring,
+                  builder: (_, s, c) => Transform.scale(scale: s, child: c),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: i == today
+                          ? _ink
+                          : done[i]
+                          ? _green.withValues(alpha: 0.12)
+                          : const Color(0xFFF3F4F6),
+                      border: i > today
+                          ? Border.all(color: const Color(0xFFE5E7EB))
+                          : null,
+                    ),
+                    child: Icon(
+                      i == today
+                          ? Icons.play_arrow_rounded
+                          : done[i]
+                          ? Icons.check_rounded
+                          : i < today
+                          ? Icons.close_rounded
+                          : null,
+                      size: 15,
+                      color: i == today
+                          ? Colors.white
+                          : done[i]
+                          ? _green
+                          : _faint,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
       ],
     );
@@ -542,7 +735,11 @@ class _PrimaryButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _PrimaryButton({required this.icon, required this.label, required this.onTap});
+  const _PrimaryButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   State<_PrimaryButton> createState() => _PrimaryButtonState();
@@ -569,24 +766,36 @@ class _PrimaryButtonState extends State<_PrimaryButton> {
             color: _ink,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
-              BoxShadow(color: _ink.withValues(alpha: 0.22), blurRadius: 14, offset: const Offset(0, 6)),
+              BoxShadow(
+                color: _ink.withValues(alpha: 0.22),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
             ],
           ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(
-              width: 26,
-              height: 26,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: _mint),
-              child: Icon(widget.icon, size: 18, color: Colors.white),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(widget.label,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _mint,
+                ),
+                child: Icon(widget.icon, size: 18, color: Colors.white),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _t(14.5, w: FontWeight.w700, c: Colors.white)),
-            ),
-          ]),
+                  style: _t(14.5, w: FontWeight.w700, c: Colors.white),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -613,111 +822,177 @@ class _NutritionCard extends StatelessWidget {
     final budget = IslandStats.budget.toDouble();
     return _NeuCard(
       page: () => const _NutritionDetailPage(),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardHead('Nutrition', Icons.restaurant_rounded, _orange, trailing: 'Today'),
-        const SizedBox(height: 16),
-        Row(children: [
-          SizedBox(
-            width: 118,
-            height: 118,
-            child: _AnimRing(
-              value: eaten / budget,
-              color: _orange,
-              stroke: 11,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _Count(eaten, _t(24, w: FontWeight.w800, ls: -0.8)),
-                Text('of ${budget.round()} kcal', style: _t(10, w: FontWeight.w600, c: _faint)),
-              ]),
-            ),
+      glass: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cardHead(
+            'Nutrition',
+            Icons.restaurant_rounded,
+            _orange,
+            trailing: 'Today',
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(children: [
-              for (final m in _macros) ...[
-                _MacroBar(name: m.$1, value: m.$2, goal: m.$3, unit: m.$4, color: m.$5),
-                if (m != _macros.last) const SizedBox(height: 10),
-              ],
-            ]),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 118,
+                height: 118,
+                child: _AnimRing(
+                  value: eaten / budget,
+                  color: _orange,
+                  stroke: 11,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _Count(eaten, _t(24, w: FontWeight.w800, ls: -0.8)),
+                      Text(
+                        'of ${budget.round()} kcal',
+                        style: _t(10, w: FontWeight.w600, c: _faint),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    for (final m in _macros) ...[
+                      _MacroBar(
+                        name: m.$1,
+                        value: m.$2,
+                        goal: m.$3,
+                        unit: m.$4,
+                        color: m.$5,
+                      ),
+                      if (m != _macros.last) const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-        ]),
-        const SizedBox(height: 16),
-        Row(children: [
-          _miniStat(Icons.water_drop_rounded, _blue, '1.25 / 2.5 L', 'Water'),
-          const SizedBox(width: 10),
-          _miniStat(Icons.lunch_dining_rounded, _green, '3 of 4', 'Meals'),
-          const SizedBox(width: 10),
-          _miniStat(Icons.local_fire_department_rounded, _orange, '${IslandStats.left}', 'kcal left'),
-        ]),
-      ]),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _miniStat(
+                Icons.water_drop_rounded,
+                _blue,
+                '1.25 / 2.5 L',
+                'Water',
+              ),
+              const SizedBox(width: 10),
+              _miniStat(Icons.lunch_dining_rounded, _green, '3 of 4', 'Meals'),
+              const SizedBox(width: 10),
+              _miniStat(
+                Icons.local_fire_department_rounded,
+                _orange,
+                '${IslandStats.left}',
+                'kcal left',
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
 Widget _miniStat(IconData i, Color c, String v, String l) => Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF6F8F7),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(children: [
-          Icon(i, size: 15, color: c),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        Icon(i, size: 15, color: c),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(v, style: _t(12, w: FontWeight.w800)),
               ),
-              Text(l, maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(9.5, w: FontWeight.w600, c: _faint)),
-            ]),
+              Text(
+                l,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _t(9.5, w: FontWeight.w600, c: _faint),
+              ),
+            ],
           ),
-        ]),
-      ),
-    );
+        ),
+      ],
+    ),
+  ),
+);
 
 class _MacroBar extends StatelessWidget {
   final String name, unit;
   final double value, goal;
   final Color color;
-  const _MacroBar(
-      {required this.name, required this.value, required this.goal, required this.unit, required this.color});
+  const _MacroBar({
+    required this.name,
+    required this.value,
+    required this.goal,
+    required this.unit,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(child: Text(name, style: _t(12, w: FontWeight.w700))),
-        Text('${value.round()}', style: _t(12, w: FontWeight.w800)),
-        Text('/${goal.round()}$unit', style: _t(10.5, w: FontWeight.w600, c: _faint)),
-      ]),
-      const SizedBox(height: 5),
-      TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: (value / goal).clamp(0.0, 1.0)),
-        duration: const Duration(milliseconds: 1300),
-        curve: Curves.easeOutCubic,
-        builder: (_, v, _) => LayoutBuilder(
-          builder: (_, c) => Stack(children: [
-            Container(
-              height: 7,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(name, style: _t(12, w: FontWeight.w700)),
             ),
-            Container(
-              height: 7,
-              width: c.maxWidth * v,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [color.withValues(alpha: 0.6), color]),
-                borderRadius: BorderRadius.circular(6),
-              ),
+            Text('${value.round()}', style: _t(12, w: FontWeight.w800)),
+            Text(
+              '/${goal.round()}$unit',
+              style: _t(10.5, w: FontWeight.w600, c: _faint),
             ),
-          ]),
+          ],
         ),
-      ),
-    ]);
+        const SizedBox(height: 5),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: (value / goal).clamp(0.0, 1.0)),
+          duration: const Duration(milliseconds: 1300),
+          curve: Curves.easeOutCubic,
+          builder: (_, v, _) => LayoutBuilder(
+            builder: (_, c) => Stack(
+              children: [
+                Container(
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                Container(
+                  height: 7,
+                  width: c.maxWidth * v,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [color.withValues(alpha: 0.6), color],
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -725,7 +1000,12 @@ class _AnimRing extends StatelessWidget {
   final double value, stroke;
   final Color color;
   final Widget? child;
-  const _AnimRing({required this.value, required this.color, this.stroke = 10, this.child});
+  const _AnimRing({
+    required this.value,
+    required this.color,
+    this.stroke = 10,
+    this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -749,12 +1029,21 @@ class _RingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final r = Rect.fromCircle(center: size.center(Offset.zero), radius: size.shortestSide / 2 - w / 2);
+    final r = Rect.fromCircle(
+      center: size.center(Offset.zero),
+      radius: size.shortestSide / 2 - w / 2,
+    );
     final p = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = w
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(r, 0, 2 * math.pi, false, p..color = c.withValues(alpha: 0.12));
+    canvas.drawArc(
+      r,
+      0,
+      2 * math.pi,
+      false,
+      p..color = c.withValues(alpha: 0.12),
+    );
     canvas.drawArc(
       r,
       -math.pi / 2,
@@ -779,7 +1068,32 @@ class _RingPainter extends CustomPainter {
 //  3. STEPS
 // =====================================================================
 
-const _hourly = <double>[0.0, 0, 0, 0, 0, 0, 120, 640, 980, 420, 310, 520, 760, 380, 290, 450, 610, 880, 1040, 520, 220, 0, 0, 0];
+const _hourly = <double>[
+  0.0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  120,
+  640,
+  980,
+  420,
+  310,
+  520,
+  760,
+  380,
+  290,
+  450,
+  610,
+  880,
+  1040,
+  520,
+  220,
+  0,
+  0,
+  0,
+];
 
 class _StepsCard extends StatelessWidget {
   const _StepsCard();
@@ -789,54 +1103,103 @@ class _StepsCard extends StatelessWidget {
     final steps = IslandStats.steps.toDouble();
     return _NeuCard(
       page: () => const _StepsDetailPage(),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardHead('Steps', Icons.directions_walk_rounded, _green, trailing: 'Live'),
-        const SizedBox(height: 14),
-        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _Count(steps, _t(38, w: FontWeight.w800, ls: -1.4, h: 1), group: true),
-              const SizedBox(height: 4),
-              Text('of 10,000 steps · 85%', style: _t(12.5, w: FontWeight.w600, c: _muted)),
-              const SizedBox(height: 12),
-              Wrap(spacing: 14, runSpacing: 6, children: [
-                _inline(Icons.route_rounded, '6.1 km'),
-                _inline(Icons.local_fire_department_rounded, '320 kcal'),
-                _inline(Icons.timer_outlined, '54 min'),
-              ]),
-            ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cardHead(
+            'Steps',
+            Icons.directions_walk_rounded,
+            _green,
+            trailing: 'Live',
           ),
-          SizedBox(
-            width: 92,
-            height: 92,
-            child: _AnimRing(
-              value: steps / 10000,
-              color: _green,
-              stroke: 9,
-              child: const Icon(Icons.directions_run_rounded, color: _green, size: 30),
-            ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Count(
+                      steps,
+                      _t(38, w: FontWeight.w800, ls: -1.4, h: 1),
+                      group: true,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'of 10,000 steps · 85%',
+                      style: _t(12.5, w: FontWeight.w600, c: _muted),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 14,
+                      runSpacing: 6,
+                      children: [
+                        _inline(Icons.route_rounded, '6.1 km'),
+                        _inline(
+                          Icons.local_fire_department_rounded,
+                          '320 kcal',
+                        ),
+                        _inline(Icons.timer_outlined, '54 min'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 92,
+                height: 92,
+                child: _AnimRing(
+                  value: steps / 10000,
+                  color: _green,
+                  stroke: 9,
+                  child: const Icon(
+                    Icons.directions_run_rounded,
+                    color: _green,
+                    size: 30,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ]),
-        const SizedBox(height: 14),
-        const SizedBox(height: 54, child: _HourBars(values: _hourly, color: _green)),
-        const SizedBox(height: 4),
-        Row(children: [
-          Text('12 AM', style: _t(9.5, w: FontWeight.w600, c: _faint)),
-          const Spacer(),
-          Text('12 PM', style: _t(9.5, w: FontWeight.w600, c: _faint)),
-          const Spacer(),
-          Text('Now', style: _t(9.5, w: FontWeight.w800, c: _ink)),
-        ]),
-      ]),
+          const SizedBox(height: 14),
+          const SizedBox(
+            height: 54,
+            child: _HourBars(values: _hourly, color: _green),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                '12 AM',
+                style: _t(9.5, w: FontWeight.w600, c: _faint),
+              ),
+              const Spacer(),
+              Text(
+                '12 PM',
+                style: _t(9.5, w: FontWeight.w600, c: _faint),
+              ),
+              const Spacer(),
+              Text(
+                'Now',
+                style: _t(9.5, w: FontWeight.w800, c: _ink),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
-Widget _inline(IconData i, String s) => Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(i, size: 14, color: _faint),
-      const SizedBox(width: 4),
-      Text(s, style: _t(12, w: FontWeight.w700)),
-    ]);
+Widget _inline(IconData i, String s) => Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Icon(i, size: 14, color: _faint),
+    const SizedBox(width: 4),
+    Text(s, style: _t(12, w: FontWeight.w700)),
+  ],
+);
 
 class _HourBars extends StatelessWidget {
   final List<double> values;
@@ -879,23 +1242,61 @@ class _HourBars extends StatelessWidget {
 // =====================================================================
 
 const _trainers = [
-  ('Rahul Sharma', 'Strength & Muscle', '4.9', '1.2K clients', 'https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=400&auto=format&fit=crop&q=80', _green, '98% match'),
-  ('Anjali Mehta', 'Weight Loss', '4.8', '980 clients', 'https://images.unsplash.com/photo-1548690312-e3b507d8c110?w=400&auto=format&fit=crop&q=80', _orange, '94% match'),
-  ('Vikram Singh', 'Muscle Gain', '4.9', '1.5K clients', 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=400&auto=format&fit=crop&q=80', _blue, '91% match'),
-  ('Neha Patel', 'Yoga & Wellness', '4.7', '760 clients', 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&auto=format&fit=crop&q=80', _purple, '88% match'),
+  (
+    'Rahul Sharma',
+    'Strength & Muscle',
+    '4.9',
+    '1.2K clients',
+    'https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=400&auto=format&fit=crop&q=80',
+    _green,
+    '98% match',
+  ),
+  (
+    'Anjali Mehta',
+    'Weight Loss',
+    '4.8',
+    '980 clients',
+    'https://images.unsplash.com/photo-1548690312-e3b507d8c110?w=400&auto=format&fit=crop&q=80',
+    _orange,
+    '94% match',
+  ),
+  (
+    'Vikram Singh',
+    'Muscle Gain',
+    '4.9',
+    '1.5K clients',
+    'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=400&auto=format&fit=crop&q=80',
+    _blue,
+    '91% match',
+  ),
+  (
+    'Neha Patel',
+    'Yoga & Wellness',
+    '4.7',
+    '760 clients',
+    'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&auto=format&fit=crop&q=80',
+    _purple,
+    '88% match',
+  ),
 ];
 
-Widget _photo(String url, String name, Color c, {double radius = 18}) => ClipRRect(
+Widget _photo(String url, String name, Color c, {double radius = 18}) =>
+    ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Image.network(
         url,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [c.withValues(alpha: 0.25), c.withValues(alpha: 0.6)]),
+            gradient: LinearGradient(
+              colors: [c.withValues(alpha: 0.25), c.withValues(alpha: 0.6)],
+            ),
           ),
           alignment: Alignment.center,
-          child: Text(name.split(' ').map((e) => e[0]).join(), style: _t(20, w: FontWeight.w800, c: Colors.white)),
+          child: Text(
+            name.split(' ').map((e) => e[0]).join(),
+            style: _t(20, w: FontWeight.w800, c: Colors.white),
+          ),
         ),
       ),
     );
@@ -908,78 +1309,130 @@ class _TrainersCard extends StatelessWidget {
     return _NeuCard(
       page: () => const _TrainersDetailPage(),
       padding: const EdgeInsets.fromLTRB(18, 18, 0, 18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 18),
-          child: _cardHead('Top trainers for you', Icons.workspace_premium_rounded, _purple),
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.only(left: 44),
-          child: Text('Picked for your Muscle Builder goal', style: _t(11.5, w: FontWeight.w600, c: _faint)),
-        ),
-        const SizedBox(height: 14),
-        SizedBox(
-          height: 196,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
             padding: const EdgeInsets.only(right: 18),
-            itemCount: _trainers.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (_, i) {
-              final tr = _trainers[i];
-              return Container(
-                width: 138,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF6F8F7),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SizedBox(
-                    height: 110,
-                    width: double.infinity,
-                    child: Stack(fit: StackFit.expand, children: [
-                      _photo(tr.$5, tr.$1, tr.$6, radius: 15),
-                      Positioned(
-                        left: 6,
-                        top: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(tr.$7, style: _t(9.5, w: FontWeight.w800, c: tr.$6)),
+            child: _cardHead(
+              'Top trainers for you',
+              Icons.workspace_premium_rounded,
+              _purple,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 44),
+            child: Text(
+              'Picked for your Muscle Builder goal',
+              style: _t(11.5, w: FontWeight.w600, c: _faint),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 196,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(right: 18),
+              itemCount: _trainers.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (_, i) {
+                final tr = _trainers[i];
+                return Container(
+                  width: 138,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6F8F7),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 110,
+                        width: double.infinity,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _photo(tr.$5, tr.$1, tr.$6, radius: 15),
+                            Positioned(
+                              left: 6,
+                              top: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  tr.$7,
+                                  style: _t(9.5, w: FontWeight.w800, c: tr.$6),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ]),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(tr.$1, maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(13, w: FontWeight.w800)),
-                      Text(tr.$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(11, w: FontWeight.w600, c: _muted)),
-                      const SizedBox(height: 4),
-                      Row(children: [
-                        const Icon(Icons.star_rounded, size: 14, color: _amber),
-                        const SizedBox(width: 2),
-                        Text(tr.$3, style: _t(11.5, w: FontWeight.w800)),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(tr.$4,
-                              maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(10.5, w: FontWeight.w600, c: _faint)),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tr.$1,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(13, w: FontWeight.w800),
+                            ),
+                            Text(
+                              tr.$2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(11, w: FontWeight.w600, c: _muted),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.star_rounded,
+                                  size: 14,
+                                  color: _amber,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  tr.$3,
+                                  style: _t(11.5, w: FontWeight.w800),
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    tr.$4,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _t(
+                                      10.5,
+                                      w: FontWeight.w600,
+                                      c: _faint,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ]),
-                    ]),
+                      ),
+                    ],
                   ),
-                ]),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -995,98 +1448,182 @@ class _CommunityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _NeuCard(
       page: () => const _CommunityDetailPage(),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _cardHead('Community', Icons.groups_rounded, _blue),
-        const SizedBox(height: 14),
-        Row(children: [
-          SizedBox(
-            width: 104,
-            height: 34,
-            child: Stack(children: [
-              for (var i = 0; i < 4; i++)
-                Positioned(
-                  left: i * 22.0,
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-                    child: ClipOval(child: _photo(_trainers[i].$5, _trainers[i].$1, _trainers[i].$6, radius: 0)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cardHead('Community', Icons.groups_rounded, _blue),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              SizedBox(
+                width: 104,
+                height: 34,
+                child: Stack(
+                  children: [
+                    for (var i = 0; i < 4; i++)
+                      Positioned(
+                        left: i * 22.0,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                          ),
+                          child: ClipOval(
+                            child: _photo(
+                              _trainers[i].$5,
+                              _trainers[i].$1,
+                              _trainers[i].$6,
+                              radius: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const _LiveDot(),
+                        const SizedBox(width: 6),
+                        Text(
+                          '2.4k active now',
+                          style: _t(13, w: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '128 workouts shared today',
+                      style: _t(11, w: FontWeight.w600, c: _faint),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8F7),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: _photo(
+                    _trainers[3].$5,
+                    'Neha Patel',
+                    _purple,
+                    radius: 20,
                   ),
                 ),
-            ]),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                const _LiveDot(),
-                const SizedBox(width: 6),
-                Text('2.4k active now', style: _t(13, w: FontWeight.w800)),
-              ]),
-              Text('128 workouts shared today', style: _t(11, w: FontWeight.w600, c: _faint)),
-            ]),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF6F8F7),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(children: [
-            SizedBox(width: 40, height: 40, child: _photo(_trainers[3].$5, 'Neha Patel', _purple, radius: 20)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                RichText(
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  text: TextSpan(style: _t(12.5, w: FontWeight.w600, c: _muted), children: [
-                    TextSpan(text: 'Neha ', style: _t(12.5, w: FontWeight.w800)),
-                    const TextSpan(text: 'finished the 30-day plank challenge 🎉'),
-                  ]),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RichText(
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
+                          style: _t(12.5, w: FontWeight.w600, c: _muted),
+                          children: [
+                            TextSpan(
+                              text: 'Neha ',
+                              style: _t(12.5, w: FontWeight.w800),
+                            ),
+                            const TextSpan(
+                              text: 'finished the 30-day plank challenge 🎉',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.favorite_rounded,
+                            size: 13,
+                            color: _pink,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '342',
+                            style: _t(11, w: FontWeight.w700, c: _muted),
+                          ),
+                          const SizedBox(width: 10),
+                          const Icon(
+                            Icons.chat_bubble_rounded,
+                            size: 12,
+                            color: _faint,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '48',
+                            style: _t(11, w: FontWeight.w700, c: _muted),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '12m',
+                            style: _t(10.5, w: FontWeight.w600, c: _faint),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.favorite_rounded, size: 13, color: _pink),
-                  const SizedBox(width: 3),
-                  Text('342', style: _t(11, w: FontWeight.w700, c: _muted)),
-                  const SizedBox(width: 10),
-                  const Icon(Icons.chat_bubble_rounded, size: 12, color: _faint),
-                  const SizedBox(width: 3),
-                  Text('48', style: _t(11, w: FontWeight.w700, c: _muted)),
-                  const Spacer(),
-                  Text('12m', style: _t(10.5, w: FontWeight.w600, c: _faint)),
-                ]),
-              ]),
+              ],
             ),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _blue.withValues(alpha: 0.2)),
-            color: _blue.withValues(alpha: 0.05),
           ),
-          child: Row(children: [
-            const Icon(Icons.emoji_events_rounded, size: 18, color: _blue),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('10K Steps Weekend · 312 joined',
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(12.5, w: FontWeight.w700)),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _blue.withValues(alpha: 0.2)),
+              color: _blue.withValues(alpha: 0.05),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(12)),
-              child: Text('Join', style: _t(12, w: FontWeight.w800, c: Colors.white)),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events_rounded, size: 18, color: _blue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '10K Steps Weekend · 312 joined',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _t(12.5, w: FontWeight.w700),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _blue,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Join',
+                    style: _t(12, w: FontWeight.w800, c: Colors.white),
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1097,9 +1634,12 @@ class _LiveDot extends StatefulWidget {
   State<_LiveDot> createState() => _LiveDotState();
 }
 
-class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
   @override
   void dispose() {
     _c.dispose();
@@ -1113,17 +1653,27 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
       height: 12,
       child: AnimatedBuilder(
         animation: _c,
-        builder: (_, _) => Stack(alignment: Alignment.center, children: [
-          Container(
-            width: 6 + 6 * _c.value,
-            height: 6 + 6 * _c.value,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _mint.withValues(alpha: 0.4 * (1 - _c.value)),
+        builder: (_, _) => Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 6 + 6 * _c.value,
+              height: 6 + 6 * _c.value,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _mint.withValues(alpha: 0.4 * (1 - _c.value)),
+              ),
             ),
-          ),
-          Container(width: 6, height: 6, decoration: const BoxDecoration(shape: BoxShape.circle, color: _mint)),
-        ]),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: _mint,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1138,99 +1688,157 @@ class _DetailScaffold extends StatelessWidget {
   final String subtitle;
   final List<Widget> children;
   final Widget? bottom;
-  const _DetailScaffold({required this.title, required this.subtitle, required this.children, this.bottom});
+  const _DetailScaffold({
+    required this.title,
+    required this.subtitle,
+    required this.children,
+    this.bottom,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
-      body: Stack(children: [
-        const Positioned.fill(child: FurBlobsBackdrop(blobCount: 3, doodles: false)),
-        SafeArea(
-          child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Row(children: [
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    child: const Icon(Icons.arrow_back_rounded, size: 20, color: _ink),
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: FurBlobsBackdrop(blobCount: 3, doodles: false),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            size: 20,
+                            color: _ink,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: _t(20, w: FontWeight.w800, ls: -0.4),
+                            ),
+                            Text(
+                              subtitle,
+                              style: _t(12, w: FontWeight.w600, c: _faint),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: _t(20, w: FontWeight.w800, ls: -0.4)),
-                    Text(subtitle, style: _t(12, w: FontWeight.w600, c: _faint)),
-                  ]),
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      8,
+                      16,
+                      bottom != null ? 100 : 32,
+                    ),
+                    children: [
+                      for (var i = 0; i < children.length; i++) ...[
+                        _Rise(i, children[i]),
+                        const SizedBox(height: 14),
+                      ],
+                    ],
+                  ),
                 ),
-              ]),
+              ],
             ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, bottom != null ? 100 : 32),
-                children: [
-                  for (var i = 0; i < children.length; i++) ...[
-                    _Rise(i, children[i]),
-                    const SizedBox(height: 14),
-                  ],
-                ],
-              ),
+          ),
+          if (bottom != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: SafeArea(top: false, child: bottom!),
             ),
-          ]),
-        ),
-        if (bottom != null)
-          Positioned(left: 16, right: 16, bottom: 24, child: SafeArea(top: false, child: bottom!)),
-      ]),
+        ],
+      ),
     );
   }
 }
 
-Widget _panel(Widget child, {EdgeInsets padding = const EdgeInsets.all(16)}) => Container(
+Widget _panel(Widget child, {EdgeInsets padding = const EdgeInsets.all(16)}) =>
+    Container(
       padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF7D948A).withValues(alpha: 0.12), blurRadius: 20, offset: const Offset(0, 8)),
+          BoxShadow(
+            color: const Color(0xFF7D948A).withValues(alpha: 0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: child,
     );
 
-Widget _statRow(List<(String, String, Color)> items) => Row(children: [
-      for (var i = 0; i < items.length; i++) ...[
-        if (i > 0) const SizedBox(width: 10),
-        Expanded(
-          child: _panel(
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+Widget _statRow(List<(String, String, Color)> items) => Row(
+  children: [
+    for (var i = 0; i < items.length; i++) ...[
+      if (i > 0) const SizedBox(width: 10),
+      Expanded(
+        child: _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Text(items[i].$1, style: _t(20, w: FontWeight.w800, c: items[i].$3, ls: -0.5)),
+                child: Text(
+                  items[i].$1,
+                  style: _t(20, w: FontWeight.w800, c: items[i].$3, ls: -0.5),
+                ),
               ),
               const SizedBox(height: 2),
-              Text(items[i].$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(11, w: FontWeight.w600, c: _faint)),
-            ]),
-            padding: const EdgeInsets.all(14),
+              Text(
+                items[i].$2,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _t(11, w: FontWeight.w600, c: _faint),
+              ),
+            ],
           ),
+          padding: const EdgeInsets.all(14),
         ),
-      ],
-    ]);
+      ),
+    ],
+  ],
+);
 
 Widget _sectionTitle(String s) => Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(s, style: _t(16, w: FontWeight.w800, ls: -0.2)),
-    );
+  padding: const EdgeInsets.only(bottom: 10),
+  child: Text(s, style: _t(16, w: FontWeight.w800, ls: -0.2)),
+);
 
 class _StreakDetailPage extends StatelessWidget {
   const _StreakDetailPage();
@@ -1240,53 +1848,107 @@ class _StreakDetailPage extends StatelessWidget {
     return _DetailScaffold(
       title: 'Day 13 · Upper Body Push',
       subtitle: 'Muscle Builder · 30 day plan',
-      bottom: _PrimaryButton(icon: Icons.play_arrow_rounded, label: 'Start workout', onTap: () {}),
+      bottom: _PrimaryButton(
+        icon: Icons.play_arrow_rounded,
+        label: 'Start workout',
+        onTap: () {},
+      ),
       children: [
-        _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Minutes trained', style: _t(14, w: FontWeight.w700)),
-            const Spacer(),
-            Text('Last 14 days', style: _t(12, w: FontWeight.w600, c: _faint)),
-          ]),
-          const SizedBox(height: 12),
-          const DottedLineChart(
-            values: _streakMinutes,
-            color: _green,
-            label: '48 min',
-            height: 170,
-            xLabels: ['13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26'],
-          ),
-        ])),
-        _statRow(const [('12', 'Day streak', _orange), ('41', 'Avg min', _green), ('18', 'Best streak', _purple)]),
-        _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle("Today's exercises"),
-          for (var i = 0; i < _todayPlan.length; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: _green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('Minutes trained', style: _t(14, w: FontWeight.w700)),
+                  const Spacer(),
+                  Text(
+                    'Last 14 days',
+                    style: _t(12, w: FontWeight.w600, c: _faint),
                   ),
-                  child: Icon(_todayPlan[i].$3, size: 19, color: _green),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(_todayPlan[i].$1, style: _t(13.5, w: FontWeight.w700))),
-                Text(_todayPlan[i].$2, style: _t(12.5, w: FontWeight.w700, c: _muted)),
-              ]),
-            ),
-        ])),
-        _panel(Row(children: [
-          const Icon(Icons.tips_and_updates_rounded, color: _amber),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('Kemo: rest 90 s between sets today. Your pressing volume is up 12% this week.',
-                style: _t(12.5, w: FontWeight.w600, c: _muted, h: 1.4)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const DottedLineChart(
+                values: _streakMinutes,
+                color: _green,
+                label: '48 min',
+                height: 170,
+                xLabels: [
+                  '13',
+                  '14',
+                  '15',
+                  '16',
+                  '17',
+                  '18',
+                  '19',
+                  '20',
+                  '21',
+                  '22',
+                  '23',
+                  '24',
+                  '25',
+                  '26',
+                ],
+              ),
+            ],
           ),
-        ])),
+        ),
+        _statRow(const [
+          ('12', 'Day streak', _orange),
+          ('41', 'Avg min', _green),
+          ('18', 'Best streak', _purple),
+        ]),
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle("Today's exercises"),
+              for (var i = 0; i < _todayPlan.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _green.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(_todayPlan[i].$3, size: 19, color: _green),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _todayPlan[i].$1,
+                          style: _t(13.5, w: FontWeight.w700),
+                        ),
+                      ),
+                      Text(
+                        _todayPlan[i].$2,
+                        style: _t(12.5, w: FontWeight.w700, c: _muted),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        _panel(
+          Row(
+            children: [
+              const Icon(Icons.tips_and_updates_rounded, color: _amber),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Kemo: rest 90 s between sets today. Your pressing volume is up 12% this week.',
+                  style: _t(12.5, w: FontWeight.w600, c: _muted, h: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1298,7 +1960,13 @@ class _NutritionDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const meals = [
-      ('Breakfast', 'Oats, banana, whey', 420, Icons.free_breakfast_rounded, _amber),
+      (
+        'Breakfast',
+        'Oats, banana, whey',
+        420,
+        Icons.free_breakfast_rounded,
+        _amber,
+      ),
       ('Lunch', 'Chicken rice bowl', 610, Icons.lunch_dining_rounded, _green),
       ('Snack', 'Greek yogurt, almonds', 390, Icons.icecream_rounded, _pink),
       ('Dinner', 'Not logged yet', 0, Icons.dinner_dining_rounded, _faint),
@@ -1307,68 +1975,117 @@ class _NutritionDetailPage extends StatelessWidget {
       title: 'Nutrition',
       subtitle: 'Today · ${IslandStats.left} kcal left',
       children: [
-        _panel(Row(children: [
-          SizedBox(
-            width: 130,
-            height: 130,
-            child: _AnimRing(
-              value: IslandStats.eaten / IslandStats.budget,
-              color: _orange,
-              stroke: 13,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _Count(IslandStats.eaten.toDouble(), _t(26, w: FontWeight.w800)),
-                Text('kcal eaten', style: _t(10.5, w: FontWeight.w600, c: _faint)),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(children: [
-              for (final m in _macros) ...[
-                _MacroBar(name: m.$1, value: m.$2, goal: m.$3, unit: m.$4, color: m.$5),
-                const SizedBox(height: 10),
-              ],
-            ]),
-          ),
-        ])),
-        _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle('Calories this week'),
-          const DottedLineChart(
-            values: <double>[1650, 1820, 1540, 1760, 1900, 1610, 1420],
-            color: _orange,
-            label: '1,420',
-            height: 150,
-            xLabels: ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Today'],
-          ),
-        ])),
-        _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle('Meals'),
-          for (final m in meals)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              child: Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: m.$5.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+        _panel(
+          Row(
+            children: [
+              SizedBox(
+                width: 130,
+                height: 130,
+                child: _AnimRing(
+                  value: IslandStats.eaten / IslandStats.budget,
+                  color: _orange,
+                  stroke: 13,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _Count(
+                        IslandStats.eaten.toDouble(),
+                        _t(26, w: FontWeight.w800),
+                      ),
+                      Text(
+                        'kcal eaten',
+                        style: _t(10.5, w: FontWeight.w600, c: _faint),
+                      ),
+                    ],
                   ),
-                  child: Icon(m.$4, size: 20, color: m.$5),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(m.$1, style: _t(13.5, w: FontWeight.w800)),
-                    Text(m.$2, style: _t(11.5, w: FontWeight.w600, c: _faint)),
-                  ]),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    for (final m in _macros) ...[
+                      _MacroBar(
+                        name: m.$1,
+                        value: m.$2,
+                        goal: m.$3,
+                        unit: m.$4,
+                        color: m.$5,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
                 ),
-                Text(m.$3 == 0 ? '+ Add' : '${m.$3} kcal',
-                    style: _t(12.5, w: FontWeight.w800, c: m.$3 == 0 ? _green : _ink)),
-              ]),
-            ),
-        ])),
-        _statRow(const [('1.25 L', 'Water', _blue), ('18 g', 'Fiber', _green), ('42 mg', 'Sodium ok', _purple)]),
+              ),
+            ],
+          ),
+        ),
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Calories this week'),
+              const DottedLineChart(
+                values: <double>[1650, 1820, 1540, 1760, 1900, 1610, 1420],
+                color: _orange,
+                label: '1,420',
+                height: 150,
+                xLabels: ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Today'],
+              ),
+            ],
+          ),
+        ),
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Meals'),
+              for (final m in meals)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: m.$5.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(m.$4, size: 20, color: m.$5),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(m.$1, style: _t(13.5, w: FontWeight.w800)),
+                            Text(
+                              m.$2,
+                              style: _t(11.5, w: FontWeight.w600, c: _faint),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        m.$3 == 0 ? '+ Add' : '${m.$3} kcal',
+                        style: _t(
+                          12.5,
+                          w: FontWeight.w800,
+                          c: m.$3 == 0 ? _green : _ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        _statRow(const [
+          ('1.25 L', 'Water', _blue),
+          ('18 g', 'Fiber', _green),
+          ('42 mg', 'Sodium ok', _purple),
+        ]),
       ],
     );
   }
@@ -1385,37 +2102,65 @@ class _StepsDetailPage extends StatelessWidget {
       bottom: _PrimaryButton(
         icon: Icons.directions_walk_rounded,
         label: 'Open step tracker',
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StepsScreen())),
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const StepsScreen())),
       ),
       children: [
-        _panel(Column(children: [
-          SizedBox(
-            width: 190,
-            height: 190,
-            child: _AnimRing(
-              value: IslandStats.steps / 10000,
-              color: _green,
-              stroke: 16,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _Count(IslandStats.steps.toDouble(), _t(34, w: FontWeight.w800, ls: -1), group: true),
-                Text('steps today', style: _t(12, w: FontWeight.w600, c: _faint)),
-              ]),
-            ),
+        _panel(
+          Column(
+            children: [
+              SizedBox(
+                width: 190,
+                height: 190,
+                child: _AnimRing(
+                  value: IslandStats.steps / 10000,
+                  color: _green,
+                  stroke: 16,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _Count(
+                        IslandStats.steps.toDouble(),
+                        _t(34, w: FontWeight.w800, ls: -1),
+                        group: true,
+                      ),
+                      Text(
+                        'steps today',
+                        style: _t(12, w: FontWeight.w600, c: _faint),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const SizedBox(
+                height: 80,
+                child: _HourBars(values: _hourly, color: _green),
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
-          const SizedBox(height: 80, child: _HourBars(values: _hourly, color: _green)),
-        ])),
-        _statRow(const [('6.1 km', 'Distance', _blue), ('320', 'kcal burned', _orange), ('54 min', 'Active', _green)]),
-        _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle('This week'),
-          const DottedLineChart(
-            values: <double>[7200, 9100, 6400, 10300, 8800, 11200, 8542],
-            color: _green,
-            label: '8,542',
-            height: 150,
-            xLabels: ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Today'],
+        ),
+        _statRow(const [
+          ('6.1 km', 'Distance', _blue),
+          ('320', 'kcal burned', _orange),
+          ('54 min', 'Active', _green),
+        ]),
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('This week'),
+              const DottedLineChart(
+                values: <double>[7200, 9100, 6400, 10300, 8800, 11200, 8542],
+                color: _green,
+                label: '8,542',
+                height: 150,
+                xLabels: ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Today'],
+              ),
+            ],
           ),
-        ])),
+        ),
       ],
     );
   }
@@ -1432,47 +2177,101 @@ class _TrainersDetailPage extends StatelessWidget {
       bottom: _PrimaryButton(
         icon: Icons.search_rounded,
         label: 'See all trainers',
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrainersScreen())),
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const TrainersScreen())),
       ),
       children: [
         for (final tr in _trainers)
           _panel(
-            Row(children: [
-              SizedBox(width: 84, height: 96, child: _photo(tr.$5, tr.$1, tr.$6)),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(child: Text(tr.$1, style: _t(15, w: FontWeight.w800))),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: tr.$6.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
+            Row(
+              children: [
+                SizedBox(
+                  width: 84,
+                  height: 96,
+                  child: _photo(tr.$5, tr.$1, tr.$6),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              tr.$1,
+                              style: _t(15, w: FontWeight.w800),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: tr.$6.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              tr.$7,
+                              style: _t(10, w: FontWeight.w800, c: tr.$6),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text(tr.$7, style: _t(10, w: FontWeight.w800, c: tr.$6)),
-                    ),
-                  ]),
-                  Text('${tr.$2} coach', style: _t(12, w: FontWeight.w600, c: _muted)),
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    const Icon(Icons.star_rounded, size: 15, color: _amber),
-                    Text(' ${tr.$3}', style: _t(12, w: FontWeight.w800)),
-                    Text('  ·  ${tr.$4}', style: _t(11.5, w: FontWeight.w600, c: _faint)),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(color: _ink, borderRadius: BorderRadius.circular(12)),
-                      child: Text('Book session', style: _t(11.5, w: FontWeight.w700, c: Colors.white)),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('Free intro call', style: _t(11, w: FontWeight.w600, c: _green)),
-                  ]),
-                ]),
-              ),
-            ]),
+                      Text(
+                        '${tr.$2} coach',
+                        style: _t(12, w: FontWeight.w600, c: _muted),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 15,
+                            color: _amber,
+                          ),
+                          Text(' ${tr.$3}', style: _t(12, w: FontWeight.w800)),
+                          Text(
+                            '  ·  ${tr.$4}',
+                            style: _t(11.5, w: FontWeight.w600, c: _faint),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _ink,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Book session',
+                              style: _t(
+                                11.5,
+                                w: FontWeight.w700,
+                                c: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Free intro call',
+                            style: _t(11, w: FontWeight.w600, c: _green),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             padding: const EdgeInsets.all(12),
           ),
       ],
@@ -1486,14 +2285,50 @@ class _CommunityDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const posts = [
-      ('Neha Patel', 'Finished the 30-day plank challenge 🎉 Day 1 was 40 s, today 3 min 10 s!', 342, 48, '12m', 3),
-      ('Rahul Sharma', 'New PR on deadlift: 180 kg × 3. Slow eccentrics really work.', 518, 71, '1h', 0),
-      ('Anjali Mehta', 'Meal prep Sunday: 5 high-protein bowls under 500 kcal. Recipe in comments.', 289, 36, '3h', 1),
+      (
+        'Neha Patel',
+        'Finished the 30-day plank challenge 🎉 Day 1 was 40 s, today 3 min 10 s!',
+        342,
+        48,
+        '12m',
+        3,
+      ),
+      (
+        'Rahul Sharma',
+        'New PR on deadlift: 180 kg × 3. Slow eccentrics really work.',
+        518,
+        71,
+        '1h',
+        0,
+      ),
+      (
+        'Anjali Mehta',
+        'Meal prep Sunday: 5 high-protein bowls under 500 kcal. Recipe in comments.',
+        289,
+        36,
+        '3h',
+        1,
+      ),
     ];
     const challenges = [
-      ('10K Steps Weekend', '312 joined · ends Sun', Icons.directions_walk_rounded, _green),
-      ('Push-up Ladder', '1.1K joined · 7 days', Icons.fitness_center_rounded, _orange),
-      ('Mindful Mornings', '640 joined · 14 days', Icons.self_improvement_rounded, _purple),
+      (
+        '10K Steps Weekend',
+        '312 joined · ends Sun',
+        Icons.directions_walk_rounded,
+        _green,
+      ),
+      (
+        'Push-up Ladder',
+        '1.1K joined · 7 days',
+        Icons.fitness_center_rounded,
+        _orange,
+      ),
+      (
+        'Mindful Mornings',
+        '640 joined · 14 days',
+        Icons.self_improvement_rounded,
+        _purple,
+      ),
     ];
     return _DetailScaffold(
       title: 'Community',
@@ -1501,58 +2336,120 @@ class _CommunityDetailPage extends StatelessWidget {
       bottom: _PrimaryButton(
         icon: Icons.groups_rounded,
         label: 'Open community',
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocialScreen())),
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SocialScreen())),
       ),
       children: [
-        _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle('Challenges'),
-          for (final c in challenges)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: c.$4.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
-                  child: Icon(c.$3, size: 20, color: c.$4),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(c.$1, style: _t(13.5, w: FontWeight.w800)),
-                    Text(c.$2, style: _t(11.5, w: FontWeight.w600, c: _faint)),
-                  ]),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: c.$4.withValues(alpha: 0.4)),
-                    borderRadius: BorderRadius.circular(12),
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Challenges'),
+              for (final c in challenges)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: c.$4.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(c.$3, size: 20, color: c.$4),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(c.$1, style: _t(13.5, w: FontWeight.w800)),
+                            Text(
+                              c.$2,
+                              style: _t(11.5, w: FontWeight.w600, c: _faint),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: c.$4.withValues(alpha: 0.4),
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Join',
+                          style: _t(12, w: FontWeight.w800, c: c.$4),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text('Join', style: _t(12, w: FontWeight.w800, c: c.$4)),
                 ),
-              ]),
-            ),
-        ])),
+            ],
+          ),
+        ),
         for (final p in posts)
-          _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              SizedBox(width: 38, height: 38, child: _photo(_trainers[p.$6].$5, p.$1, _trainers[p.$6].$6, radius: 19)),
-              const SizedBox(width: 10),
-              Expanded(child: Text(p.$1, style: _t(13.5, w: FontWeight.w800))),
-              Text(p.$5, style: _t(11, w: FontWeight.w600, c: _faint)),
-            ]),
-            const SizedBox(height: 10),
-            Text(p.$2, style: _t(13, w: FontWeight.w500, c: _ink, h: 1.45)),
-            const SizedBox(height: 10),
-            Row(children: [
-              const Icon(Icons.favorite_rounded, size: 16, color: _pink),
-              Text(' ${p.$3}', style: _t(12, w: FontWeight.w700, c: _muted)),
-              const SizedBox(width: 14),
-              const Icon(Icons.chat_bubble_rounded, size: 15, color: _faint),
-              Text(' ${p.$4}', style: _t(12, w: FontWeight.w700, c: _muted)),
-            ]),
-          ])),
+          _panel(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 38,
+                      height: 38,
+                      child: _photo(
+                        _trainers[p.$6].$5,
+                        p.$1,
+                        _trainers[p.$6].$6,
+                        radius: 19,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(p.$1, style: _t(13.5, w: FontWeight.w800)),
+                    ),
+                    Text(
+                      p.$5,
+                      style: _t(11, w: FontWeight.w600, c: _faint),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  p.$2,
+                  style: _t(13, w: FontWeight.w500, c: _ink, h: 1.45),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.favorite_rounded, size: 16, color: _pink),
+                    Text(
+                      ' ${p.$3}',
+                      style: _t(12, w: FontWeight.w700, c: _muted),
+                    ),
+                    const SizedBox(width: 14),
+                    const Icon(
+                      Icons.chat_bubble_rounded,
+                      size: 15,
+                      color: _faint,
+                    ),
+                    Text(
+                      ' ${p.$4}',
+                      style: _t(12, w: FontWeight.w700, c: _muted),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1573,9 +2470,12 @@ class FurBlobsBackdrop extends StatefulWidget {
   State<FurBlobsBackdrop> createState() => _FurBlobsBackdropState();
 }
 
-class _FurBlobsBackdropState extends State<FurBlobsBackdrop> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 60))..repeat();
+class _FurBlobsBackdropState extends State<FurBlobsBackdrop>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 60),
+  )..repeat();
 
   @override
   void dispose() {
@@ -1636,11 +2536,14 @@ class _FurPainter extends CustomPainter {
         center,
         rr,
         Paint()
-          ..shader = RadialGradient(colors: [
-            c.withValues(alpha: 0.5),
-            c.withValues(alpha: 0.3),
-            c.withValues(alpha: 0),
-          ], stops: const [0, 0.7, 1]).createShader(Rect.fromCircle(center: center, radius: rr))
+          ..shader = RadialGradient(
+            colors: [
+              c.withValues(alpha: 0.5),
+              c.withValues(alpha: 0.3),
+              c.withValues(alpha: 0),
+            ],
+            stops: const [0, 0.7, 1],
+          ).createShader(Rect.fromCircle(center: center, radius: rr))
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
       );
 
@@ -1656,7 +2559,10 @@ class _FurPainter extends CustomPainter {
         final sway = math.sin(a * 4 + k * 0.7 + ph) * 0.08;
         final len = rr * (0.1 + rnd.nextDouble() * 0.12);
         final p0 = center + Offset(math.cos(ang), math.sin(ang)) * (rr * 0.78);
-        final p1 = center + Offset(math.cos(ang + sway), math.sin(ang + sway)) * (rr * 0.78 + len);
+        final p1 =
+            center +
+            Offset(math.cos(ang + sway), math.sin(ang + sway)) *
+                (rr * 0.78 + len);
         canvas.drawLine(p0, p1, fur);
       }
     }
@@ -1664,11 +2570,11 @@ class _FurPainter extends CustomPainter {
     if (!doodles) return;
     final ink = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
+      ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..color = const Color(0xFF64748B).withValues(alpha: 0.24);
-    final n = (size.height / 260).clamp(6, 22).round();
+      ..color = const Color(0xFF475569).withValues(alpha: 0.42);
+    final n = (size.height / 150).clamp(8, 40).round();
     for (var i = 0; i < n; i++) {
       final bx = 0.08 + rnd.nextDouble() * 0.84;
       final by = (i + rnd.nextDouble()) / n;
@@ -1680,7 +2586,14 @@ class _FurPainter extends CustomPainter {
       canvas.save();
       canvas.translate(pos.dx, pos.dy);
       canvas.rotate(math.sin(a + ph) * 0.6);
-      _doodle(canvas, i % 8, 14 + rnd.nextDouble() * 8, ink);
+      ink.color = [
+        const Color(0xFF16A34A),
+        const Color(0xFF8B5CF6),
+        const Color(0xFFF97316),
+        const Color(0xFF3B82F6),
+        const Color(0xFF475569),
+      ][i % 5].withValues(alpha: 0.38);
+      _doodle(canvas, i % 8, 18 + rnd.nextDouble() * 12, ink);
       canvas.restore();
     }
   }
@@ -1690,15 +2603,22 @@ class _FurPainter extends CustomPainter {
       case 0: // squiggle
         final path = Path()..moveTo(-s, 0);
         for (var i = 0; i < 4; i++) {
-          path.quadraticBezierTo(-s + s * 0.5 * (i * 2 + 1) / 2, i.isEven ? -s * 0.5 : s * 0.5,
-              -s + s * 0.5 * (i + 1), 0);
+          path.quadraticBezierTo(
+            -s + s * 0.5 * (i * 2 + 1) / 2,
+            i.isEven ? -s * 0.5 : s * 0.5,
+            -s + s * 0.5 * (i + 1),
+            0,
+          );
         }
         c.drawPath(path, p);
       case 1: // sparkle
         for (var k = 0; k < 4; k++) {
           final ang = k * math.pi / 4;
-          c.drawLine(Offset(math.cos(ang), math.sin(ang)) * -s * 0.6,
-              Offset(math.cos(ang), math.sin(ang)) * s * 0.6, p);
+          c.drawLine(
+            Offset(math.cos(ang), math.sin(ang)) * -s * 0.6,
+            Offset(math.cos(ang), math.sin(ang)) * s * 0.6,
+            p,
+          );
         }
       case 2: // ring
         c.drawCircle(Offset.zero, s * 0.55, p);
@@ -1719,8 +2639,28 @@ class _FurPainter extends CustomPainter {
         c.drawPath(path, p);
       case 6: // dumbbell
         c.drawLine(Offset(-s * 0.5, 0), Offset(s * 0.5, 0), p);
-        c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(-s * 0.55, 0), width: s * 0.22, height: s * 0.6), const Radius.circular(2)), p);
-        c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(s * 0.55, 0), width: s * 0.22, height: s * 0.6), const Radius.circular(2)), p);
+        c.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(-s * 0.55, 0),
+              width: s * 0.22,
+              height: s * 0.6,
+            ),
+            const Radius.circular(2),
+          ),
+          p,
+        );
+        c.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(s * 0.55, 0),
+              width: s * 0.22,
+              height: s * 0.6,
+            ),
+            const Radius.circular(2),
+          ),
+          p,
+        );
       default: // spiral
         final path = Path();
         for (var i = 0; i <= 40; i++) {

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -49,38 +51,122 @@ class CategoryTabBar extends StatefulWidget {
   State<CategoryTabBar> createState() => _CategoryTabBarState();
 }
 
-class _CategoryTabBarState extends State<CategoryTabBar> {
+class _CategoryTabBarState extends State<CategoryTabBar>
+    with SingleTickerProviderStateMixin {
   static const double _gap = 6;
   static const double _sidePad = 12;
+
+  // Drives the sliding active tab: the leading edge races ahead and the
+  // trailing edge catches up with a spring, so the tab stretches like
+  // liquid while it moves, then a light sweep runs across it.
+  late final AnimationController _move = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 680),
+    value: 1,
+  );
+  late int _from = widget.selectedIndex;
+
+  @override
+  void didUpdateWidget(covariant CategoryTabBar old) {
+    super.didUpdateWidget(old);
+    if (old.selectedIndex != widget.selectedIndex) {
+      _from = old.selectedIndex;
+      _move.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _move.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final tabW = CategoryTabBar.tabWidthFor(c.maxWidth, widget.tabs.length);
+        final n = widget.tabs.length;
+        final tabW = CategoryTabBar.tabWidthFor(c.maxWidth, n);
         final h = CategoryTabBar.heightFor(tabW);
+        final itemW = (c.maxWidth - 2 * _sidePad - (n - 1) * _gap) / n;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: _sidePad),
           child: SizedBox(
             height: h + 2,
-            child: Row(
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                for (var i = 0; i < widget.tabs.length; i++) ...[
-                  if (i > 0) const SizedBox(width: _gap),
-                  Expanded(
-                    child: _FolderTab(
-                      data: widget.tabs[i],
-                      width: tabW,
-                      height: h,
-                      selected: i == widget.selectedIndex,
-                      highlighted: widget.highlightIndex == i,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        widget.onSelected(i);
-                      },
+                // Soft glass rail under all tabs.
+                Positioned(
+                  left: -4,
+                  right: -4,
+                  bottom: 0,
+                  height: 1.4,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        Colors.white.withValues(alpha: 0),
+                        Colors.white,
+                        Colors.white.withValues(alpha: 0),
+                      ]),
                     ),
                   ),
-                ],
+                ),
+                AnimatedBuilder(
+                  animation: _move,
+                  builder: (context, _) {
+                    final to = widget.selectedIndex;
+                    final v = _move.value;
+                    final forward = to >= _from;
+                    final lead = Curves.easeOutCubic
+                        .transform(const Interval(0, 0.62).transform(v));
+                    final trail = const Cubic(0.3, 1.25, 0.4, 1)
+                        .transform(const Interval(0.14, 1).transform(v));
+                    final fromL = _from * (itemW + _gap);
+                    final toL = to * (itemW + _gap);
+                    final l = fromL + (toL - fromL) * (forward ? trail : lead);
+                    final r = fromL + itemW +
+                        (toL - fromL) * (forward ? lead : trail);
+                    final color = Color.lerp(
+                      widget.tabs[_from.clamp(0, n - 1)].color,
+                      widget.tabs[to].color,
+                      Curves.easeOut.transform(v),
+                    )!;
+                    return Positioned(
+                      left: math.min(l, r - 20),
+                      width: math.max(20, r - l),
+                      top: 0,
+                      height: h,
+                      child: CustomPaint(
+                        painter: _FolderTabPainter(
+                          t: 1,
+                          color: color,
+                          shine: v,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < n; i++) ...[
+                      if (i > 0) const SizedBox(width: _gap),
+                      Expanded(
+                        child: _FolderTab(
+                          data: widget.tabs[i],
+                          width: tabW,
+                          height: h,
+                          selected: i == widget.selectedIndex,
+                          highlighted: widget.highlightIndex == i,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            widget.onSelected(i);
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -171,11 +257,14 @@ class _FolderTabState extends State<_FolderTab>
                 children: [
                   // Tab shape: frosted fill, outline and flared foot
                   Positioned.fill(
-                    child: CustomPaint(
-                      painter: _FolderTabPainter(
-                        t: t,
-                        color: d.color,
-                        pulse: widget.highlighted,
+                    child: Opacity(
+                      opacity: (1 - t).clamp(0.0, 1.0),
+                      child: CustomPaint(
+                        painter: _FolderTabPainter(
+                          t: 0,
+                          color: d.color,
+                          pulse: widget.highlighted,
+                        ),
                       ),
                     ),
                   ),
@@ -287,8 +376,10 @@ class _FolderTabPainter extends CustomPainter {
   final double t; // 0 = idle, 1 = selected
   final Color color;
   final bool pulse;
+  final double shine; // 0..1 sweep of light across the active tab
 
-  _FolderTabPainter({required this.t, required this.color, this.pulse = false});
+  _FolderTabPainter(
+      {required this.t, required this.color, this.pulse = false, this.shine = 1});
 
   Path _shape(Size s, {required double flare}) {
     final w = s.width;
@@ -350,6 +441,24 @@ class _FolderTabPainter extends CustomPainter {
       canvas.restore();
     }
 
+    // Light sweep after the tab lands.
+    if (t > 0 && shine > 0.2 && shine < 1) {
+      final k = (shine - 0.2) / 0.8;
+      canvas.save();
+      canvas.clipPath(filled);
+      final x = -size.width + k * size.width * 3;
+      canvas.drawRect(
+        Rect.fromLTWH(x, 0, size.width * 0.6, size.height),
+        Paint()
+          ..shader = LinearGradient(colors: [
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: 0.75 * (1 - k)),
+            Colors.white.withValues(alpha: 0),
+          ]).createShader(Rect.fromLTWH(x, 0, size.width * 0.6, size.height)),
+      );
+      canvas.restore();
+    }
+
     // Soft coloured shadow under the active tab
     if (t > 0) {
       canvas.drawPath(
@@ -389,5 +498,8 @@ class _FolderTabPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FolderTabPainter old) =>
-      old.t != t || old.color != color || old.pulse != pulse;
+      old.t != t ||
+      old.color != color ||
+      old.pulse != pulse ||
+      old.shine != shine;
 }
