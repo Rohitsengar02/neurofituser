@@ -249,6 +249,7 @@ class WorkoutsBackendService extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   void _initSocket() {
+    if (ApiConstants.demoMode) return;
     try {
       final socketUrl = ApiConstants.baseUrl;
       _socket = IO.io(socketUrl, <String, dynamic>{

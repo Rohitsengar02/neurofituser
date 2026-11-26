@@ -117,6 +117,7 @@ class WorkoutBannersBackendService extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   void _initSocket() {
+    if (ApiConstants.demoMode) return;
     try {
       final socketUri = ApiConstants.socketUrl;
       _socket = IO.io(

@@ -186,6 +186,7 @@ class MarketplaceHomeLayoutService extends ChangeNotifier {
   }
 
   void _initSocket() {
+    if (ApiConstants.demoMode) return;
     try {
       final socketUri = ApiConstants.socketUrl;
       _socket = IO.io(

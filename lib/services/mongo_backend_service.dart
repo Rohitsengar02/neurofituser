@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:mongo_dart/mongo_dart.dart';
+import '../constants/api_constants.dart';
 
 class MongoBackendService extends ChangeNotifier {
   static final MongoBackendService _instance = MongoBackendService._internal();
@@ -22,6 +23,7 @@ class MongoBackendService extends ChangeNotifier {
   // 1. INITIALIZE & CONNECT TO MONGODB ATLAS
   // -------------------------------------------------------------
   Future<Db?> connect() async {
+    if (ApiConstants.demoMode) return null;
     if (_db != null && _db!.isConnected) {
       return _db;
     }
