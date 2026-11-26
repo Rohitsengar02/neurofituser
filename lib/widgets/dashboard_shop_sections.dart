@@ -1,9 +1,8 @@
+import '../widgets/staggered_slide_fade.dart';
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'dashboard_motion.dart';
-import 'shop_home_sections.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -57,7 +56,7 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
     _prodService.addListener(_onUpdate);
 
     // Safety timeout: If network is slow, unlock skeleton after max 3.5s
-    _safetyTimeoutTimer = Timer(const Duration(milliseconds: 900), () {
+    _safetyTimeoutTimer = Timer(const Duration(milliseconds: 1200), () {
       if (mounted && !_isTop4SectionsLoaded) {
         setState(() => _isTop4SectionsLoaded = true);
       }
@@ -226,25 +225,14 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
       children: [
         const SizedBox(height: 12),
 
-        // 1. Storefront: greeting with Kemo, search, categories, promos,
-        // filter chips and the product list (demo data)
-        const ShopHomeSections(),
+        // 1. Search Bar & Full Store CTA with Stagger Entrance (Index 0)
+        StaggeredSlideFade(
+          index: 0,
+          duration: const Duration(milliseconds: 400),
+          child: _buildSearchAndShopHeader(),
+        ),
 
-        const SizedBox(height: 18),
-
-        if (_searchQuery.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: Text(
-              'More from the store',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF0F172A),
-                letterSpacing: -0.4,
-              ),
-            ),
-          ),
+        const SizedBox(height: 14),
 
         // 2. SEARCH MODE OR REAL-TIME LAYOUT CMS SECTIONS (Staggered Entrance)
         if (_searchQuery.isNotEmpty) ...[
@@ -291,8 +279,10 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
             _renderProductSection(LayoutSectionModel(id: 'def_prod', title: 'Trending Essentials 🔥', subtitle: 'Top rated gear loved by athletes', type: 'products', layoutMode: 'grid')),
           ] else
             ...List.generate(activeSections.length, (index) {
-              return Reveal(
-                delay: Duration(milliseconds: 60 * (index + 2)),
+              return StaggeredSlideFade(
+                index: index + 1,
+                delay: const Duration(milliseconds: 60),
+                duration: const Duration(milliseconds: 450),
                 child: _renderDynamicSection(activeSections[index]),
               );
             }),
@@ -351,8 +341,8 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
                   (i) => Column(
                     children: [
                       Container(
-                        width: 52,
-                        height: 52,
+                        width: 58,
+                        height: 58,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Color.lerp(
@@ -1051,6 +1041,105 @@ class _DashboardShopTabContentState extends State<DashboardShopTabContent>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchAndShopHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9).withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF64748B),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0F172A),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Search whey, gear, supplements...',
+                        hintStyle: GoogleFonts.plusJakartaSans(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF94A3B8),
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ShopScreen()),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.storefront_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Full Store',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

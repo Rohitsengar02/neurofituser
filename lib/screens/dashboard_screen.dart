@@ -10,18 +10,13 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
-import '../widgets/neuro_island_dock.dart';
-import '../widgets/dashboard_motion.dart';
-import '../widgets/category_tab_bar.dart';
-import '../widgets/kemo.dart';
-import '../widgets/tabs_v3/kit3.dart';
-import '../widgets/tabs_v3/nutrition_tab.dart';
-import '../widgets/tabs_v3/overview_tab.dart';
-import '../widgets/tabs_v3/shop_tab.dart';
-import '../widgets/tabs_v3/wellness_tab.dart';
-import '../widgets/tabs_v3/workouts_tab.dart';
-import 'kemo_ai_screen.dart';
+import '../widgets/neuro_dynamic_island.dart';
 import '../widgets/dashboard_3d_icons.dart';
+import '../widgets/dashboard_overview_sections.dart';
+import '../widgets/dashboard_workout_sections.dart';
+import '../widgets/dashboard_nutrition_sections.dart';
+import '../widgets/dashboard_mental_health_sections.dart';
+import '../widgets/dashboard_shop_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
 import 'trainers_screen.dart';
@@ -59,60 +54,38 @@ class _DashboardScreenState extends State<DashboardScreen>
     _CategoryItem(
       title: 'Overview',
       imagePath: 'assets/images/top tabs/overview.png',
-      bgColor: kTint,
-      subBgColor: kTint,
-      activeColor: kBrand,
-      heroColor: kTintTop,
+      bgColor: const Color(0xFFE8F8EE), // Light Green
+      subBgColor: const Color(0xFFF0FDF4),
+      activeColor: const Color(0xFF16A34A),
     ),
     _CategoryItem(
       title: 'Workouts',
       imagePath: 'assets/images/top tabs/workout.png',
-      bgColor: kTint,
-      subBgColor: kTint,
-      activeColor: kBrand,
-      heroColor: kTintTop,
+      bgColor: const Color(0xFFF5EEFF), // Light Purple
+      subBgColor: const Color(0xFFFAF5FF),
+      activeColor: const Color(0xFF9333EA),
     ),
     _CategoryItem(
       title: 'Nutrition',
       imagePath: 'assets/images/top tabs/nutrition.png',
-      bgColor: kTint,
-      subBgColor: kTint,
-      activeColor: kBrand,
-      heroColor: kTintTop,
+      bgColor: const Color(0xFFFEF7E6), // Light Yellow / Cream
+      subBgColor: const Color(0xFFFFFBEB),
+      activeColor: const Color(0xFFD97706),
     ),
     _CategoryItem(
       title: 'Mental Health',
       imagePath: 'assets/images/top tabs/mental health.png',
-      bgColor: kTint,
-      subBgColor: kTint,
-      activeColor: kBrand,
-      heroColor: kTintTop,
+      bgColor: const Color(0xFFFFEEF1), // Light Pink
+      subBgColor: const Color(0xFFFFF1F2),
+      activeColor: const Color(0xFFE11D48),
     ),
     _CategoryItem(
       title: 'Shop',
       imagePath: 'assets/images/top tabs/shop.png',
-      bgColor: kTint,
-      subBgColor: kTint,
-      activeColor: kBrand,
-      heroColor: kTintTop,
+      bgColor: const Color(0xFFEBF5FF), // Light Blue
+      subBgColor: const Color(0xFFF0F9FF),
+      activeColor: const Color(0xFF0284C7),
     ),
-  ];
-
-  static const List<String> _tabLabels = [
-    'Overview',
-    'Workouts',
-    'Nutrition',
-    'Wellness',
-    'Shop',
-  ];
-
-  final ValueNotifier<bool> _pageScrolling = ValueNotifier<bool>(false);
-  static const List<String> _tabIcons = [
-    'assets/images/top tabs/icons/overview.png',
-    'assets/images/top tabs/icons/workout.png',
-    'assets/images/top tabs/icons/nutrition.png',
-    'assets/images/top tabs/icons/wellness.png',
-    'assets/images/top tabs/icons/shop.png',
   ];
 
   bool _isOverviewLoading = true;
@@ -189,12 +162,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
 
     // Initial skeleton loading simulation, then check for first-time user tour
-    Future.delayed(const Duration(milliseconds: 700), () {
+    Future.delayed(const Duration(milliseconds: 850), () {
       if (mounted) {
         setState(() {
           _isOverviewLoading = false;
         });
-        _shimmerController.stop();
         _entranceController.forward(from: 0.0);
 
         // Eagerly preload all Shop Products, Banners, and Images in the background
@@ -209,7 +181,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _demoPulseController.dispose();
     _shimmerController.dispose();
     _entranceController.dispose();
-    _pageScrolling.dispose();
     super.dispose();
   }
 
@@ -221,21 +192,16 @@ class _DashboardScreenState extends State<DashboardScreen>
       backgroundColor:
           Colors.transparent, // Background handled by AnimatedContainer
       body: AnimatedContainer(
-        duration: const Duration(milliseconds: 520),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 350),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            stops: const [0.0, 0.2, 0.42, 0.7],
+            stops: const [0.0, 0.45, 1.0],
             colors: [
-              activeCategory.heroColor, // Vivid tab colour at the top
-              activeCategory.bgColor, // Softening
-              activeCategory.subBgColor, // Pastel
-              // Overview keeps one solid neon colour; its white sheet
-              // starts below the stat cards.
-              activeCategory.subBgColor, // Every tab ends on its tint;
-              // the curved sheet inside the tab supplies the light surface.
+              activeCategory.bgColor, // Slightly darker/richer shade
+              activeCategory.subBgColor, // Fading to pastel shade
+              const Color(0xFFFBFBFD), // Blending into clean background
             ],
           ),
         ),
@@ -252,88 +218,109 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ? const SocialScreen()
                   : _selectedBottomNavIndex == 4
                   ? const ProfileScreen()
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: (n) {
-                        if (n.metrics.axis != Axis.vertical) return false;
-                        if (n is ScrollStartNotification ||
-                            n is ScrollUpdateNotification) {
-                          _pageScrolling.value = true;
-                        } else if (n is ScrollEndNotification) {
-                          _pageScrolling.value = false;
-                        }
-                        return false;
-                      },
-                      child: RevealScope(
-                        child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          padding: EdgeInsets.only(
-                            // Overview's white sheet carries its own space
-                            // for the floating bottom nav.
-                            bottom: 0,
+                  : SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(
+                        bottom: 110,
+                      ), // Space for floating bottom nav
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 0. Top Dynamic Island (Tap to expand/collapse metrics & quick actions)
+                          NeuroDynamicIsland(
+                            themeColor: activeCategory.activeColor,
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 14),
 
-                              // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
-                              _buildAnimatedHeader(),
+                          const SizedBox(height: 12),
 
-                              const SizedBox(height: 16),
+                          // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
+                          _buildAnimatedHeader(),
 
-                              // 2. Fixed Top Category Tabs
-                              _buildTopCategoryTabs(activeCategory),
+                          const SizedBox(height: 16),
 
-                              // 3. Smooth Animated Switcher for Tab Content
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 350),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, animation) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0.04, 0.0),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: KeyedSubtree(
-                                  key: ValueKey<int>(_selectedCategoryIndex),
-                                  child: _selectedCategoryIndex == 1
-                                      ? const WorkoutsTabV3()
-                                      : _selectedCategoryIndex == 2
-                                      ? const NutritionTabV3()
-                                      : _selectedCategoryIndex == 3
-                                      ? const WellnessTabV3()
-                                      : _selectedCategoryIndex == 4
-                                      ? const ShopTabV3()
-                                      : const OverviewTabV7(),
+                          // 2. Fixed Top Category Tabs
+                          _buildTopCategoryTabs(activeCategory),
+
+                          // 3. Smooth Animated Switcher for Tab Content
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0.04, 0.0),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
                                 ),
-                              ),
-                            ],
+                              );
+                            },
+                            child: KeyedSubtree(
+                              key: ValueKey<int>(_selectedCategoryIndex),
+                              child: _selectedCategoryIndex == 1
+                                  ? const DashboardWorkoutTabContent()
+                                  : _selectedCategoryIndex == 2
+                                  ? const DashboardNutritionTabContent()
+                                  : _selectedCategoryIndex == 3
+                                  ? const DashboardMentalHealthTabContent()
+                                  : _selectedCategoryIndex == 4
+                                  ? const DashboardShopTabContent()
+                                  : Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 18),
+
+                                        // Search Bar & "Transform Yourself" Card
+                                        _buildAnimatedSearchAndTransformRow(),
+
+                                        const SizedBox(height: 18),
+
+                                        // Hero Banner Card ("Stay Consistent, See Results!")
+                                        _buildAnimatedHeroBanner(),
+
+                                        const SizedBox(height: 16),
+
+                                        // Overview Image Carousel Cards (Image Only, No Text)
+                                        _buildOverviewCategoryCardsCarousel(),
+
+                                        const SizedBox(height: 20),
+
+                                        // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
+                                        _buildAnimatedOverviewBentoGrid(),
+
+                                        const SizedBox(height: 24),
+
+                                        // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
+                                        _buildAnimatedProgressCarousel(),
+
+                                        // Show extended sections only on Overview Tab (Index 0)
+                                        if (_selectedCategoryIndex == 0) ...[
+                                          const SizedBox(height: 24),
+                                          const TodaysPlanSection(),
+                                          const SizedBox(height: 24),
+                                          const NutritionSummarySection(),
+                                          const SizedBox(height: 24),
+                                          const WaterIntakeSection(),
+                                          const SizedBox(height: 24),
+                                          const MindMoodSection(),
+                                          const SizedBox(height: 24),
+                                          const AchievementsSection(),
+                                          const SizedBox(height: 24),
+                                          const ArticlesTipsSection(),
+                                        ],
+
+                                        const SizedBox(height: 20),
+                                      ],
+                                    ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-
-              // Docked island on the right edge (home only). Tap to open
-              // the full panel with today's stats and quick actions.
-              if (_selectedBottomNavIndex == 0)
-                Positioned.fill(
-                  child: NeuroIslandDock(
-                    accent: activeCategory.activeColor,
-                    scrolling: _pageScrolling,
-                    onSelectTab: (i) {
-                      if (i >= 0 && i < _categories.length) {
-                        setState(() => _selectedCategoryIndex = i);
-                      }
-                    },
-                  ),
-                ),
 
               // Bottom Floating Navigation Bar
               Positioned(
@@ -650,6 +637,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           curve: const Interval(0.0, 0.45, curve: Curves.easeOutCubic),
         ).value;
         final slideY = 24.0 * (1 - anim);
+        final blur = 8.0 * (1 - anim);
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -659,7 +647,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               Expanded(
                 child: Transform.translate(
                   offset: Offset(0, slideY),
-                  child: RepaintBoundary(
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
                     child: Opacity(
                       opacity: anim.clamp(0.0, 1.0),
                       child: Column(
@@ -690,17 +679,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                           const SizedBox(height: 2),
                           Row(
                             children: [
-                              Flexible(
-                                child: Text(
+                              Text(
                                 'Ready to crush your goals today?',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF64748B),
                                 ),
-                              ),
                               ),
                               const Icon(
                                 Icons.keyboard_arrow_down_rounded,
@@ -780,14 +765,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              // Kemo, the AI buddy: tap to chat
-              _KemoHeaderButton(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(context, KemoAiScreen.route());
-                },
-              ),
             ],
           ),
         );
@@ -808,31 +785,202 @@ class _DashboardScreenState extends State<DashboardScreen>
           parent: _entranceController,
           curve: const Interval(0.05, 0.45, curve: Curves.easeOutCubic),
         ).value;
+
         return Transform.translate(
           offset: Offset(0, (1.0 - anim) * 16.0),
-          child: Opacity(opacity: anim.clamp(0.0, 1.0), child: child),
+          child: Opacity(
+            opacity: anim.clamp(0.0, 1.0),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const count = 5;
+                  const gap = 8.0;
+                  const underlineHeight = 4.0;
+                  const underlineGap = 8.0; // space between cards and line
+                  final cardWidth =
+                      (constraints.maxWidth - ((count - 1) * gap)) / count;
+                  final cardHeight = cardWidth;
+                  final underlineWidth = cardWidth * 0.55;
+
+                  return SizedBox(
+                    height: cardHeight + underlineGap + underlineHeight + 6,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // ---- Cards row ----
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: cardHeight,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: List.generate(count, (index) {
+                              final item = _categories[index];
+                              final isSelected =
+                                  _selectedCategoryIndex == index;
+                              final isDemoHighlighted =
+                                  _isDemoActive && _demoStep == index;
+
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  if (_isDemoActive) {
+                                    _nextDemoStep();
+                                  } else {
+                                    setState(
+                                      () => _selectedCategoryIndex = index,
+                                    );
+                                  }
+                                },
+                                child: AnimatedScale(
+                                  scale: isSelected ? 1.06 : 1.0,
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutBack,
+                                  child: SizedBox(
+                                    width: cardWidth,
+                                    height: cardHeight,
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        // Card — no border, shadow only when active
+                                        AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 280,
+                                          ),
+                                          curve: Curves.easeOutCubic,
+                                          width: cardWidth,
+                                          height: cardHeight,
+                                          clipBehavior: Clip.antiAlias,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              22,
+                                            ),
+                                            boxShadow: isSelected
+                                                ? [
+                                                    BoxShadow(
+                                                      color: item.activeColor
+                                                          .withValues(
+                                                            alpha: 0.38,
+                                                          ),
+                                                      blurRadius: 16,
+                                                      spreadRadius: 1,
+                                                      offset: const Offset(
+                                                        0,
+                                                        5,
+                                                      ),
+                                                    ),
+                                                  ]
+                                                : const [],
+                                          ),
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(
+                                              milliseconds: 280,
+                                            ),
+                                            opacity: isSelected ? 1.0 : 0.78,
+                                            child: Image.asset(
+                                              item.imagePath,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Center(
+                                                    child: Icon(
+                                                      Icons.dashboard_rounded,
+                                                      size: 26,
+                                                      color: item.activeColor,
+                                                    ),
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // Demo pulse badge
+                                        if (isDemoHighlighted)
+                                          Positioned(
+                                            top: -10,
+                                            left: 0,
+                                            right: 0,
+                                            child: Center(
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: item.activeColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: item.activeColor
+                                                          .withValues(
+                                                            alpha: 0.6,
+                                                          ),
+                                                      blurRadius: 8,
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Text(
+                                                  'TAP 👆',
+                                                  style:
+                                                      GoogleFonts.plusJakartaSans(
+                                                        color: Colors.white,
+                                                        fontSize: 8.5,
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                      ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+
+                        // ---- Sliding underline under the active tab ----
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          top: cardHeight + underlineGap,
+                          left:
+                              _selectedCategoryIndex * (cardWidth + gap) +
+                              (cardWidth - underlineWidth) / 2,
+                          width: underlineWidth,
+                          height: underlineHeight,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 320),
+                            decoration: BoxDecoration(
+                              color: activeCategory.activeColor,
+                              borderRadius: BorderRadius.circular(3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: activeCategory.activeColor.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         );
       },
-      child: CategoryTabBar(
-        tabs: [
-          for (var i = 0; i < _categories.length; i++)
-            CategoryTabData(
-              label: _tabLabels[i],
-              iconPath: _tabIcons[i],
-              color: _categories[i].activeColor,
-              badge: i == 4 ? '40% OFF' : null,
-            ),
-        ],
-        selectedIndex: _selectedCategoryIndex,
-        highlightIndex: _isDemoActive ? _demoStep : null,
-        onSelected: (index) {
-          if (_isDemoActive) {
-            _nextDemoStep();
-          } else {
-            setState(() => _selectedCategoryIndex = index);
-          }
-        },
-      ),
     );
   }
 
@@ -875,33 +1023,26 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Skeleton — matches the wider, pod-less layout
   Widget _buildTopCategoryTabsSkeleton() {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final w = CategoryTabBar.tabWidthFor(c.maxWidth, 5);
-        final h = CategoryTabBar.heightFor(w);
-        return SizedBox(
-          height: h + 4,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: 5,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
-            itemBuilder: (_, __) => SizedBox(
-              width: w,
-              height: h,
-              child: _buildSkeletonShimmerBox(
-                width: w,
-                height: h,
-                borderRadius: 20,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14.0),
+      child: Row(
+        children: List.generate(5, (index) {
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: index == 0 ? 0 : 4,
+                right: index == 4 ? 0 : 4,
+              ),
+              child: AspectRatio(
+                aspectRatio: 1.0,
+                child: _buildSkeletonShimmerBox(borderRadius: 22),
               ),
             ),
-          ),
-        );
-      },
+          );
+        }),
+      ),
     );
   }
-
 
   // -------------------------------------------------------------
   // 3. SEARCH & TRANSFORM YOURSELF ROW (STAGGERED SLIDE WITH SKELETON)
@@ -1222,17 +1363,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Flexible(
-                                          child: Text(
+                                        Text(
                                           'Explore Plans',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                           style: GoogleFonts.plusJakartaSans(
                                             fontSize: 11.5,
                                             fontWeight: FontWeight.w800,
                                             color: Colors.white,
                                           ),
-                                        ),
                                         ),
                                         const SizedBox(width: 5),
                                         const Icon(
@@ -2266,16 +2403,12 @@ class _CategoryItem {
   final Color subBgColor;
   final Color activeColor;
 
-  /// Vivid colour at the very top of the page, fading into [bgColor].
-  final Color heroColor;
-
   _CategoryItem({
     required this.title,
     required this.imagePath,
     required this.bgColor,
     required this.subBgColor,
     required this.activeColor,
-    required this.heroColor,
   });
 }
 
@@ -2601,100 +2734,6 @@ class _OverviewBentoVideoPlayerState extends State<_OverviewBentoVideoPlayer> {
               ? _controller!.value.size.height
               : 400,
           child: VideoPlayer(_controller!),
-        ),
-      ),
-    );
-  }
-}
-
-/// Round Kemo avatar in the header with an "Ask me" bubble that pops in now
-/// and then.
-class _KemoHeaderButton extends StatefulWidget {
-  final VoidCallback onTap;
-  const _KemoHeaderButton({required this.onTap});
-
-  @override
-  State<_KemoHeaderButton> createState() => _KemoHeaderButtonState();
-}
-
-class _KemoHeaderButtonState extends State<_KemoHeaderButton> {
-  bool _showHint = false;
-  Timer? _timer;
-  int _tick = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 4200), (_) {
-      if (!mounted) return;
-      _tick++;
-      setState(() => _showHint = _tick % 3 == 1);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PressScale(
-      onTap: widget.onTap,
-      child: SizedBox(
-        width: 46,
-        height: 46,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Hero(tag: 'kemo-face', child: KemoFace(size: 46)),
-            // online dot
-            Positioned(
-              right: 1,
-              bottom: 2,
-              child: Container(
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22C55E),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: -20,
-              child: IgnorePointer(
-                child: AnimatedScale(
-                  scale: _showHint ? 1 : 0,
-                  alignment: Alignment.topRight,
-                  duration: const Duration(milliseconds: 380),
-                  curve: _showHint ? Curves.elasticOut : Curves.easeIn,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF14210C),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Ask Kemo',
-                      maxLines: 1,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFFB8FF3D),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

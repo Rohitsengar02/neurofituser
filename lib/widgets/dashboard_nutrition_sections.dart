@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'dashboard_motion.dart';
-import 'dashboard_highlights.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sensors_plus/sensors_plus.dart';
@@ -123,7 +121,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
     });
 
     // Simulate skeleton loading -> Stagger Blur Reveal
-    Timer(const Duration(milliseconds: 550), () {
+    Timer(const Duration(milliseconds: 650), () {
       if (mounted) {
         setState(() => _isLoading = false);
         _staggerController.forward();
@@ -206,10 +204,28 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
     required double endInterval,
     required Widget child,
   }) {
-    // Sections already on screen cascade in; the rest rise in as you scroll.
-    return Reveal(
-      delay: Duration(milliseconds: (startInterval * 700).round()),
-      child: child,
+    return AnimatedBuilder(
+      animation: _staggerController,
+      builder: (context, _) {
+        final anim = CurvedAnimation(
+          parent: _staggerController,
+          curve: Interval(startInterval, endInterval, curve: Curves.easeOutCubic),
+        ).value;
+
+        final blurVal = ((1 - anim) * 12.0).clamp(0.0, 12.0);
+        final slideY = (24.0 * (1 - anim));
+
+        return Transform.translate(
+          offset: Offset(0, slideY),
+          child: Opacity(
+            opacity: anim.clamp(0.0, 1.0),
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
+              child: child,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -229,15 +245,6 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
           startInterval: 0.0,
           endInterval: 0.16,
           child: _buildCalendarCarouselSection(),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Next meal with a live countdown
-        _buildStaggeredSection(
-          startInterval: 0.04,
-          endInterval: 0.2,
-          child: const NextMealCard(),
         ),
 
         const SizedBox(height: 18),
@@ -363,7 +370,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(
                   5,
-                  (i) => _buildShimmerBox(width: 52, height: 84, borderRadius: 18),
+                  (i) => _buildShimmerBox(width: 62, height: 88, borderRadius: 18),
                 ),
               ),
             ),
@@ -2258,7 +2265,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Row(
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
@@ -2287,7 +2294,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                     ),
                   ),
                 ],
-              ))),
+              ),
               GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -2697,7 +2704,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(
+                Text(
                   '7-Day Nutrition Score',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 16,
@@ -2705,7 +2712,7 @@ class _DashboardNutritionTabContentState extends State<DashboardNutritionTabCont
                     color: const Color(0xFF0F172A),
                     letterSpacing: -0.3,
                   ),
-                ))),
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -3147,7 +3154,7 @@ class _TiltingNaturalWaterCardState extends State<TiltingNaturalWaterCard>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Row(
+                        Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(8),
@@ -3180,7 +3187,7 @@ class _TiltingNaturalWaterCardState extends State<TiltingNaturalWaterCard>
                               ],
                             ),
                           ],
-                        ))),
+                        ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(

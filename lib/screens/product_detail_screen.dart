@@ -1575,9 +1575,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   setState(() => _selectedImageIndex = index),
               itemCount: _allImages.length,
               itemBuilder: (context, index) {
-                if (_allImages[index].startsWith('assets/')) {
-                  return Image.asset(_allImages[index], fit: BoxFit.contain);
-                }
                 return Image.network(
                   CategoryBackendService.getDisplayableImageUrl(_allImages[index]),
                   fit: BoxFit.contain,

@@ -37,31 +37,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  fonts:
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/inter/Inter-Medium.otf
-          weight: 500
-        - asset: assets/fonts/inter/Inter-SemiBold.otf
-          weight: 600
-        - asset: assets/fonts/inter/Inter-Bold.otf
-          weight: 700
-    - family: InterDisplay
-      fonts:
-        - asset: assets/fonts/inter/InterDisplay-Bold.otf
-          weight: 700
-        - asset: assets/fonts/inter/InterDisplay-ExtraBold.otf
-          weight: 800
-
   assets:
     - assets/images/
     - assets/images/top tabs/
     - assets/images/top tabs/overview/
-    - assets/images/top tabs/icons/
-    - assets/images/illustrations/
-    - assets/images/overview_v3/
-    - assets/images/overview_v4/
-    - assets/images/clean/
     - assets/videos/
     - assets/exercises/images/
     - assets/exercises/videos/
