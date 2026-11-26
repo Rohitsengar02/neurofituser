@@ -14,17 +14,21 @@ import 'island_panels.dart';
 import 'kemo_avatar.dart';
 import 'liquid_glass.dart';
 import '../backend/me.dart';
+import '../services/step_tracker.dart';
+import '../services/user_nutrition_service.dart';
 
 /// Today's numbers shared by the island and its slider.
 class IslandStats {
   IslandStats._();
-  static const int eaten = 1420;
-  static const int burned = 320;
-  static const int budget = 1800;
+  // Live numbers for today: food from the nutrition log, steps and burned
+  // calories from the step counter, water from the hydration log.
+  static int get eaten => UserNutritionService.instance.currentNutrition.consumedCalories;
+  static int get burned => StepTracker.instance.kcal;
+  static int get budget => UserNutritionService.instance.currentNutrition.targetCalories;
   static int get left => budget - eaten + burned;
-  static const int steps = 8542;
-  static const int stepGoal = 10000;
-  static final ValueNotifier<int> waterMl = ValueNotifier<int>(1250);
+  static int get steps => StepTracker.instance.today;
+  static int get stepGoal => StepTracker.instance.goal;
+  static final ValueNotifier<int> waterMl = ValueNotifier<int>(0);
   static const int waterGoal = 2500;
 }
 

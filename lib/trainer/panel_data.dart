@@ -3,14 +3,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../backend/live_backend.dart';
+import '../backend/me.dart';
+import '../backend/media.dart';
+import '../backend/sync_store.dart';
 import 'trainer_data.dart';
 
 // Trainer panel state: the coach's profile from onboarding, panel mode, and
 // the data behind the 10 dashboard features (plans, clients, content,
-// schedule, messages, earnings, reviews, diet templates). Everything is
-// local and persisted so the panel works without the backend.
+// schedule, messages, earnings, reviews, diet templates). Everything comes
+// from the NeuroFit API (/api/panel) and is kept on the phone for offline use.
 
-String face(int i, {bool woman = false}) => 'https://randomuser.me/api/portraits/${woman ? 'women' : 'men'}/$i.jpg';
 
 class PPlan {
   String name;
@@ -32,8 +35,9 @@ class PClient {
   String note;
   int unread;
   final List<ChatMsg> chat;
+  final String userId;
   PClient(this.id, this.name, this.photo, this.goal, this.plan, this.since, this.until, this.startKg, this.nowKg, this.workouts,
-      this.streak, this.status, this.note, this.unread, this.chat);
+      this.streak, this.status, this.note, this.unread, this.chat, {this.userId = ''});
   int get daysLeft => until.difference(DateTime.now()).inDays;
   double get progress => (workouts / 48).clamp(0, 1);
 }
@@ -98,9 +102,12 @@ class PDiet {
   int kcal, protein;
   List<String> meals;
   int assigned;
-  PDiet(this.name, this.goal, this.kcal, this.protein, this.meals, this.assigned);
-  Map<String, dynamic> toJson() => {'n': name, 'g': goal, 'k': kcal, 'p': protein, 'm': meals, 'a': assigned};
-  static PDiet fromJson(Map<String, dynamic> j) => PDiet(j['n'], j['g'], j['k'], j['p'], List<String>.from(j['m']), j['a']);
+  String id;
+  List<String> assignedTo = [];
+  PDiet(this.name, this.goal, this.kcal, this.protein, this.meals, this.assigned, [String? id])
+      : id = id ?? 'td_${DateTime.now().microsecondsSinceEpoch}';
+  Map<String, dynamic> toJson() => {'n': name, 'g': goal, 'k': kcal, 'p': protein, 'm': meals, 'a': assigned, 'i': id};
+  static PDiet fromJson(Map<String, dynamic> j) => PDiet(j['n'], j['g'], j['k'], j['p'], List<String>.from(j['m']), j['a'], j['i']);
 }
 
 const specialtyOptions = [
@@ -120,26 +127,31 @@ const specialtyOptions = [
 
 class PanelStore extends ChangeNotifier {
   PanelStore._() {
-    _seed();
     _load();
+    SyncStore.I.on('notification:new', () {
+      if (registered) refresh();
+    });
   }
   static final PanelStore I = PanelStore._();
-  static const _key = 'trainer_panel_v1';
+  static const _key = 'trainer_panel_v2';
 
   bool registered = false;
   bool panelMode = false;
   bool ready = false;
 
+  /// pending until the admin approves the coach, then approved.
+  String status = 'pending';
+
   // Profile from onboarding.
-  String name = 'Rohit Sengar';
-  String headline = 'Strength and fat-loss coach';
-  String bio = 'I help busy people get strong, lean and consistent with simple plans that fit real life.';
-  String city = 'Delhi';
+  String name = '';
+  String headline = '';
+  String bio = '';
+  String city = '';
   String mode = 'Online';
-  int years = 3;
-  List<String> specialties = ['Strength', 'Fat loss'];
-  List<String> certs = ['ACE Certified Personal Trainer'];
-  String? photo; // base64
+  int years = 0;
+  List<String> specialties = [];
+  List<String> certs = [];
+  String? photo; // URL (R2) or base64 until uploaded
 
   bool acceptingClients = true;
 
@@ -148,6 +160,10 @@ class PanelStore extends ChangeNotifier {
   DateTime? liveSince;
   String liveTitle = '';
   int liveSessions = 0;
+  String? liveId;
+
+  /// LiveKit room details for the current broadcast (null if LiveKit is not set up).
+  String? liveUrl, liveToken;
 
   final List<PPlan> plans = [];
   final List<PClient> clients = [];
@@ -156,12 +172,13 @@ class PanelStore extends ChangeNotifier {
   final List<PTxn> txns = [];
   final List<PReview> reviews = [];
   final List<PDiet> diets = [];
+  int _paidBalance = 0;
 
   // ----- derived -----
   int get activeClients => clients.where((c) => c.status != 'paused').length;
   int get expiring => clients.where((c) => c.status == 'expiring').length;
   int get unread => clients.fold(0, (a, c) => a + c.unread);
-  int get balance => txns.fold(0, (a, t) => a + t.amount);
+  int get balance => _paidBalance > 0 ? _paidBalance : txns.fold(0, (a, t) => a + t.amount);
   int get monthEarnings {
     final now = DateTime.now();
     return txns.where((t) => t.amount > 0 && t.at.month == now.month && t.at.year == now.year).fold(0, (a, t) => a + t.amount);
@@ -183,6 +200,208 @@ class PanelStore extends ChangeNotifier {
       if (w < 8) out[7 - w] += t.amount;
     }
     return out;
+  }
+
+  // ----- server -----
+  static void _bg(Future<Object?> f) => f.catchError((_) => null);
+  static DateTime _at(Object? v) => DateTime.tryParse('${v ?? ''}')?.toLocal() ?? DateTime.now();
+  static int _n(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+
+  Map<String, dynamic> get _profileJson => {
+        'name': name,
+        'headline': headline,
+        'role': headline,
+        'bio': bio,
+        'city': city,
+        'mode': mode,
+        'years': years,
+        'specialties': specialties,
+        'cat': specialties.isEmpty ? 'Strength' : specialties.first,
+        'tags': specialties,
+        'certifications': certs,
+        'accepting': acceptingClients,
+        if (photo != null && photo!.startsWith('http')) 'photo': photo,
+        'price': plans.isEmpty ? 999 : plans.first.price,
+        'plans': [for (final p in plans) {'name': p.name, 'months': p.months, 'price': p.price, 'perks': p.perks, 'active': p.active}],
+      };
+
+  void _pushProfile() => _bg(Api.send('PUT', '/panel/me', _profileJson));
+
+  /// Pulls the coach's profile, clients, content, schedule, money and reviews.
+  Future<void> refresh() async {
+    if (!AppSession.isSignedIn) return;
+    try {
+      final me = (await Api.get('/panel/me'))['data'];
+      if (me is! Map) return;
+      final t = Map<String, dynamic>.from(me);
+      registered = true;
+      status = (t['status'] ?? 'pending').toString();
+      name = (t['name'] ?? name).toString();
+      headline = (t['headline'] ?? t['role'] ?? headline).toString();
+      bio = (t['bio'] ?? bio).toString();
+      city = (t['city'] ?? city).toString();
+      mode = (t['mode'] ?? mode).toString();
+      years = _n(t['years']);
+      specialties = [for (final x in (t['specialties'] as List? ?? const [])) x.toString()];
+      certs = [for (final x in (t['certifications'] as List? ?? const [])) x.toString()];
+      if ((t['photo'] ?? '').toString().isNotEmpty) photo = t['photo'].toString();
+      acceptingClients = t['accepting'] != false;
+      plans
+        ..clear()
+        ..addAll([
+          for (final p in (t['plans'] as List? ?? const []))
+            if (p is Map)
+              PPlan((p['name'] ?? 'Plan').toString(), _n(p['months'] ?? 1), _n(p['price']), 0, p['active'] != false,
+                  [for (final x in (p['perks'] as List? ?? const [])) x.toString()]),
+        ]);
+    } on ApiError catch (e) {
+      if (e.status == 404) {
+        registered = false;
+        panelMode = false;
+      }
+      ready = true;
+      notifyListeners();
+      return;
+    } catch (_) {
+      return; // offline: keep what is saved
+    }
+    await Future.wait([_clients(), _content(), _money(), _reviews(), _schedule(), _diets()]);
+    ready = true;
+    notifyListeners();
+    _save();
+  }
+
+  Future<void> _clients() async {
+    try {
+      final res = await Future.wait([Api.get('/panel/clients'), Api.get('/panel/checkins')]);
+      final weights = <String, List<double>>{};
+      for (final c in Api.list(res[1]).reversed) {
+        final w = (c['weight'] as num?)?.toDouble();
+        if (w != null && w > 0) (weights[(c['userId'] ?? '').toString()] ??= []).add(w);
+      }
+      final old = {for (final c in clients) c.userId: c.chat};
+      clients
+        ..clear()
+        ..addAll([
+          for (final c in Api.list(res[0]))
+            PClient(
+              (c['id'] ?? '').toString(),
+              (c['name'] ?? 'Client').toString(),
+              (c['photo'] ?? '').toString(),
+              (c['goal'] ?? c['trainerNote'] ?? '').toString(),
+              (c['planName'] ?? '').toString(),
+              _at(c['since']),
+              _at(c['until']),
+              weights[c['userId']]?.first ?? 0,
+              weights[c['userId']]?.last ?? 0,
+              _n(c['workouts']),
+              0,
+              (c['status'] ?? 'active').toString(),
+              (c['trainerNote'] ?? '').toString(),
+              _n(c['unread']),
+              old[(c['userId'] ?? '').toString()] ?? <ChatMsg>[],
+              userId: (c['userId'] ?? '').toString(),
+            ),
+        ]);
+      for (final p in plans) {
+        p.subs = clients.where((c) => c.plan == p.name && c.status != 'paused').length;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _content() async {
+    try {
+      final j = await Api.get('/panel/workouts');
+      workouts
+        ..clear()
+        ..addAll([
+          for (final w in Api.list(j))
+            PWorkout(
+              (w['id'] ?? '').toString(),
+              (w['title'] ?? 'Workout').toString(),
+              (w['level'] ?? 'All levels').toString(),
+              (w['kind'] ?? 'Video').toString(),
+              _n(w['minutes']),
+              [for (final e in (w['exercises'] as List? ?? const [])) e is Map ? (e['name'] ?? '').toString() : e.toString()],
+              (w['cover'] ?? '').toString().isEmpty ? null : w['cover'].toString(),
+              _at(w['createdAt']),
+              w['isActive'] != false,
+              _n(w['views']),
+              _n(w['saves']),
+            ),
+        ]);
+    } catch (_) {}
+  }
+
+  Future<void> _money() async {
+    try {
+      final res = await Future.wait([Api.get('/panel/transactions'), Api.get('/panel/dashboard')]);
+      txns
+        ..clear()
+        ..addAll([
+          for (final t in Api.list(res[0]))
+            PTxn((t['title'] ?? '').toString(), (t['status'] ?? '').toString(), _n(t['amount']), _at(t['at'])),
+        ]);
+      final d = res[1]['data'];
+      if (d is Map) {
+        final paidOut = txns.where((t) => t.amount < 0).fold(0, (a, t) => a + t.amount);
+        _paidBalance = _n(d['balance']) + paidOut;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _reviews() async {
+    try {
+      final j = await Api.get('/panel/reviews');
+      reviews
+        ..clear()
+        ..addAll([
+          for (final r in Api.list(j))
+            PReview((r['id'] ?? '').toString(), (r['name'] ?? 'Member').toString(), (r['photo'] ?? '').toString(), (r['text'] ?? '').toString(),
+                _n(r['stars'] ?? 5), _at(r['createdAt']), r['reply']?.toString()),
+        ]);
+    } catch (_) {}
+  }
+
+  Future<void> _schedule() async {
+    try {
+      final me = AppSession.userId;
+      final res = await Future.wait([Api.get('/live/sessions?status=all&trainerId=$me'), Api.get('/panel/bookings')]);
+      sessions
+        ..clear()
+        ..addAll([
+          for (final x in Api.list(res[0]))
+            if (x['status'] != 'ended')
+              PSession((x['id'] ?? '').toString(), (x['title'] ?? 'Live class').toString(), (x['type'] ?? 'Live class').toString(), _at(x['startsAt']),
+                  _n(x['durationMin'] ?? 45), x['client']?.toString()),
+          for (final b in Api.list(res[1]))
+            if (b['status'] != 'cancelled')
+              PSession((b['id'] ?? '').toString(), (b['type'] ?? 'Session').toString(), '1:1 call', _at(b['at']), 30,
+                  clients.where((c) => c.userId == b['userId']).firstOrNull?.name),
+        ]);
+      liveSessions = Api.list(res[0]).where((x) => x['status'] == 'ended').length;
+      final on = Api.list(res[0]).where((x) => x['status'] == 'live').firstOrNull;
+      if (on != null && !live) {
+        live = true;
+        liveId = on['id']?.toString();
+        liveTitle = (on['title'] ?? '').toString();
+        liveSince = _at(on['startedAt'] ?? on['startsAt']);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _diets() async {
+    try {
+      final j = await Api.get('/panel/diets');
+      diets
+        ..clear()
+        ..addAll([
+          for (final d in Api.list(j))
+            PDiet((d['name'] ?? 'Diet').toString(), (d['goal'] ?? '').toString(), _n(d['kcal']), _n(d['protein']),
+                [for (final m in (d['meals'] as List? ?? const [])) m.toString()], _n(d['assigned']), (d['id'] ?? '').toString())
+              ..assignedTo = [for (final x in (d['assignedTo'] as List? ?? const [])) x.toString()],
+        ]);
+    } catch (_) {}
   }
 
   // ----- actions -----
@@ -212,12 +431,23 @@ class PanelStore extends ChangeNotifier {
       ..addAll(plans);
     registered = true;
     panelMode = true;
+    status = 'pending';
     _save();
+    () async {
+      final url = await Media.uploadBase64(photo, folder: 'coaches');
+      if (url != null) this.photo = url;
+      try {
+        await Api.send('POST', '/panel/apply', {..._profileJson, if (url != null) 'photo': url});
+        _pushProfile(); // plans and the rest of the profile
+      } catch (_) {}
+      _save();
+    }();
   }
 
   void enterPanel() {
     panelMode = true;
     _save();
+    refresh();
   }
 
   void exitPanel() {
@@ -228,12 +458,15 @@ class PanelStore extends ChangeNotifier {
   void leaveCoaching() {
     registered = false;
     panelMode = false;
+    acceptingClients = false;
     _save();
+    _bg(Api.send('PUT', '/panel/me', {'accepting': false}));
   }
 
   void setAccepting(bool v) {
     acceptingClients = v;
     _save();
+    _bg(Api.send('PUT', '/panel/me', {'accepting': v}));
   }
 
   void updateProfile({String? name, String? headline, String? bio, String? city, String? photo}) {
@@ -243,28 +476,49 @@ class PanelStore extends ChangeNotifier {
     if (city != null) this.city = city;
     if (photo != null) this.photo = photo;
     _save();
+    () async {
+      if (photo != null && !photo.startsWith('http')) {
+        final url = await Media.uploadBase64(photo, folder: 'coaches');
+        if (url != null) this.photo = url;
+      }
+      _pushProfile();
+      _save();
+    }();
   }
 
   void savePlan(PPlan p, {bool isNew = false}) {
     if (isNew) plans.add(p);
     _save();
+    _pushProfile();
   }
 
   void removePlan(PPlan p) {
     plans.remove(p);
     _save();
+    _pushProfile();
   }
 
   void togglePlan(PPlan p) {
     p.active = !p.active;
     _save();
+    _pushProfile();
   }
 
+  /// Goes live: creates the session (subscribers are notified) and gets a
+  /// LiveKit token for the camera stream.
   void startLive(String title) {
     live = true;
     liveTitle = title;
     liveSince = DateTime.now();
+    liveId = 'live_${DateTime.now().millisecondsSinceEpoch}';
+    liveUrl = null;
+    liveToken = null;
     notifyListeners();
+    Api.send('POST', '/live/sessions', {'id': liveId, 'title': title, 'type': 'Live class', 'goLive': true}).then((j) {
+      liveUrl = j['url']?.toString();
+      liveToken = j['token']?.toString();
+      notifyListeners();
+    }).catchError((_) {});
   }
 
   /// Ends the stream; returns minutes streamed.
@@ -272,89 +526,148 @@ class PanelStore extends ChangeNotifier {
     final m = liveSince == null ? 0 : DateTime.now().difference(liveSince!).inMinutes;
     live = false;
     liveSessions++;
-    if (tips > 0) txns.insert(0, PTxn('Live tips', liveTitle, tips, DateTime.now()));
-    workouts.insert(
-      0,
-      PWorkout('w${DateTime.now().millisecondsSinceEpoch}', liveTitle.isEmpty ? 'Live class' : liveTitle, 'All levels', 'Live replay',
-          m.clamp(1, 120), const [], null, DateTime.now(), true, viewers, 0),
-    );
+    final id = liveId;
+    if (id != null) _bg(Api.send('POST', '/live/sessions/$id/end'));
+    final w = PWorkout('tw_${DateTime.now().millisecondsSinceEpoch}', liveTitle.isEmpty ? 'Live class' : liveTitle, 'All levels', 'Live replay',
+        m.clamp(1, 120), const [], null, DateTime.now(), true, viewers, 0);
+    workouts.insert(0, w);
+    _bg(Api.send('POST', '/panel/workouts', _workoutJson(w)));
     liveSince = null;
+    liveId = null;
+    liveUrl = null;
+    liveToken = null;
     _save();
     return m;
   }
 
+  Map<String, dynamic> _workoutJson(PWorkout w) => {
+        'id': w.id,
+        'title': w.title,
+        'level': w.level,
+        'kind': w.kind,
+        'minutes': w.minutes,
+        'exercises': w.exercises,
+        if (w.cover != null && (w.cover!.startsWith('http') || w.cover!.startsWith('assets/'))) 'cover': w.cover,
+        'isActive': w.published,
+        'views': w.views,
+        'saves': w.saves,
+      };
+
   void publish(PWorkout w) {
     workouts.insert(0, w);
     _save();
+    () async {
+      var body = _workoutJson(w);
+      final c = w.cover;
+      if (c != null && !c.startsWith('http') && !c.startsWith('assets/')) {
+        final url = await Media.uploadBase64(c, folder: 'workouts');
+        if (url != null) body = {...body, 'cover': url};
+      }
+      _bg(Api.send('POST', '/panel/workouts', body));
+    }();
   }
 
   void toggleWorkout(PWorkout w) {
     w.published = !w.published;
     _save();
+    _bg(Api.send('POST', '/panel/workouts', {'id': w.id, 'isActive': w.published}));
   }
 
   void deleteWorkout(PWorkout w) {
     workouts.remove(w);
     _save();
+    _bg(Api.send('DELETE', '/panel/workouts/${w.id}'));
   }
 
   void addSession(PSession s) {
     sessions.add(s);
     _save();
+    _bg(Api.send('POST', '/live/sessions', {
+      'id': s.id,
+      'title': s.title,
+      'type': s.kind,
+      'startsAt': s.at.toUtc().toIso8601String(),
+      'durationMin': s.minutes,
+      'goLive': false,
+      if (s.client != null) 'client': s.client,
+    }));
   }
 
   void cancelSession(PSession s) {
     sessions.remove(s);
     _save();
+    _bg(Api.send('DELETE', '/live/sessions/${s.id}'));
   }
 
   void sendTo(PClient c, String text) {
     c.chat.add(ChatMsg(true, text, DateTime.now()));
     notifyListeners();
+    if (c.userId.isNotEmpty) _bg(Api.send('POST', '/panel/clients/${c.userId}/chat', {'text': text}));
   }
 
+  /// Opens a client's chat: loads the thread and marks it read.
   void readChat(PClient c) {
-    if (c.unread == 0) return;
     c.unread = 0;
     notifyListeners();
+    if (c.userId.isEmpty) return;
+    Api.get('/panel/clients/${c.userId}/chat').then((j) {
+      c.chat
+        ..clear()
+        ..addAll([for (final m in Api.list(j)) ChatMsg(m['me'] == true, (m['text'] ?? '').toString(), _at(m['createdAt']))]);
+      notifyListeners();
+    }).catchError((_) {});
   }
 
   void setClientStatus(PClient c, String s) {
     c.status = s;
     notifyListeners();
+    _bg(Api.send('PUT', '/panel/clients/${c.id}', {'status': s}));
   }
 
   void setClientNote(PClient c, String n) {
     c.note = n;
     notifyListeners();
+    _bg(Api.send('PUT', '/panel/clients/${c.id}', {'note': n}));
   }
 
   void renew(PClient c) {
     c.status = 'active';
-    txns.insert(0, PTxn('Renewal · ${c.name}', c.plan, plans.isEmpty ? 1499 : plans.first.price, DateTime.now()));
+    final plan = plans.where((p) => p.name == c.plan).firstOrNull;
     _save();
+    Api.send('PUT', '/panel/clients/${c.id}', {'status': 'active', 'renewMonths': plan?.months ?? 1}).then((_) => refresh()).catchError((_) {});
   }
 
   bool withdraw(int amount) {
     if (amount <= 0 || amount > balance) return false;
-    txns.insert(0, PTxn('Payout to bank', 'HDFC ••4821 · arrives in 1 day', -amount, DateTime.now()));
+    txns.insert(0, PTxn('Payout to bank', 'Requested · arrives after approval', -amount, DateTime.now()));
+    _paidBalance -= amount;
     _save();
+    Api.send('POST', '/panel/payouts', {'amount': amount}).then((_) => _money().then((_) => notifyListeners())).catchError((_) {});
     return true;
   }
 
   void reply(PReview r, String text) {
     r.reply = text;
     notifyListeners();
+    _bg(Api.send('POST', '/panel/reviews/${r.id}/reply', {'text': text}));
   }
+
+  Map<String, dynamic> _dietJson(PDiet d) =>
+      {'id': d.id, 'name': d.name, 'goal': d.goal, 'kcal': d.kcal, 'protein': d.protein, 'meals': d.meals, 'assigned': d.assigned, 'assignedTo': d.assignedTo};
 
   void saveDiet(PDiet d, {bool isNew = false}) {
     if (isNew) diets.insert(0, d);
     _save();
+    _bg(Api.send('POST', '/panel/diets', _dietJson(d)));
   }
 
+  /// Sends the diet to the next [n] active clients who don't have it yet.
   void assignDiet(PDiet d, int n) {
-    d.assigned += n;
+    final next = clients.where((c) => c.status != 'paused' && c.userId.isNotEmpty && !d.assignedTo.contains(c.userId)).take(n).toList();
+    d.assignedTo.addAll(next.map((c) => c.userId));
+    d.assigned = d.assignedTo.isEmpty ? d.assigned + n : d.assignedTo.length;
     _save();
+    _bg(Api.send('POST', '/panel/diets', _dietJson(d)));
   }
 
   // ----- persistence -----
@@ -366,6 +679,7 @@ class PanelStore extends ChangeNotifier {
         final j = jsonDecode(raw) as Map<String, dynamic>;
         registered = j['reg'] ?? false;
         panelMode = j['mode'] ?? false;
+        status = j['status'] ?? status;
         name = j['name'] ?? name;
         headline = j['head'] ?? headline;
         bio = j['bio'] ?? bio;
@@ -404,20 +718,22 @@ class PanelStore extends ChangeNotifier {
         }
       }
     } catch (_) {}
+    if (name.isEmpty) name = Me.name;
     ready = true;
     notifyListeners();
+    refresh();
   }
 
   Future<void> _save() async {
     notifyListeners();
     try {
       final p = await SharedPreferences.getInstance();
-      // Keep at most a few uploaded covers so storage stays small.
+      // Keep at most a few local (not yet uploaded) covers so storage stays small.
       var covers = 0;
       final wo = workouts.map((w) {
         final j = w.toJson();
         final c = w.cover;
-        if (c != null && !c.startsWith('assets/')) {
+        if (c != null && !c.startsWith('assets/') && !c.startsWith('http')) {
           covers++;
           if (covers > 4) j['c'] = null;
         }
@@ -428,6 +744,7 @@ class PanelStore extends ChangeNotifier {
         jsonEncode({
           'reg': registered,
           'mode': panelMode,
+          'status': status,
           'name': name,
           'head': headline,
           'bio': bio,
@@ -447,113 +764,5 @@ class PanelStore extends ChangeNotifier {
         }),
       );
     } catch (_) {}
-  }
-
-  // ----- seed -----
-  void _seed() {
-    final now = DateTime.now();
-    DateTime d(int days, [int h = 9, int m = 0]) => DateTime(now.year, now.month, now.day + days, h, m);
-
-    plans.addAll([
-      PPlan('Monthly', 1, 1499, 18, true, ['Custom workout plan', 'Weekly check-in', 'Chat support']),
-      PPlan('Quarterly', 3, 3899, 11, true, ['Everything in Monthly', 'Diet plan', '2 video calls a month']),
-      PPlan('Yearly', 12, 12999, 5, true, ['Everything in Quarterly', 'Priority replies', 'Live classes free']),
-    ]);
-
-    final names = [
-      ('Aarav Mehta', 12, false, 'Lose 8 kg', 'Quarterly', 84.0, 79.4, 31, 9, 'active', 2),
-      ('Isha Kapoor', 44, true, 'Tone up', 'Monthly', 62.0, 59.8, 22, 14, 'active', 1),
-      ('Kabir Singh', 32, false, 'Build muscle', 'Yearly', 68.0, 72.5, 46, 21, 'active', 0),
-      ('Neha Verma', 65, true, 'Run 10K', 'Monthly', 58.0, 56.9, 12, 4, 'expiring', 0),
-      ('Rahul Nair', 75, false, 'Lose 12 kg', 'Quarterly', 96.0, 90.1, 27, 6, 'active', 3),
-      ('Sara Khan', 21, true, 'Postpartum fitness', 'Monthly', 70.0, 67.2, 18, 3, 'expiring', 0),
-      ('Vikram Rao', 52, false, 'Mobility', 'Monthly', 78.0, 77.6, 8, 0, 'paused', 0),
-      ('Ananya Das', 90, true, 'Strength', 'Quarterly', 55.0, 56.3, 35, 11, 'active', 1),
-    ];
-    final msgs = [
-      'Done with today’s workout! Legs are on fire 🔥',
-      'Can I swap squats for leg press today?',
-      'Hit a new PR on deadlift, 120 kg!',
-      'Missed yesterday, will double up today.',
-      'What should I eat before a morning session?',
-      'Feeling much more energetic this week.',
-      'Back pain is better, can we restart?',
-      'Thanks for the new plan 🙏',
-    ];
-    for (var i = 0; i < names.length; i++) {
-      final n = names[i];
-      final since = d(-(20 + i * 9));
-      final months = n.$5 == 'Yearly' ? 12 : n.$5 == 'Quarterly' ? 3 : 1;
-      var until = DateTime(since.year, since.month + months, since.day);
-      if (n.$10 == 'expiring') until = d(2 + i % 3);
-      if (until.isBefore(now) && n.$10 == 'active') until = DateTime(now.year, now.month + 1, since.day);
-      clients.add(PClient(
-        'c$i',
-        n.$1,
-        face(n.$2, woman: n.$3),
-        n.$4,
-        n.$5,
-        since,
-        until,
-        n.$6,
-        n.$7,
-        n.$8,
-        n.$9,
-        n.$10,
-        '',
-        n.$11,
-        [
-          ChatMsg(true, 'How did the session go today?', now.subtract(Duration(hours: 3 + i))),
-          ChatMsg(false, msgs[i], now.subtract(Duration(hours: 2 + i, minutes: 10 * i))),
-        ],
-      ));
-    }
-
-    workouts.addAll([
-      PWorkout('w1', 'Full body burn', 'Beginner', 'Video', 25, ['Jumping jacks', 'Squat', 'Push-up', 'Plank'],
-          exImg('1160-dK9394r.jpg'), d(-2), true, 1840, 212),
-      PWorkout('w2', 'Push day hypertrophy', 'Intermediate', 'Plan', 55, ['Bench press', 'Incline DB press', 'Dips', 'Lateral raise'],
-          exImg('0025-EIeI8Vf.jpg'), d(-6), true, 960, 140),
-      PWorkout('w3', 'Mobility flow', 'All levels', 'Video', 15, ['Cat-cow', 'World’s greatest stretch', 'Hip 90/90'], null, d(-9),
-          false, 0, 0),
-    ]);
-
-    sessions.addAll([
-      PSession('s1', 'HIIT live class', 'Live class', d(0, 18, 30), 45, null),
-      PSession('s2', 'Form check', '1:1 call', d(0, 20, 0), 20, 'Aarav Mehta'),
-      PSession('s3', 'Monthly review', 'Check-in', d(1, 9, 30), 30, 'Isha Kapoor'),
-      PSession('s4', 'Mobility live', 'Live class', d(2, 7, 0), 30, null),
-      PSession('s5', 'Diet consult', '1:1 call', d(3, 19, 0), 30, 'Rahul Nair'),
-    ]);
-
-    var k = 0;
-    for (var w = 0; w < 8; w++) {
-      final n = 2 + (w * 7 + 3) % 4;
-      for (var j = 0; j < n; j++) {
-        final c = clients[k++ % clients.length];
-        final price = c.plan == 'Yearly' ? 12999 : c.plan == 'Quarterly' ? 3899 : 1499;
-        txns.add(PTxn('${c.plan} plan · ${c.name}', 'Subscription', price, now.subtract(Duration(days: w * 7 + j * 2, hours: j))));
-      }
-    }
-    txns.add(PTxn('Payout to bank', 'HDFC ••4821', -18000, now.subtract(const Duration(days: 30))));
-    txns.add(PTxn('Payout to bank', 'HDFC ••4821', -15000, now.subtract(const Duration(days: 45))));
-    txns.sort((a, b) => b.at.compareTo(a.at));
-
-    reviews.addAll([
-      PReview('r1', 'Isha Kapoor', face(44, woman: true), 'Down 2 kg in a month and I actually enjoy training now. Super clear plans.', 5,
-          now.subtract(const Duration(days: 2))),
-      PReview('r2', 'Kabir Singh', face(32), 'Gained 4.5 kg of mostly muscle. The weekly check-ins keep me honest.', 5,
-          now.subtract(const Duration(days: 6)), 'Proud of you Kabir, next stop 75! 💪'),
-      PReview('r3', 'Rahul Nair', face(75), 'Great coach. Sometimes replies take a few hours, but always helpful.', 4,
-          now.subtract(const Duration(days: 11))),
-      PReview('r4', 'Ananya Das', face(90, woman: true), 'Best decision this year. My deadlift went from 40 to 70 kg.', 5,
-          now.subtract(const Duration(days: 19))),
-    ]);
-
-    diets.addAll([
-      PDiet('Lean cut 1800', 'Fat loss', 1800, 140, ['Oats with whey and berries', 'Paneer bhurji wrap', 'Greek yogurt', 'Grilled chicken, rice, salad'], 9),
-      PDiet('Muscle gain 2800', 'Muscle gain', 2800, 170, ['Eggs, toast, banana', 'Chicken biryani bowl', 'Peanut butter shake', 'Fish curry with rice'], 4),
-      PDiet('Veg balance 2000', 'Maintenance', 2000, 110, ['Poha with peanuts', 'Rajma chawal', 'Sprouts chaat', 'Tofu stir fry with roti'], 6),
-    ]);
   }
 }

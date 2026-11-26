@@ -9,6 +9,9 @@ import '../widgets/apple_kit.dart';
 import '../widgets/net_img.dart';
 import 'trainer_data.dart';
 import 'trainers_page.dart';
+import '../backend/me.dart';
+import '../backend/live_backend.dart';
+import '../backend/live_room.dart';
 
 // Everything a subscriber gets from their trainer: the coaching home plus
 // seven feature pages (live training, workout plan, diet, chat, check-ins,
@@ -311,36 +314,57 @@ class LiveSessionPage extends StatefulWidget {
 class _LiveSessionPageState extends State<LiveSessionPage> with TickerProviderStateMixin {
   final _sw = Stopwatch()..start();
   Timer? _t;
-  int viewers = 214;
+  final room = LiveRoom();
+  int get viewers => room.viewers + 1;
   bool mic = false, cam = false;
-  final List<(String, String)> msgs = [];
+  List<(String, String)> get msgs => room.messages.length > 6 ? room.messages.sublist(room.messages.length - 6) : room.messages;
   final List<(double, int)> hearts = [];
   final _r = math.Random(3);
   late final AnimationController _float = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
   final _chat = TextEditingController();
-
-  static const _names = ['Aman', 'Riya', 'Dev', 'Priya', 'Kunal', 'Sana', 'Neel'];
-  static const _lines = ['Let\'s go! 🔥', 'Legs shaking 😅', 'Form check pls', 'Loving this', '💪💪', 'Round 2!', 'Can I do knee push-ups?'];
+  int _seenHearts = 0;
 
   @override
   void initState() {
     super.initState();
+    room.addListener(_changed);
     _t = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() {
-        viewers += _r.nextInt(7) - 2;
-        if (_sw.elapsed.inSeconds % 3 == 0) {
-          msgs.add((_names[_r.nextInt(_names.length)], _lines[_r.nextInt(_lines.length)]));
-          if (msgs.length > 6) msgs.removeAt(0);
-        }
-        hearts.removeWhere((h) => _sw.elapsedMilliseconds - h.$2 > 2600);
-      });
+      setState(() => hearts.removeWhere((h) => _sw.elapsedMilliseconds - h.$2 > 2600));
     });
+    _join();
+  }
+
+  void _changed() {
+    if (!mounted) return;
+    setState(() {
+      // Hearts other members send float up too.
+      while (_seenHearts < room.hearts) {
+        _seenHearts++;
+        hearts.add((_r.nextDouble(), _sw.elapsedMilliseconds));
+      }
+    });
+  }
+
+  /// Joins the coach's live session, if one is running.
+  Future<void> _join() async {
+    try {
+      final j = await Api.get('/live/sessions?status=live&trainerId=${widget.trainer.id}');
+      final live = Api.list(j);
+      if (live.isEmpty) {
+        if (mounted) shopToast(context, '${widget.trainer.first} is not live right now. You will get a notification.');
+        return;
+      }
+      final ok = await room.join(live.first['id'].toString());
+      if (!ok && mounted && room.error != null) shopToast(context, room.error!);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _t?.cancel();
+    room.removeListener(_changed);
+    room.dispose();
     _float.dispose();
     _chat.dispose();
     super.dispose();
@@ -360,7 +384,7 @@ class _LiveSessionPageState extends State<LiveSessionPage> with TickerProviderSt
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(children: [
-          Positioned.fill(child: NetImg(unsplash(t.photo, 900), alignment: Alignment.topCenter)),
+          Positioned.fill(child: LiveRoomVideo(room: room, placeholder: NetImg(unsplash(t.photo, 900), alignment: Alignment.topCenter))),
           const Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -425,7 +449,7 @@ class _LiveSessionPageState extends State<LiveSessionPage> with TickerProviderSt
               ),
               child: Center(
                 child: cam
-                    ? const CircleAvatar(radius: 26, backgroundColor: Color(0xFF7C3AED), child: Text('R', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)))
+                    ? CircleAvatar(radius: 26, backgroundColor: const Color(0xFF7C3AED), child: Text(Me.first.isEmpty ? 'Y' : Me.first[0], style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)))
                     : const Icon(Icons.videocam_off_rounded, color: Colors.white54),
               ),
             ),
@@ -536,6 +560,8 @@ class _LiveSessionPageState extends State<LiveSessionPage> with TickerProviderSt
               const SizedBox(width: 8),
               _ctrl(Icons.favorite_rounded, () {
                 HapticFeedback.lightImpact();
+                _seenHearts++;
+                room.sendHeart();
                 setState(() => hearts.add((_r.nextDouble(), _sw.elapsedMilliseconds)));
               }, color: const Color(0xFFEC4899)),
             ]),
@@ -554,10 +580,7 @@ class _LiveSessionPageState extends State<LiveSessionPage> with TickerProviderSt
 
   void _say(String s) {
     if (s.trim().isEmpty) return;
-    setState(() {
-      msgs.add(('You', s.trim()));
-      if (msgs.length > 6) msgs.removeAt(0);
-    });
+    room.sendChat(s);
     _chat.clear();
   }
 

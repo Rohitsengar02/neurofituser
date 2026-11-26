@@ -32,6 +32,23 @@ class _TrainersPageState extends State<TrainersPage> {
   int cat = -1;
   String q = '';
 
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    TrainerStore.I.addListener(_changed);
+    TrainerStore.I.refresh();
+  }
+
+  @override
+  void dispose() {
+    TrainerStore.I.removeListener(_changed);
+    super.dispose();
+  }
+
   List<Trainer> get _list => trainers
       .where((t) => cat < 0 || t.cat == trainerCats[cat].name)
       .where((t) => q.isEmpty || '${t.name} ${t.role} ${t.tags.join(' ')}'.toLowerCase().contains(q.toLowerCase()))
@@ -68,15 +85,13 @@ class _TrainersPageState extends State<TrainersPage> {
               AkHead('Recommended for you', caption: cat < 0 ? 'Based on your goals and workouts' : trainerCats[cat].name),
               _Recommended(items: list),
             ],
-            const AkHead('Live now', caption: 'Drop in for free'),
-            _LiveRail(items: live),
-            const AkHead('Top rated'),
+            if (live.isNotEmpty) const AkHead('Live now', caption: 'Drop in for free'),
+            if (live.isNotEmpty) _LiveRail(items: live),
+            if (top.isNotEmpty) const AkHead('Top rated'),
             for (var i = 0; i < math.min(top.length, 5); i++)
               Rise(delay: i * 50, child: Padding(padding: const EdgeInsets.only(bottom: 10), child: _RankRow(rank: i + 1, t: top[i]))),
-            const AkHead('Coach programs', caption: 'Ready-made plans from our coaches'),
+            if (trainers.isNotEmpty) const AkHead('Coach programs', caption: 'Ready-made plans from our coaches'),
             const _Programs(),
-            const AkHead('Success stories'),
-            const _Stories(),
             const SizedBox(height: 18),
             const ScrollReveal(child: BecomeCoachBanner()),
           ],
@@ -471,11 +486,18 @@ class _Programs extends StatelessWidget {
   const _Programs();
   @override
   Widget build(BuildContext context) {
-    const items = [
-      ('12-week strength', '4 days/wk · Rahul', '0043-qXTaZnJ.jpg', Color(0xFF16A34A), 't1'),
-      ('Fat loss kickstart', '5 days/wk · Anjali', '1160-dK9394r.jpg', Color(0xFFF97316), 't2'),
-      ('Lean bulk', '5 days/wk · Vikram', '0025-EIeI8Vf.jpg', Color(0xFF0EA5E9), 't3'),
-      ('20-min HIIT', '3 days/wk · Arjun', '0630-RJgzwny.jpg', Color(0xFFEAB308), 't5'),
+    // One program card per approved coach (their speciality), best rated first.
+    const looks = [
+      ('0043-qXTaZnJ.jpg', Color(0xFF16A34A)),
+      ('1160-dK9394r.jpg', Color(0xFFF97316)),
+      ('0025-EIeI8Vf.jpg', Color(0xFF0EA5E9)),
+      ('0630-RJgzwny.jpg', Color(0xFFEAB308)),
+    ];
+    final coaches = ([...trainers]..sort((a, b) => b.rating.compareTo(a.rating))).take(4).toList();
+    if (coaches.isEmpty) return const SizedBox.shrink();
+    final items = [
+      for (var i = 0; i < coaches.length; i++)
+        (coaches[i].role, '${coaches[i].cat} · ${coaches[i].first}', looks[i % looks.length].$1, looks[i % looks.length].$2, coaches[i].id),
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -519,74 +541,6 @@ class _Programs extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _Stories extends StatelessWidget {
-  const _Stories();
-  @override
-  Widget build(BuildContext context) {
-    const s = [
-      ('-12 kg', 'Weight loss · 12 weeks', '1581009146145-b5ef050c2e1e', '1534528741775-53994a69daeb', 'with Anjali'),
-      ('-8 kg', 'Fat loss · 10 weeks', '1531746020798-e6953c6e8e04', '1544005313-94ddf0286df2', 'with Arjun'),
-      ('+6 kg', 'Muscle gain · 16 weeks', '1567013127542-490d757e51fc', '1583454110551-21f2fa2afe61', 'with Vikram'),
-    ];
-    return SizedBox(
-      height: 210,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: s.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => Rise(
-          delay: i * 60,
-          child: Container(
-            width: 260,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(26),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 14, offset: const Offset(0, 6))],
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Row(children: [
-                  for (final k in [0, 1])
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(right: k == 0 ? 4 : 0, left: k == 1 ? 4 : 0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Stack(fit: StackFit.expand, children: [
-                            NetImg(unsplash(k == 0 ? s[i].$3 : s[i].$4, 300)),
-                            Positioned(
-                              left: 6,
-                              top: 6,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(color: k == 0 ? Colors.black54 : const Color(0xFF16A34A), borderRadius: BorderRadius.circular(8)),
-                                child: Text(k == 0 ? 'BEFORE' : 'AFTER', style: akT(9.5, w: FontWeight.w900, c: Colors.white, ls: 0.6)),
-                              ),
-                            ),
-                          ]),
-                        ),
-                      ),
-                    ),
-                ]),
-              ),
-              const SizedBox(height: 8),
-              Row(children: [
-                Text(s[i].$1, style: akN(18, c: const Color(0xFF16A34A))),
-                const SizedBox(width: 8),
-                Expanded(child: Text(s[i].$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: akT(12.5, w: FontWeight.w700))),
-                Text(s[i].$5, style: akT(11.5, w: FontWeight.w600, c: akMuted)),
-              ]),
-            ]),
-          ),
-        ),
       ),
     );
   }

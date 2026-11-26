@@ -4,6 +4,8 @@
 <dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NeuroFit uses your photos so you can share progress pictures, post in the community and add a profile photo.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>NeuroFit uses the microphone for live classes and calls with your coach.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>NeuroFit uses the camera so you can take progress photos and go live as a coach.</string>
 	<key>NSMotionUsageDescription</key>
