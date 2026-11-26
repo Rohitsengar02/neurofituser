@@ -14,7 +14,7 @@ import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/kemo.dart';
-import '../widgets/tabs_v2/overview_v4.dart';
+import '../widgets/tabs_v2/overview_v5.dart';
 import '../widgets/tabs_v2/workouts_tab.dart';
 import '../widgets/tabs_v2/nutrition_tab.dart';
 import '../widgets/tabs_v2/wellness_tab.dart';
@@ -305,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       ? const WellnessTabV2()
                                       : _selectedCategoryIndex == 4
                                       ? const DashboardShopTabContent()
-                                      : const OverviewTabV4(),
+                                      : const OverviewTabV5(),
                                 ),
                               ),
                             ],
