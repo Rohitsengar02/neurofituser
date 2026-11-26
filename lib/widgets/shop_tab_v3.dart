@@ -4,6 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../shop/cart_page.dart';
+import '../shop/orders_page.dart';
+import '../shop/product_page.dart';
+import '../shop/shop_data.dart';
+import '../shop/shop_ui.dart';
 import 'apple_kit.dart';
 import 'liquid_glass.dart';
 
@@ -22,71 +27,18 @@ const _teal = Color(0xFF14B8A6);
 
 const _img = 'assets/images/';
 
-class Product {
-  final String name, brand, image, cat;
-  final int price, old;
-  final double rating;
-  final int reviews;
-  final bool cover; // photo fills the card instead of sitting on white
-  const Product(this.name, this.brand, this.image, this.cat, this.price, this.old, this.rating, this.reviews, {this.cover = false});
-  int get off => old <= price ? 0 : ((old - price) / old * 100).round();
-}
+const _products = shopProducts;
+String _rs(int v) => rs(v);
 
-const _products = [
-  Product('Gold Standard Whey + Creatine', 'Optimum Nutrition', '${_img}product_1.png', 'Protein', 6499, 8299, 4.8, 12840),
-  Product('Performance Whey 2 kg', 'Optimum Nutrition', '${_img}product_2.png', 'Protein', 4299, 5199, 4.6, 6420),
-  Product('NutriFit Premium Whey', 'NutriFit', '${_img}nutrifit_whey_protein.jpg', 'Protein', 2899, 3999, 4.7, 2210),
-  Product('Air Bike Pro', 'NeuroFit Gear', '${_img}product_3.png', 'Equipment', 24999, 32999, 4.5, 640),
-  Product('Home Gym Station', 'NeuroFit Gear', '${_img}product_5.png', 'Equipment', 38999, 49999, 4.4, 312),
-  Product('Hex Dumbbell 10 kg', 'NeuroFit Gear', '${_img}neon_green_dumbbell_1787819274202.jpg', 'Equipment', 1899, 2499, 4.7, 3110, cover: true),
-  Product('Cloud Run Shoes', 'Stride', '${_img}neon_green_shoe_1787819288631.jpg', 'Apparel', 5499, 7999, 4.6, 1980, cover: true),
-  Product('Pulse Smartwatch', 'NeuroFit', '${_img}neon_green_smartwatch_1787819302325.jpg', 'Wearables', 8999, 12999, 4.5, 2740, cover: true),
-  Product('Steel Bottle 1 L', 'NeuroFit', '${_img}neon_green_waterbottle_1787819315145.jpg', 'Accessories', 699, 999, 4.8, 5320, cover: true),
-  Product('Grip Yoga Mat', 'Zen Flow', '${_img}neon_green_yogamat_1787819327380.jpg', 'Yoga', 1299, 1899, 4.7, 2860, cover: true),
-  Product('Duffle Gym Bag', 'NeuroFit', '${_img}neon_orange_gymbag_1787819375587.jpg', 'Accessories', 1799, 2599, 4.6, 1420, cover: true),
-  Product('Heart Rate Strap', 'Pulse', '${_img}neon_orange_heartrate_1787819363247.jpg', 'Wearables', 3299, 4499, 4.4, 880, cover: true),
-  Product('Cast Kettlebell 12 kg', 'NeuroFit Gear', '${_img}neon_orange_kettlebell_1787819340750.jpg', 'Equipment', 2199, 2999, 4.8, 1760, cover: true),
-  Product('Leakproof Shaker', 'NeuroFit', '${_img}neon_orange_proteinshaker_1787819387813.jpg', 'Accessories', 399, 599, 4.6, 6210, cover: true),
-  Product('Speed Rope', 'NeuroFit', '${_img}neon_orange_skippingrope_1787819351491.jpg', 'Accessories', 549, 799, 4.5, 2390, cover: true),
-];
-
+/// Badge listenables kept for older callers; the real state is ShopStore.
 class ShopCart {
   ShopCart._();
-  static final count = ValueNotifier<int>(2);
-  static final saved = ValueNotifier<Set<String>>({});
+  static ValueNotifier<int> get count => ShopStore.I.cartCount;
+  static ValueNotifier<Set<String>> get saved => ShopStore.I.saved;
 }
 
-String _rs(int v) {
-  final s = v.toString();
-  if (s.length <= 3) return '₹$s';
-  final last3 = s.substring(s.length - 3);
-  var rest = s.substring(0, s.length - 3);
-  final parts = <String>[];
-  while (rest.length > 2) {
-    parts.insert(0, rest.substring(rest.length - 2));
-    rest = rest.substring(0, rest.length - 2);
-  }
-  if (rest.isNotEmpty) parts.insert(0, rest);
-  return '₹${parts.join(',')},$last3';
-}
-
-void _open(BuildContext context, Product p) =>
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ProductPage(p)));
-
-void _addToCart(BuildContext context, Product p) {
-  HapticFeedback.mediumImpact();
-  ShopCart.count.value++;
-  ScaffoldMessenger.maybeOf(context)
-    ?..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: akInk,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-      duration: const Duration(milliseconds: 1400),
-      content: Text('${p.name} added to cart', style: akT(13.5, c: Colors.white)),
-    ));
-}
+void _open(BuildContext context, Product p) => openProduct(context, p);
+void _addToCart(BuildContext context, Product p) => addToBag(context, p);
 
 // =====================================================================
 
@@ -104,6 +56,8 @@ class ShopTabV3 extends StatelessWidget {
         const AkWelcome(caption: 'SHOP · FREE DELIVERY OVER ₹999', words: ['Gear', 'up,', 'Rohit'], accent: _orange),
         const SizedBox(height: 14),
         const _SearchRow(),
+        const SizedBox(height: 14),
+        const _QuickLinks(),
         const SizedBox(height: 16),
         const _HeroCarousel(),
         const AkHead('Categories'),
@@ -112,7 +66,7 @@ class ShopTabV3 extends StatelessWidget {
         const _FlashDeals(),
         AkHead('Best sellers', action: 'See all', onAction: () {}),
         _Grid(items: [_products[0], _products[5], _products[7], _products[2]]),
-        const AkHead('Offers for you'),
+        AkHead('Offers for you', action: 'See all', onAction: () => shopPush(context, const OffersPage())),
         const _Offers(),
         const AkHead('Shop by goal'),
         const _Goals(),
@@ -176,7 +130,7 @@ class _SearchRow extends StatelessWidget {
           LiquidGlass(
             style: LiquidGlassStyle.material,
             borderRadius: BorderRadius.circular(20),
-            onTap: () {},
+            onTap: () => shopPush(context, const CartPage()),
             child: SizedBox(
               width: 52,
               height: 50,
@@ -303,7 +257,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
                         borderRadius: BorderRadius.circular(16),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         shadow: false,
-                        onTap: () {},
+                        onTap: () => shopPush(context, const OffersPage()),
                         child: Text('Shop', style: akT(13, w: FontWeight.w800, c: Colors.white)),
                       ),
                     ),
@@ -491,7 +445,7 @@ class _Heart extends StatelessWidget {
         return GestureDetector(
           onTap: () {
             HapticFeedback.selectionClick();
-            ShopCart.saved.value = on ? ({...s}..remove(p.name)) : {...s, p.name};
+            ShopStore.I.toggleSave(p);
           },
           child: Container(
             width: 30,
@@ -702,6 +656,7 @@ class _Offers extends StatelessWidget {
         itemBuilder: (_, i) => ScrollReveal(
           delayMs: math.min(i, 3) * 70,
           child: AkPress(
+            onTap: () => shopPush(context, const OffersPage()),
             child: Container(
               width: 175,
               decoration: BoxDecoration(
@@ -810,9 +765,10 @@ class _Bundle extends StatelessWidget {
           const Spacer(),
           AkPress(
             onTap: () {
-              for (final p in items) {
-                _addToCart(context, p);
+              for (final p in items.skip(1)) {
+                ShopStore.I.add(p);
               }
+              _addToCart(context, items.first);
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
@@ -1114,152 +1070,68 @@ class _Trust extends StatelessWidget {
 //  PRODUCT PAGE
 // =====================================================================
 
-class _ProductPage extends StatefulWidget {
-  final Product p;
-  const _ProductPage(this.p);
-  @override
-  State<_ProductPage> createState() => _ProductPageState();
-}
+// =====================================================================
+//  QUICK LINKS: orders, wishlist, offers, bag
+// =====================================================================
 
-class _ProductPageState extends State<_ProductPage> {
-  int option = 0, qty = 1;
-
-  List<String> get _options => switch (widget.p.cat) {
-        'Protein' => ['Chocolate', 'Vanilla', 'Strawberry'],
-        'Apparel' => ['UK 7', 'UK 8', 'UK 9', 'UK 10'],
-        'Equipment' => ['Standard', 'Pro'],
-        _ => ['Black', 'Green', 'Orange'],
-      };
+class _QuickLinks extends StatelessWidget {
+  const _QuickLinks();
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.p;
-    return AkPage(
-      title: p.name,
-      caption: p.brand,
-      tint: _orange,
-      body: Stack(children: [
-        ListView(
-          padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.9, end: 1),
-                duration: const Duration(milliseconds: 700),
-                curve: akSpring,
-                builder: (_, s, c) => Transform.scale(scale: s, child: c),
-                child: AspectRatio(
-                  aspectRatio: 1.1,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: p.cover
-                        ? Image.asset(p.image, fit: BoxFit.cover)
-                        : ColoredBox(color: Colors.white, child: Padding(padding: const EdgeInsets.all(20), child: Image.asset(p.image))),
+    final store = ShopStore.I;
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final active = store.orders.where((o) => o.active).length;
+        final items = [
+          (Icons.receipt_long_rounded, 'Orders', const Color(0xFF3B82F6), active, () => shopPush(context, const OrdersPage())),
+          (Icons.favorite_rounded, 'Wishlist', _red, store.saved.value.length, () => shopPush(context, const WishlistPage())),
+          (Icons.local_offer_rounded, 'Offers', _violet, coupons.length, () => shopPush(context, const OffersPage())),
+          (Icons.shopping_bag_rounded, 'Bag', _orange, store.count, () => shopPush(context, const CartPage())),
+        ];
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(children: [
+            for (var i = 0; i < items.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(
+                child: ScrollReveal(
+                  delayMs: i * 60,
+                  child: LiquidGlass(
+                    style: LiquidGlassStyle.material,
+                    borderRadius: BorderRadius.circular(22),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    onTap: items[i].$5,
+                    child: Column(children: [
+                      Stack(clipBehavior: Clip.none, children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [items[i].$3.withValues(alpha: 0.7), items[i].$3],
+                            ),
+                            boxShadow: [BoxShadow(color: items[i].$3.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
+                          ),
+                          child: Icon(items[i].$1, color: Colors.white, size: 20),
+                        ),
+                        if (items[i].$4 > 0)
+                          Positioned(right: -8, top: -6, child: CountBadge(items[i].$4, color: akInk)),
+                      ]),
+                      const SizedBox(height: 7),
+                      Text(items[i].$2, style: akT(12, w: FontWeight.w800)),
+                    ]),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            AkGlass(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Text(_rs(p.price), style: akN(30)),
-                  const SizedBox(width: 8),
-                  if (p.off > 0) ...[
-                    Text(_rs(p.old), style: akT(13, c: akFaint).copyWith(decoration: TextDecoration.lineThrough)),
-                    const SizedBox(width: 8),
-                    Text('${p.off}% off', style: akT(13, w: FontWeight.w800, c: _green)),
-                  ],
-                ]),
-                const SizedBox(height: 8),
-                Row(children: [
-                  for (var k = 0; k < 5; k++) Icon(Icons.star_rounded, size: 17, color: k < p.rating.round() ? _amber : Colors.black12),
-                  const SizedBox(width: 6),
-                  Text('${p.rating} · ${p.reviews} reviews', style: akT(12.5, c: akMuted)),
-                ]),
-                const SizedBox(height: 16),
-                Text('Choose', style: akT(14, w: FontWeight.w800)),
-                const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (var i = 0; i < _options.length; i++)
-                    AkPress(
-                      onTap: () => setState(() => option = i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: i == option ? akInk : Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: i == option ? akInk : Colors.black12),
-                        ),
-                        child: Text(_options[i], style: akT(13, w: FontWeight.w700, c: i == option ? Colors.white : akInk)),
-                      ),
-                    ),
-                ]),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            AkGlass(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Why you\'ll like it', style: akT(15, w: FontWeight.w800)),
-                const SizedBox(height: 10),
-                for (final f in [
-                  'Lab tested and 100% authentic',
-                  'Picked for your current training plan',
-                  'Ships in 24 hours, free over ₹999',
-                  '7-day easy returns',
-                ])
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(children: [
-                      const Icon(Icons.check_circle_rounded, color: _green, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(f, style: akT(13.5, w: FontWeight.w500, c: akMuted))),
-                    ]),
-                  ),
-              ]),
-            ),
-          ],
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 20,
-          child: SafeArea(
-            top: false,
-            child: LiquidGlass(
-              style: LiquidGlassStyle.regular,
-              borderRadius: BorderRadius.circular(24),
-              padding: const EdgeInsets.all(8),
-              child: Row(children: [
-                IconButton(onPressed: () => setState(() => qty = math.max(1, qty - 1)), icon: const Icon(Icons.remove_rounded)),
-                Text('$qty', style: akN(18)),
-                IconButton(onPressed: () => setState(() => qty++), icon: const Icon(Icons.add_rounded)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: AkPress(
-                    onTap: () {
-                      for (var k = 0; k < qty; k++) {
-                        _addToCart(context, p);
-                      }
-                    },
-                    child: Container(
-                      height: 52,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: _orange, borderRadius: BorderRadius.circular(18)),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('Add · ${_rs(p.price * qty)}', style: akT(15, w: FontWeight.w800, c: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-          ),
-        ),
-      ]),
+            ],
+          ]),
+        );
+      },
     );
   }
 }

@@ -117,9 +117,15 @@ class _AkSeenState extends State<AkSeen> with SingleTickerProviderStateMixin {
     }
     final pos = Scrollable.maybeOf(context)?.position;
     if (pos != _pos) {
-      _pos?.removeListener(_check);
-      _pos = pos?..addListener(_check);
+      _pos?.removeListener(_onScroll);
+      _pos = pos?..addListener(_onScroll);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  // Layout lags the scroll offset by a frame, so check again after it.
+  void _onScroll() {
+    _check();
     WidgetsBinding.instance.addPostFrameCallback((_) => _check());
   }
 
@@ -130,7 +136,7 @@ class _AkSeenState extends State<AkSeen> with SingleTickerProviderStateMixin {
     if (box == null || !box.attached) return;
     final top = view == null ? 0.0 : box.localToGlobal(Offset.zero, ancestor: view).dy;
     if (view == null || top < view.size.height - 40) {
-      _pos?.removeListener(_check);
+      _pos?.removeListener(_onScroll);
       Future.delayed(const Duration(milliseconds: 150), () {
         if (mounted) _c.forward();
       });
@@ -139,7 +145,7 @@ class _AkSeenState extends State<AkSeen> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
-    _pos?.removeListener(_check);
+    _pos?.removeListener(_onScroll);
     _c.dispose();
     super.dispose();
   }

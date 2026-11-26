@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../screens/log_meal_screen.dart';
+import '../screens/water_screen.dart';
+import '../services/hydration_store.dart';
 import 'liquid_glass.dart';
 import 'side_island.dart' show IslandStats;
 
@@ -614,18 +616,22 @@ class _WaterCardState extends State<_WaterCard> with SingleTickerProviderStateMi
     super.dispose();
   }
 
+  final _store = HydrationStore.I;
+
   void _add(int ml) {
     HapticFeedback.mediumImpact();
-    IslandStats.waterMl.value = (IslandStats.waterMl.value + ml).clamp(0, IslandStats.waterGoal);
+    _store.add('water', ml);
   }
 
   @override
   Widget build(BuildContext context) {
     return _glass(
-      child: ValueListenableBuilder<int>(
-        valueListenable: IslandStats.waterMl,
-        builder: (_, ml, _) {
-          final goal = IslandStats.waterGoal;
+      onTap: () => openWaterScreen(context),
+      child: ListenableBuilder(
+        listenable: _store,
+        builder: (_, _) {
+          final ml = _store.total;
+          final goal = _store.goal;
           return Row(children: [
             SizedBox(
               width: 92,
@@ -659,11 +665,29 @@ class _WaterCardState extends State<_WaterCard> with SingleTickerProviderStateMi
                 Text('${((ml / goal) * 100).round()}% of daily goal', style: _t(12.5, w: FontWeight.w600, c: _sky)),
                 const SizedBox(height: 14),
                 Wrap(spacing: 8, runSpacing: 8, children: [
-                  _waterBtn('+250 ml', () => _add(250)),
-                  _waterBtn('+500 ml', () => _add(500)),
+                  _waterBtn('Glass +250', () => _add(250)),
+                  _waterBtn('Bottle +500', () => _add(500)),
+                  _waterBtn('Cup +150', () => _add(150)),
+                  _waterBtn('Other', () => showAddDrinkSheet(context), icon: Icons.add_rounded),
+                  if (_store.today.isNotEmpty) _waterBtn('Undo', () {
+                    HapticFeedback.selectionClick();
+                    _store.undo();
+                  }, icon: Icons.undo_rounded, quiet: true),
                 ]),
                 const SizedBox(height: 10),
-                Text('Next reminder in 40 min', style: _t(11.5, w: FontWeight.w600, c: _faint)),
+                Row(children: [
+                  Expanded(
+                    child: Text(
+                        !_store.reminders
+                            ? 'Reminders off'
+                            : _store.nextReminder.inMinutes == 0
+                                ? 'Time for a sip'
+                                : 'Next reminder in ${_store.nextReminder.inMinutes} min',
+                        style: _t(11.5, w: FontWeight.w600, c: _faint)),
+                  ),
+                  Text('Open', style: _t(12, w: FontWeight.w800, c: const Color(0xFF0369A1))),
+                  const Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF0369A1)),
+                ]),
               ]),
             ),
           ]);
@@ -672,16 +696,22 @@ class _WaterCardState extends State<_WaterCard> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _waterBtn(String l, VoidCallback onTap) => GestureDetector(
+  Widget _waterBtn(String l, VoidCallback onTap, {IconData? icon, bool quiet = false}) => GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
           decoration: BoxDecoration(
-            color: _sky.withValues(alpha: 0.12),
+            color: quiet ? Colors.white.withValues(alpha: 0.6) : _sky.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _sky.withValues(alpha: 0.3)),
+            border: Border.all(color: quiet ? Colors.black12 : _sky.withValues(alpha: 0.3)),
           ),
-          child: Text(l, style: _t(12.5, w: FontWeight.w800, c: const Color(0xFF0369A1))),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: quiet ? _muted : const Color(0xFF0369A1)),
+              const SizedBox(width: 3),
+            ],
+            Text(l, style: _t(12, w: FontWeight.w800, c: quiet ? _muted : const Color(0xFF0369A1))),
+          ]),
         ),
       );
 }
