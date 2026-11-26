@@ -1,9 +1,6 @@
 name: Android APK (preview)
 
 on:
-  push:
-    branches:
-      - claude/project-thread-0e2awj
   workflow_dispatch:
 
 permissions:
