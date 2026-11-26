@@ -9,6 +9,7 @@ import '../../widgets/apple_kit.dart';
 import '../../widgets/liquid_glass.dart';
 import '../../widgets/mindful_games.dart';
 import '../overview/overview_home_cards.dart' show DottedLineChart;
+import '../../backend/me.dart';
 
 part 'sections/stats_grid.dart';
 part 'sections/stress.dart';
@@ -75,12 +76,7 @@ class _WellnessTabV3State extends State<WellnessTabV3> {
   /// The tab's sections, built lazily by the home scroll view.
   static const List<Widget> sections = [
         SizedBox(height: 18),
-        AkWelcome(
-          caption: 'WELLNESS · MIND SCORE 82',
-          words: ['Find', 'your', 'calm,', 'Rohit'],
-          accent: _violet,
-          subtitle: 'Stress is lower than yesterday. A short breath session keeps it there.',
-        ),
+        _WellnessWelcome(),
         AkHead('Today', caption: 'Nine signals from your body and mind'),
         _StatsGrid(),
         AkHead('Stress level'),
@@ -115,3 +111,18 @@ class _WellnessTabV3State extends State<WellnessTabV3> {
   }
 }
 
+
+/// Greeting with the signed-in user's name (kept out of the const list above).
+class _WellnessWelcome extends StatelessWidget {
+  const _WellnessWelcome();
+
+  @override
+  Widget build(BuildContext context) {
+    return AkWelcome(
+          caption: 'WELLNESS · MIND SCORE 82',
+          words: ['Find', 'your', 'calm,', Me.first],
+          accent: _violet,
+          subtitle: 'Stress is lower than yesterday. A short breath session keeps it there.',
+        );
+  }
+}

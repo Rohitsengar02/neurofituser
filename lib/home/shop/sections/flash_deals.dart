@@ -33,7 +33,7 @@ class _FlashDealsState extends State<_FlashDeals> {
     final left = _end.difference(DateTime.now());
     String two(int v) => v.toString().padLeft(2, '0');
     final parts = [two(left.inHours), two(left.inMinutes % 60), two(left.inSeconds % 60)];
-    final deals = [_products[1], _products[7], _products[12], _products[6], _products[9]];
+    final deals = [_p(1), _p(7), _p(12), _p(6), _p(9)];
     const claimed = [0.72, 0.48, 0.85, 0.6, 0.35];
     return Column(children: [
       ScrollReveal(
@@ -82,8 +82,8 @@ class _FlashDealsState extends State<_FlashDeals> {
                         borderRadius: BorderRadius.circular(18),
                         child: SizedBox.expand(
                           child: p.cover
-                              ? Image.asset(p.image, fit: BoxFit.cover)
-                              : ColoredBox(color: Colors.white, child: Image.asset(p.image, fit: BoxFit.contain)),
+                              ? productImage(p.image, fit: BoxFit.cover)
+                              : ColoredBox(color: Colors.white, child: productImage(p.image, fit: BoxFit.contain)),
                         ),
                       ),
                     ),

@@ -89,7 +89,7 @@ class _Bundle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [_products[2], _products[13], _products[8]];
+    final items = [_p(2), _p(13), _p(8)];
     final total = items.fold(0, (a, p) => a + p.price);
     final bundle = (total * 0.8).round();
     return AkGlass(
@@ -111,8 +111,8 @@ class _Bundle extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: items[i].cover
-                      ? Image.asset(items[i].image, fit: BoxFit.cover)
-                      : ColoredBox(color: Colors.white, child: Image.asset(items[i].image, fit: BoxFit.contain)),
+                      ? productImage(items[i].image, fit: BoxFit.cover)
+                      : ColoredBox(color: Colors.white, child: productImage(items[i].image, fit: BoxFit.contain)),
                 ),
               ),
             ),

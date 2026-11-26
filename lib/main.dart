@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'services/widget_sync.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,6 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'constants/api_constants.dart';
 import 'demo/demo_backend.dart';
+import 'backend/live_backend.dart';
+import 'backend/local_db.dart';
+import 'backend/sync_store.dart';
+import 'backend/usage_tracker.dart';
 import 'screens/splash_screen.dart';
 import 'screens/privacy_policy_screen.dart';
 import 'screens/terms_of_service_screen.dart';
@@ -20,12 +25,22 @@ void main() {
     final realClient = http.Client();
     http.runWithClient(_startApp, () => DemoBackendClient(realClient));
   } else {
-    _startApp();
+    // Live API: tokens, offline cache and the offline outbox (lib/backend/live_backend.dart).
+    final realClient = http.Client();
+    http.runWithClient(_startApp, () => LiveBackendClient(realClient));
   }
 }
 
 Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!ApiConstants.demoMode) {
+    await AppSession.load();
+    await LocalDb.I.open();
+    AppSession.onSignedOut = () => _navKey.currentState?.pushNamedAndRemoveUntil('/', (_) => false);
+    // Send anything saved offline last time, then keep this device in sync.
+    unawaited(SyncStore.I.start());
+    UsageTracker.I.start();
+  }
   try {
     // No Firebase in demo mode. Firebase also has no web config yet.
     if (ApiConstants.demoMode || kIsWeb) throw Exception('Firebase skipped');
@@ -45,6 +60,8 @@ Future<void> _startApp() async {
   WidgetSync.init();
 }
 
+final _navKey = GlobalKey<NavigatorState>();
+
 class NeurofitApp extends StatelessWidget {
   const NeurofitApp({super.key});
 
@@ -52,6 +69,8 @@ class NeurofitApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Neurofit',
+      navigatorKey: _navKey,
+      navigatorObservers: [UsageRouteObserver()],
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       initialRoute: '/',

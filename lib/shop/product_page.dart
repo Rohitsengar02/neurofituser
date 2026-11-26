@@ -54,6 +54,7 @@ class _ProductPageState extends State<ProductPage> {
   void initState() {
     super.initState();
     _checkPin();
+    ShopStore.I.markViewed(widget.p);
   }
 
   @override
@@ -81,7 +82,7 @@ class _ProductPageState extends State<ProductPage> {
     final store = ShopStore.I;
     final similar = shopProducts.where((x) => x != p && (x.cat == p.cat || x.brand == p.brand)).toList();
     final more = similar.length < 4 ? [...similar, ...shopProducts.where((x) => x != p && !similar.contains(x)).take(4 - similar.length)] : similar;
-    final buddy = shopProducts.firstWhere((x) => x.cat == 'Accessories' && x != p);
+    final buddy = shopProducts.where((x) => x.cat == 'Accessories' && x != p).firstOrNull ?? shopProducts.where((x) => x != p).firstOrNull;
     final deal = store.bestDealFor(p);
     final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
@@ -164,9 +165,9 @@ class _ProductPageState extends State<ProductPage> {
           SliverToBoxAdapter(child: _highlights()),
           SliverToBoxAdapter(child: _details(p)),
           SliverToBoxAdapter(child: _reviews(p)),
-          SliverToBoxAdapter(child: _together(p, buddy)),
-          const SliverToBoxAdapter(child: AkHead('You may also like')),
-          SliverToBoxAdapter(child: ProductRail(items: more)),
+          if (buddy != null) SliverToBoxAdapter(child: _together(p, buddy)),
+          if (more.isNotEmpty) const SliverToBoxAdapter(child: AkHead('You may also like')),
+          if (more.isNotEmpty) SliverToBoxAdapter(child: ProductRail(items: more)),
           SliverToBoxAdapter(child: SizedBox(height: 120 + MediaQuery.paddingOf(context).bottom)),
         ]),
         // Top bar
@@ -271,8 +272,8 @@ class _ProductPageState extends State<ProductPage> {
                     child: Hero(
                       tag: i == 0 ? 'p-${p.name}' : 'p-${p.name}-$i',
                       child: p.cover
-                          ? Image.asset(p.image, fit: BoxFit.cover, alignment: [Alignment.center, Alignment.topCenter, Alignment.bottomCenter][i])
-                          : Transform.rotate(angle: [0.0, -0.06, 0.06][i], child: Image.asset(p.image, fit: BoxFit.contain)),
+                          ? productImage(p.image, fit: BoxFit.cover, alignment: [Alignment.center, Alignment.topCenter, Alignment.bottomCenter][i])
+                          : Transform.rotate(angle: [0.0, -0.06, 0.06][i], child: productImage(p.image, fit: BoxFit.contain)),
                     ),
                   ),
                 ),

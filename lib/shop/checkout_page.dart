@@ -8,6 +8,7 @@ import 'cart_page.dart';
 import 'orders_page.dart';
 import 'shop_data.dart';
 import 'shop_ui.dart';
+import '../backend/me.dart';
 
 // Checkout in three steps (Address → Payment → Review) with an animated
 // step header, then a processing state and the thank-you page.
@@ -27,7 +28,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String upiApp = 'Google Pay';
   String bank = 'HDFC Bank';
   final _upiId = TextEditingController();
-  final _cardNo = TextEditingController(), _cardName = TextEditingController(text: 'Rohit');
+  final _cardNo = TextEditingController(), _cardName = TextEditingController(text: Me.name);
   final _exp = TextEditingController(), _cvv = TextEditingController();
   bool placing = false;
   String? payError;
@@ -724,7 +725,7 @@ class AddressFormPage extends StatefulWidget {
 }
 
 class _AddressFormPageState extends State<AddressFormPage> {
-  late final _name = TextEditingController(text: widget.edit?.name ?? 'Rohit');
+  late final _name = TextEditingController(text: widget.edit?.name ?? Me.name);
   late final _phone = TextEditingController(text: widget.edit?.phone ?? '');
   late final _pin = TextEditingController(text: widget.edit?.pin ?? '');
   late final _l1 = TextEditingController(text: widget.edit?.line1 ?? '');

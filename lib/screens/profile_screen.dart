@@ -12,6 +12,7 @@ import 'social_screen.dart';
 import 'shop_screen.dart';
 import 'challenges_screen.dart';
 import 'vendor_registration_screen.dart';
+import '../backend/me.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -328,8 +329,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   Widget _buildProfileHeroCard(UserModel? user, Map<String, dynamic> qData) {
     final String displayName = (user != null && user.name.trim().isNotEmpty)
         ? user.name.trim()
-        : 'Rohit Sengar';
-    final String email = user?.email ?? 'rohit@neurofit.com';
+        : 'Athlete';
+    final String email = user?.email ?? '';
     final String handle = '@${email.split('@').first}';
     final String photoUrl = (user != null && user.photoUrl.isNotEmpty)
         ? user.photoUrl

@@ -11,6 +11,7 @@ import '../../screens/water_screen.dart';
 import '../../services/hydration_store.dart';
 import '../../widgets/liquid_glass.dart';
 import '../../widgets/side_island.dart' show IslandStats;
+import '../../backend/me.dart';
 
 part 'sections/welcome_day_picker.dart';
 part 'sections/calories_gauge.dart';

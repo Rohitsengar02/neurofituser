@@ -13,6 +13,7 @@ import '../screens/steps_screen.dart';
 import 'island_panels.dart';
 import 'kemo_avatar.dart';
 import 'liquid_glass.dart';
+import '../backend/me.dart';
 
 /// Today's numbers shared by the island and its slider.
 class IslandStats {
@@ -294,7 +295,7 @@ class _SideIslandState extends State<SideIsland> with TickerProviderStateMixin {
               const SizedBox(width: 10),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Hi Rohit', style: _f(16, w: FontWeight.w800, c: _ink)),
+                  Text('Hi ${Me.first}', style: _f(16, w: FontWeight.w800, c: _ink)),
                   Text('What do you need?', style: _f(11.5, w: FontWeight.w500, c: const Color(0xFF6B7280))),
                 ]),
               ),

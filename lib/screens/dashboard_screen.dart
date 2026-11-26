@@ -32,6 +32,7 @@ import 'ai_coach_screen.dart';
 import 'challenges_screen.dart';
 import 'vendor_registration_screen.dart';
 import 'streak_detail_screen.dart';
+import '../backend/me.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -160,7 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           const SizedBox(height: 14),
           TickerGate(
             child: IosHeader(
-              name: 'Rohit',
+              name: Me.first,
               streak: 12,
               onStreak: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreakDetailScreen())),
               onAvatar: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),

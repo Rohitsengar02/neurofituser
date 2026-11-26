@@ -3,16 +3,16 @@ import 'package:flutter/foundation.dart';
 
 /// Centralized API & Server Configuration with instant Local vs Live Render toggle
 class ApiConstants {
-  /// UI-only demo: every backend call is answered on the device with demo data
-  /// (see lib/demo/demo_backend.dart). Build with --dart-define=DEMO_MODE=false
-  /// to talk to the real backend again.
-  static const bool demoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: true);
+  /// The app talks to the live NeuroFit API by default.
+  /// Build with --dart-define=DEMO_MODE=true for the old on-device demo data
+  /// (lib/demo/demo_backend.dart), e.g. for screenshots.
+  static const bool demoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: false);
 
   /// 🔘 SWITCH HERE: Set to `true` for Local Backend, or `false` for Live Render Backend
   static const bool useLocalBackend = false;
 
   /// Live Render Production Base URL
-  static const String liveRenderUrl = 'https://neurofit-full.onrender.com';
+  static const String liveRenderUrl = String.fromEnvironment('API_URL', defaultValue: 'https://neurofit-api.onrender.com');
 
   /// Local Backend Configuration
   static const int serverPort = 5000;
@@ -68,13 +68,8 @@ class ApiConstants {
         liveRenderUrl,
       ];
     } else {
-      return [
-        liveRenderUrl,
-        'http://127.0.0.1:$serverPort',
-        'http://$lanIp:$serverPort',
-        'http://localhost:$serverPort',
-        'http://10.0.2.2:$serverPort',
-      ];
+      // Live: one server only. Trying local addresses on a phone just adds waiting.
+      return [liveRenderUrl];
     }
   }
 }

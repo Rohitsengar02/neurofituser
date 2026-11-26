@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../backend/me.dart';
 
 class DashboardMentalHealthTabContent extends StatefulWidget {
   const DashboardMentalHealthTabContent({super.key});
@@ -341,7 +342,7 @@ class _DashboardMentalHealthTabContentState extends State<DashboardMentalHealthT
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Good evening, Rohit 👋",
+                      "Good evening, ${Me.first} 👋",
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
