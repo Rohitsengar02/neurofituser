@@ -335,7 +335,7 @@ const _progress = [
   _ProgressData(
     title: 'Workouts',
     icon: Icons.fitness_center_rounded,
-    color: Color(0xFF3F6212),
+    color: Color(0xFF65A30D),
     value: '12',
     unit: '/20',
     sub: 'this month',
@@ -452,6 +452,7 @@ class _ProgressWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = data;
     return _GlowBorderPanel(
+      color: d.color,
       radius: 30,
       padding: const EdgeInsets.all(14),
       child: LayoutBuilder(builder: (context, c) {
@@ -514,7 +515,9 @@ class _GlowBorderPanel extends StatefulWidget {
   final Widget child;
   final EdgeInsets padding;
   final double radius;
-  const _GlowBorderPanel({required this.child, required this.padding, this.radius = 30});
+  final Color color;
+  const _GlowBorderPanel(
+      {required this.child, required this.padding, required this.color, this.radius = 30});
 
   @override
   State<_GlowBorderPanel> createState() => _GlowBorderPanelState();
@@ -547,9 +550,8 @@ class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerPro
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFFECFCCB).withValues(alpha: 0.95),
-                  const Color(0xFFD9F99D).withValues(alpha: 0.9),
-                  const Color(0xFFBEF264).withValues(alpha: 0.85),
+                  Color.alphaBlend(widget.color.withValues(alpha: 0.06), Colors.white).withValues(alpha: 0.9),
+                  Color.alphaBlend(widget.color.withValues(alpha: 0.14), Colors.white).withValues(alpha: 0.85),
                 ],
               ),
             ),
@@ -559,13 +561,12 @@ class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerPro
       ),
       builder: (context, inner) {
         final g = SweepGradient(
-          colors: const [
-            Color(0xFF22C55E),
-            Color(0xFFD9F99D),
-            Color(0xFFFFFFFF),
-            Color(0xFF5EEAD4),
-            Color(0xFF84CC16),
-            Color(0xFF22C55E),
+          colors: [
+            widget.color.withValues(alpha: 0.85),
+            widget.color.withValues(alpha: 0.25),
+            Colors.white,
+            widget.color.withValues(alpha: 0.45),
+            widget.color.withValues(alpha: 0.85),
           ],
           transform: GradientRotation(_spin.value * 2 * math.pi),
         );
@@ -576,12 +577,12 @@ class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerPro
             gradient: g,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF65A30D).withValues(alpha: 0.22),
+                color: widget.color.withValues(alpha: 0.16),
                 blurRadius: 22,
                 offset: const Offset(0, 10),
               ),
               BoxShadow(
-                color: const Color(0xFFBEF264).withValues(alpha: 0.35),
+                color: widget.color.withValues(alpha: 0.12),
                 blurRadius: 12,
                 spreadRadius: -2,
               ),

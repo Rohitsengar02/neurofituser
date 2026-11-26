@@ -175,7 +175,7 @@ class _NeuCardState extends State<_NeuCard> {
     child: ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
           padding: widget.padding,
           decoration: BoxDecoration(
@@ -526,7 +526,7 @@ class StreakHeroCard extends StatelessWidget {
           onTap: () => _openFrom(context, const _StreakDetailPage()),
           child: ClipRect(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
@@ -2518,14 +2518,16 @@ class _FurPainter extends CustomPainter {
     final rnd = math.Random(7);
     final unit = math.min(size.width, 430.0);
 
-    for (var i = 0; i < count; i++) {
-      final bx = rnd.nextDouble();
-      final by = (i + 0.5) / count + (rnd.nextDouble() - 0.5) * 0.08;
-      final r = unit * (0.22 + rnd.nextDouble() * 0.14);
+    final total = math.max(count, (size.height / 290).ceil());
+    for (var i = 0; i < total; i++) {
+      final bx = i.isEven ? 0.1 + rnd.nextDouble() * 0.35 : 0.55 + rnd.nextDouble() * 0.35;
+      final byPx = 40 + i * 290.0 + (rnd.nextDouble() - 0.5) * 120;
+      final by = byPx / math.max(1, size.height);
+      final r = unit * (0.24 + rnd.nextDouble() * 0.12);
       final f1 = 1 + rnd.nextInt(3), f2 = 1 + rnd.nextInt(2);
       final ph = rnd.nextDouble() * 6.28;
-      final cx = bx * size.width + math.sin(a * f1 + ph) * unit * 0.22;
-      final cy = by * size.height + math.cos(a * f2 + ph * 1.3) * unit * 0.28;
+      final cx = bx * size.width + math.sin(a * f1 + ph) * unit * 0.16;
+      final cy = by * size.height + math.cos(a * f2 + ph * 1.3) * unit * 0.18;
       final c = _tints[i % _tints.length];
       final center = Offset(cx, cy);
       final breathe = 1 + 0.06 * math.sin(a * 3 + ph);
@@ -2544,12 +2546,12 @@ class _FurPainter extends CustomPainter {
             ],
             stops: const [0, 0.7, 1],
           ).createShader(Rect.fromCircle(center: center, radius: rr))
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
       );
 
       // Fur: short soft strands around the rim, gently swaying.
       final fur = Paint()
-        ..color = c.withValues(alpha: 0.34)
+        ..color = c.withValues(alpha: 0.6)
         ..strokeWidth = 2.2
         ..strokeCap = StrokeCap.round
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2);

@@ -227,7 +227,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                       padding: const EdgeInsets.only(
                         bottom: 110,
                       ), // Space for floating bottom nav
-                      child: Column(
+                      child: Stack(
+                        children: [
+                          // Furry blurred circles and doodles drift behind
+                          // the whole Overview, header included.
+                          if (_selectedCategoryIndex == 0)
+                            const Positioned.fill(child: FurBlobsBackdrop()),
+                          Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // 0. Top Dynamic Island (Tap to expand/collapse metrics & quick actions)
@@ -247,12 +253,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                               context,
                               MaterialPageRoute(
                                 builder: (_) => const ProfileScreen(),
-                              ),
-                            ),
-                            onTransform: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const TransformScreen(),
                               ),
                             ),
                           ),
@@ -299,9 +299,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                                         // behind the white Overview cards.
                                         const Stack(
                                           children: [
-                                            Positioned.fill(
-                                              child: FurBlobsBackdrop(),
-                                            ),
                                             Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.stretch,
@@ -323,6 +320,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     ),
                             ),
                           ),
+                        ],
+                      ),
                         ],
                       ),
                     ),

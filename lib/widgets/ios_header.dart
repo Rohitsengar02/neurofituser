@@ -20,14 +20,12 @@ class IosHeader extends StatefulWidget {
   final int streak;
   final VoidCallback onStreak;
   final VoidCallback onAvatar;
-  final VoidCallback onTransform;
   const IosHeader({
     super.key,
     required this.name,
     required this.streak,
     required this.onStreak,
     required this.onAvatar,
-    required this.onTransform,
   });
 
   @override
@@ -128,8 +126,6 @@ class _IosHeaderState extends State<IosHeader> with TickerProviderStateMixin {
                   ),
                   dy: 18,
                 ),
-                const SizedBox(height: 10),
-                _fadeUp(_seg(0.5, 0.95, _spring), _TransformChip(onTap: widget.onTransform)),
               ],
             ),
           ),
@@ -311,32 +307,6 @@ class _RingAvatar extends StatelessWidget {
               ),
             ),
           ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _TransformChip extends StatelessWidget {
-  final VoidCallback onTap;
-  const _TransformChip({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return _Tap(
-      onTap: onTap,
-      child: _glass(
-        radius: BorderRadius.circular(18),
-        padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Image.asset('assets/images/athlete_transform.jpg', width: 28, height: 28, fit: BoxFit.cover),
-          ),
-          const SizedBox(width: 8),
-          Text('Transform yourself', style: _t(12.5, w: FontWeight.w700)),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF16A34A)),
         ]),
       ),
     );
