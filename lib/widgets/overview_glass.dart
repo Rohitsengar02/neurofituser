@@ -9,6 +9,7 @@ import '../screens/date_nutrition_detail_screen.dart';
 import '../screens/log_meal_screen.dart';
 import '../screens/steps_screen.dart';
 import '../screens/streak_detail_screen.dart';
+import 'liquid_glass.dart';
 import 'side_island.dart' show IslandStats;
 
 // Apple-widget style palette: light glass on the app's green.
@@ -47,38 +48,13 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = tint ??
-        [Colors.white.withValues(alpha: 0.82), Colors.white.withValues(alpha: 0.58)];
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F3D24).withValues(alpha: 0.07),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: colors,
-              ),
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 1.2),
-            ),
-            child: child,
-          ),
-        ),
-      ),
+    final t = tint;
+    return LiquidGlass(
+      style: LiquidGlassStyle.material,
+      borderRadius: BorderRadius.circular(radius),
+      padding: padding,
+      colors: t,
+      child: child,
     );
   }
 }
@@ -124,21 +100,8 @@ class _Rise extends StatelessWidget {
   const _Rise(this.order, this.child);
 
   @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 700 + order * 110),
-      curve: Interval((order * 110) / (700 + order * 110), 1, curve: _spring),
-      builder: (context, t, c) => Opacity(
-        opacity: t.clamp(0.0, 1.0),
-        child: Transform.translate(
-          offset: Offset(0, 26 * (1 - t)),
-          child: Transform.scale(scale: 0.96 + 0.04 * t, child: c),
-        ),
-      ),
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) =>
+      ScrollReveal(delayMs: (order % 3) * 70, child: child);
 }
 
 class _Head extends StatelessWidget {
@@ -538,26 +501,13 @@ class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerPro
     final r = widget.radius;
     return AnimatedBuilder(
       animation: _spin,
-      child: ClipRRect(
+      child: LiquidGlass(
+        style: LiquidGlassStyle.material,
         borderRadius: BorderRadius.circular(r - 2),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            padding: widget.padding,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(r - 2),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color.alphaBlend(widget.color.withValues(alpha: 0.06), Colors.white).withValues(alpha: 0.9),
-                  Color.alphaBlend(widget.color.withValues(alpha: 0.14), Colors.white).withValues(alpha: 0.85),
-                ],
-              ),
-            ),
-            child: widget.child,
-          ),
-        ),
+        padding: widget.padding,
+        tint: widget.color,
+        shadow: false,
+        child: widget.child,
       ),
       builder: (context, inner) {
         final g = SweepGradient(

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'liquid_glass.dart';
+
 const _ink = Color(0xFF0F172A);
 const _muted = Color(0xFF64748B);
 const Curve _spring = Cubic(0.2, 1.2, 0.32, 1);
@@ -176,20 +178,12 @@ class _TapState extends State<_Tap> {
       );
 }
 
-Widget _glass({required Widget child, required BorderRadius radius, EdgeInsets? padding}) => ClipRRect(
+Widget _glass({required Widget child, required BorderRadius radius, EdgeInsets? padding}) => LiquidGlass(
+      style: LiquidGlassStyle.clear,
       borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: Colors.white.withValues(alpha: 0.6),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.95), width: 1.1),
-          ),
-          child: child,
-        ),
-      ),
+      padding: padding,
+      shadow: false,
+      child: child,
     );
 
 class _StreakPill extends StatelessWidget {

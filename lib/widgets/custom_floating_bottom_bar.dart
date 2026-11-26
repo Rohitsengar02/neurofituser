@@ -1,6 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import 'liquid_glass.dart';
 
 class CustomFloatingBottomBar extends StatelessWidget {
   final int selectedIndex;
@@ -20,58 +21,36 @@ class CustomFloatingBottomBar extends StatelessWidget {
       children: [
         // 1. Left Rounded Capsule Navigation Pill
         Expanded(
-          child: Container(
+          child: SizedBox(
             height: 62,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFAF7F0).withValues(alpha: 0.92),
+            child: LiquidGlass(
+              style: LiquidGlassStyle.regular,
               borderRadius: BorderRadius.circular(36),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.95),
-                width: 1.8,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF451A03).withValues(alpha: 0.07),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-                BoxShadow(
-                  color: const Color(0xFFFEF3C7).withValues(alpha: 0.50),
-                  blurRadius: 16,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildCapsuleItem(
-                      index: 0,
-                      icon: Icons.home_rounded,
-                      unselectedIcon: Icons.home_outlined,
-                    ),
-                    _buildCapsuleItem(
-                      index: 1,
-                      icon: Icons.directions_walk_rounded,
-                      unselectedIcon: Icons.directions_walk_outlined,
-                    ),
-                    _buildCapsuleItem(
-                      index: 2,
-                      icon: Icons.sports_gymnastics_rounded,
-                      unselectedIcon: Icons.sports_gymnastics_rounded,
-                    ),
-                    _buildCapsuleItem(
-                      index: 3,
-                      icon: Icons.people_rounded,
-                      unselectedIcon: Icons.people_outline_rounded,
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildCapsuleItem(
+                    index: 0,
+                    icon: Icons.home_rounded,
+                    unselectedIcon: Icons.home_outlined,
+                  ),
+                  _buildCapsuleItem(
+                    index: 1,
+                    icon: Icons.directions_walk_rounded,
+                    unselectedIcon: Icons.directions_walk_outlined,
+                  ),
+                  _buildCapsuleItem(
+                    index: 2,
+                    icon: Icons.sports_gymnastics_rounded,
+                    unselectedIcon: Icons.sports_gymnastics_rounded,
+                  ),
+                  _buildCapsuleItem(
+                    index: 3,
+                    icon: Icons.people_rounded,
+                    unselectedIcon: Icons.people_outline_rounded,
+                  ),
+                ],
               ),
             ),
           ),
@@ -80,48 +59,18 @@ class CustomFloatingBottomBar extends StatelessWidget {
         const SizedBox(width: 12),
 
         // 2. Right Circular Action Button with '+' Icon
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.heavyImpact();
-            onAddPressed();
-          },
-          child: Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFAF7F0).withValues(alpha: 0.92),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.95),
-                width: 1.8,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF451A03).withValues(alpha: 0.07),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-                BoxShadow(
-                  color: const Color(0xFFFEF3C7).withValues(alpha: 0.50),
-                  blurRadius: 16,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      size: 28,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                ),
-              ),
+        SizedBox(
+          width: 62,
+          height: 62,
+          child: LiquidGlass(
+            style: LiquidGlassStyle.regular,
+            shape: BoxShape.circle,
+            onTap: () {
+              HapticFeedback.heavyImpact();
+              onAddPressed();
+            },
+            child: const Center(
+              child: Icon(Icons.add_rounded, size: 28, color: Color(0xFF1E293B)),
             ),
           ),
         ),

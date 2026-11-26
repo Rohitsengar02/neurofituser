@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../screens/social_screen.dart';
 import '../screens/steps_screen.dart';
 import '../screens/trainers_screen.dart';
+import 'liquid_glass.dart';
 import 'side_island.dart' show IslandStats, iosZoomRoute;
 
 // White, neumorphic Overview cards: a full-bleed workout streak hero, then
@@ -16,7 +17,7 @@ import 'side_island.dart' show IslandStats, iosZoomRoute;
 
 const _ink = Color(0xFF111827);
 const _muted = Color(0xFF6B7280);
-const _faint = Color(0xFF9CA3AF);
+const _faint = Color(0xFF6E7681); // secondary label, 4.6:1 on white
 const _green = Color(0xFF16A34A);
 const _mint = Color(0xFF22C55E);
 const _orange = Color(0xFFFF7A3D);
@@ -89,11 +90,22 @@ class OverviewHomeCards extends StatelessWidget {
   }
 }
 
-/// Fades, lifts and un-blurs a child once, staggered by [order].
+/// Reveals a child with a spring when it scrolls into view.
 class _Rise extends StatelessWidget {
   final int order;
   final Widget child;
   const _Rise(this.order, this.child);
+
+  @override
+  Widget build(BuildContext context) =>
+      ScrollReveal(delayMs: (order % 3) * 70, child: child);
+}
+
+/// Fades, lifts and un-blurs a child once, staggered by [order].
+class _RiseOld extends StatelessWidget {
+  final int order;
+  final Widget child;
+  const _RiseOld(this.order, this.child);
 
   @override
   Widget build(BuildContext context) {
@@ -139,88 +151,16 @@ class _NeuCard extends StatefulWidget {
 }
 
 class _NeuCardState extends State<_NeuCard> {
-  bool _down = false;
-
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _down = true),
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) {
-        setState(() => _down = false);
-        HapticFeedback.selectionClick();
-        if (widget.page != null) _openFrom(context, widget.page!());
-      },
-      child: AnimatedScale(
-        scale: _down ? 0.965 : 1,
-        duration: Duration(milliseconds: _down ? 110 : 450),
-        curve: _down ? Curves.easeOut : _spring,
-        child: widget.glass ? _glassBody() : _solidBody(),
-      ),
+    return LiquidGlass(
+      style: LiquidGlassStyle.material,
+      borderRadius: BorderRadius.circular(28),
+      padding: widget.padding,
+      onTap: widget.page == null ? null : () => _openFrom(context, widget.page!()),
+      child: widget.child,
     );
   }
-
-  Widget _glassBody() => DecoratedBox(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(28),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF7D948A).withValues(alpha: _down ? 0.10 : 0.16),
-          offset: Offset(0, _down ? 6 : 12),
-          blurRadius: 28,
-        ),
-      ],
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: widget.padding,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.62),
-                Colors.white.withValues(alpha: 0.32),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.85),
-              width: 1.3,
-            ),
-          ),
-          child: widget.child,
-        ),
-      ),
-    ),
-  );
-
-  Widget _solidBody() => AnimatedContainer(
-    duration: const Duration(milliseconds: 200),
-    padding: widget.padding,
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: Colors.white, width: 1.4),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.white.withValues(alpha: 0.95),
-          offset: const Offset(-7, -7),
-          blurRadius: 18,
-        ),
-        BoxShadow(
-          color: const Color(0xFF7D948A).withValues(alpha: _down ? 0.14 : 0.22),
-          offset: Offset(8, _down ? 6 : 12),
-          blurRadius: _down ? 16 : 26,
-        ),
-      ],
-    ),
-    child: widget.child,
-  );
 }
 
 Widget _cardHead(String title, IconData icon, Color c, {String? trailing}) =>
@@ -345,8 +285,7 @@ class DottedLineChart extends StatelessWidget {
                     child: Text(
                       xLabels![i],
                       textAlign: TextAlign.center,
-                      style: _t(
-                        10.5,
+                      style: _t(11,
                         w: i == xLabels!.length - 1
                             ? FontWeight.w800
                             : FontWeight.w600,
@@ -524,29 +463,12 @@ class StreakHeroCard extends StatelessWidget {
       builder: (context) {
         return GestureDetector(
           onTap: () => _openFrom(context, const _StreakDetailPage()),
-          child: ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.58),
-                      Colors.white.withValues(alpha: 0.34),
-                    ],
-                  ),
-                  border: Border.symmetric(
-                    horizontal: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      width: 1.2,
-                    ),
-                  ),
-                ),
-                child: Column(
+          child: LiquidGlass(
+          style: LiquidGlassStyle.material,
+          borderRadius: BorderRadius.zero,
+          shadow: false,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -655,8 +577,6 @@ class StreakHeroCard extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-            ),
           ),
         );
       },
@@ -848,7 +768,7 @@ class _NutritionCard extends StatelessWidget {
                       _Count(eaten, _t(24, w: FontWeight.w800, ls: -0.8)),
                       Text(
                         'of ${budget.round()} kcal',
-                        style: _t(10, w: FontWeight.w600, c: _faint),
+                        style: _t(11, w: FontWeight.w600, c: _faint),
                       ),
                     ],
                   ),
@@ -923,7 +843,7 @@ Widget _miniStat(IconData i, Color c, String v, String l) => Expanded(
                 l,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _t(9.5, w: FontWeight.w600, c: _faint),
+                style: _t(11, w: FontWeight.w600, c: _faint),
               ),
             ],
           ),
@@ -958,7 +878,7 @@ class _MacroBar extends StatelessWidget {
             Text('${value.round()}', style: _t(12, w: FontWeight.w800)),
             Text(
               '/${goal.round()}$unit',
-              style: _t(10.5, w: FontWeight.w600, c: _faint),
+              style: _t(11, w: FontWeight.w600, c: _faint),
             ),
           ],
         ),
@@ -1172,17 +1092,17 @@ class _StepsCard extends StatelessWidget {
             children: [
               Text(
                 '12 AM',
-                style: _t(9.5, w: FontWeight.w600, c: _faint),
+                style: _t(11, w: FontWeight.w600, c: _faint),
               ),
               const Spacer(),
               Text(
                 '12 PM',
-                style: _t(9.5, w: FontWeight.w600, c: _faint),
+                style: _t(11, w: FontWeight.w600, c: _faint),
               ),
               const Spacer(),
               Text(
                 'Now',
-                style: _t(9.5, w: FontWeight.w800, c: _ink),
+                style: _t(11, w: FontWeight.w800, c: _ink),
               ),
             ],
           ),
@@ -1369,7 +1289,7 @@ class _TrainersCard extends StatelessWidget {
                                 ),
                                 child: Text(
                                   tr.$7,
-                                  style: _t(9.5, w: FontWeight.w800, c: tr.$6),
+                                  style: _t(11, w: FontWeight.w800, c: tr.$6),
                                 ),
                               ),
                             ),
@@ -1413,8 +1333,7 @@ class _TrainersCard extends StatelessWidget {
                                     tr.$4,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: _t(
-                                      10.5,
+                                    style: _t(11,
                                       w: FontWeight.w600,
                                       c: _faint,
                                     ),
@@ -1575,7 +1494,7 @@ class _CommunityCard extends StatelessWidget {
                           const Spacer(),
                           Text(
                             '12m',
-                            style: _t(10.5, w: FontWeight.w600, c: _faint),
+                            style: _t(11, w: FontWeight.w600, c: _faint),
                           ),
                         ],
                       ),
@@ -1994,7 +1913,7 @@ class _NutritionDetailPage extends StatelessWidget {
                       ),
                       Text(
                         'kcal eaten',
-                        style: _t(10.5, w: FontWeight.w600, c: _faint),
+                        style: _t(11, w: FontWeight.w600, c: _faint),
                       ),
                     ],
                   ),
@@ -2215,7 +2134,7 @@ class _TrainersDetailPage extends StatelessWidget {
                             ),
                             child: Text(
                               tr.$7,
-                              style: _t(10, w: FontWeight.w800, c: tr.$6),
+                              style: _t(11, w: FontWeight.w800, c: tr.$6),
                             ),
                           ),
                         ],
@@ -2485,6 +2404,12 @@ class _FurBlobsBackdropState extends State<FurBlobsBackdrop>
 
   @override
   Widget build(BuildContext context) {
+    // Reduce Motion: keep the blobs but stop them drifting.
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
     return IgnorePointer(
       child: RepaintBoundary(
         child: CustomPaint(
