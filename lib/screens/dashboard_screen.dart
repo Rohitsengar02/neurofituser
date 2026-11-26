@@ -14,13 +14,14 @@ import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/kemo.dart';
-import '../widgets/tabs_v2/overview_v6.dart';
-import '../widgets/tabs_v2/workouts_tab.dart';
-import '../widgets/tabs_v2/nutrition_tab.dart';
-import '../widgets/tabs_v2/wellness_tab.dart';
+import '../widgets/tabs_v3/kit3.dart';
+import '../widgets/tabs_v3/nutrition_tab.dart';
+import '../widgets/tabs_v3/overview_tab.dart';
+import '../widgets/tabs_v3/shop_tab.dart';
+import '../widgets/tabs_v3/wellness_tab.dart';
+import '../widgets/tabs_v3/workouts_tab.dart';
 import 'kemo_ai_screen.dart';
 import '../widgets/dashboard_3d_icons.dart';
-import '../widgets/dashboard_shop_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
 import 'trainers_screen.dart';
@@ -58,42 +59,42 @@ class _DashboardScreenState extends State<DashboardScreen>
     _CategoryItem(
       title: 'Overview',
       imagePath: 'assets/images/top tabs/overview.png',
-      bgColor: kOverviewNeon, // Neon green, one solid colour
-      subBgColor: kOverviewNeon,
-      activeColor: const Color(0xFF0E0F0C),
-      heroColor: kOverviewNeon,
+      bgColor: kTint,
+      subBgColor: kTint,
+      activeColor: kBrand,
+      heroColor: kTintTop,
     ),
     _CategoryItem(
       title: 'Workouts',
       imagePath: 'assets/images/top tabs/workout.png',
-      bgColor: const Color(0xFFF5EEFF), // Light Purple
-      subBgColor: const Color(0xFFFAF5FF),
-      activeColor: const Color(0xFF9333EA),
-      heroColor: const Color(0xFFD4B8FF),
+      bgColor: kTint,
+      subBgColor: kTint,
+      activeColor: kBrand,
+      heroColor: kTintTop,
     ),
     _CategoryItem(
       title: 'Nutrition',
       imagePath: 'assets/images/top tabs/nutrition.png',
-      bgColor: const Color(0xFFFEF7E6), // Light Yellow / Cream
-      subBgColor: const Color(0xFFFFFBEB),
-      activeColor: const Color(0xFFD97706),
-      heroColor: const Color(0xFFFFDE6B),
+      bgColor: kTint,
+      subBgColor: kTint,
+      activeColor: kBrand,
+      heroColor: kTintTop,
     ),
     _CategoryItem(
       title: 'Mental Health',
       imagePath: 'assets/images/top tabs/mental health.png',
-      bgColor: const Color(0xFFFFEEF1), // Light Pink
-      subBgColor: const Color(0xFFFFF1F2),
-      activeColor: const Color(0xFFE11D48),
-      heroColor: const Color(0xFFFFB8C8),
+      bgColor: kTint,
+      subBgColor: kTint,
+      activeColor: kBrand,
+      heroColor: kTintTop,
     ),
     _CategoryItem(
       title: 'Shop',
       imagePath: 'assets/images/top tabs/shop.png',
-      bgColor: const Color(0xFFEBF5FF), // Light Blue
-      subBgColor: const Color(0xFFF0F9FF),
-      activeColor: const Color(0xFF0284C7),
-      heroColor: const Color(0xFF9FD8FF),
+      bgColor: kTint,
+      subBgColor: kTint,
+      activeColor: kBrand,
+      heroColor: kTintTop,
     ),
   ];
 
@@ -233,9 +234,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               activeCategory.subBgColor, // Pastel
               // Overview keeps one solid neon colour; its white sheet
               // starts below the stat cards.
-              _selectedCategoryIndex == 0
-                  ? activeCategory.subBgColor
-                  : const Color(0xFFFBFBFD), // Clean background
+              activeCategory.subBgColor, // Every tab ends on its tint;
+              // the curved sheet inside the tab supplies the light surface.
             ],
           ),
         ),
@@ -269,7 +269,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           padding: EdgeInsets.only(
                             // Overview's white sheet carries its own space
                             // for the floating bottom nav.
-                            bottom: _selectedCategoryIndex == 0 ? 0 : 110,
+                            bottom: 0,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,14 +304,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 child: KeyedSubtree(
                                   key: ValueKey<int>(_selectedCategoryIndex),
                                   child: _selectedCategoryIndex == 1
-                                      ? const WorkoutsTabV2()
+                                      ? const WorkoutsTabV3()
                                       : _selectedCategoryIndex == 2
-                                      ? const NutritionTabV2()
+                                      ? const NutritionTabV3()
                                       : _selectedCategoryIndex == 3
-                                      ? const WellnessTabV2()
+                                      ? const WellnessTabV3()
                                       : _selectedCategoryIndex == 4
-                                      ? const DashboardShopTabContent()
-                                      : const OverviewTabV6(),
+                                      ? const ShopTabV3()
+                                      : const OverviewTabV7(),
                                 ),
                               ),
                             ],

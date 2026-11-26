@@ -12,19 +12,19 @@ class _AnimatedIconMarqueeState extends State<AnimatedIconMarquee>
   late AnimationController _controller;
 
   final List<String> _neonGreenImages = const [
-    'assets/images/neon_green_dumbbell_1787819274202.jpg',
-    'assets/images/neon_green_shoe_1787819288631.jpg',
-    'assets/images/neon_green_smartwatch_1787819302325.jpg',
-    'assets/images/neon_green_waterbottle_1787819315145.jpg',
-    'assets/images/neon_green_yogamat_1787819327380.jpg',
+    'assets/images/clean/dumbbell.jpg',
+    'assets/images/clean/shoe.jpg',
+    'assets/images/clean/smartwatch.jpg',
+    'assets/images/clean/waterbottle.jpg',
+    'assets/images/clean/yogamat.jpg',
   ];
 
   final List<String> _neonOrangeImages = const [
-    'assets/images/neon_orange_gymbag_1787819375587.jpg',
-    'assets/images/neon_orange_heartrate_1787819363247.jpg',
-    'assets/images/neon_orange_kettlebell_1787819340750.jpg',
-    'assets/images/neon_orange_proteinshaker_1787819387813.jpg',
-    'assets/images/neon_orange_skippingrope_1787819351491.jpg',
+    'assets/images/clean/gymbag.jpg',
+    'assets/images/clean/heartrate.jpg',
+    'assets/images/clean/kettlebell.jpg',
+    'assets/images/clean/proteinshaker.jpg',
+    'assets/images/clean/skippingrope.jpg',
   ];
 
   @override
