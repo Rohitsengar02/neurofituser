@@ -183,7 +183,7 @@ class _AkWelcomeState extends State<AkWelcome> with SingleTickerProviderStateMix
         final o = a.value.clamp(0.0, 1.0);
         final b = (1 - o) * 10;
         Widget x = Transform.translate(offset: Offset(0, 22 * (1 - a.value)), child: c);
-        if (b > 0.3) x = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: x);
+        if (b > 0.3 && !LiquidGlass.lite) x = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: x);
         return Opacity(opacity: o, child: x);
       },
     );

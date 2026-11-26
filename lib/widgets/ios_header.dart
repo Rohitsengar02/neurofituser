@@ -71,7 +71,7 @@ class _IosHeaderState extends State<IosHeader> with TickerProviderStateMixin {
           final v = a.value;
           final b = (1 - v.clamp(0.0, 1.0)) * 6;
           Widget w = Transform.translate(offset: Offset(0, dy * (1 - v)), child: c);
-          if (b > 0.2) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
+          if (b > 0.2 && !LiquidGlass.lite) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
           return Opacity(opacity: v.clamp(0.0, 1.0), child: w);
         },
       );
@@ -79,7 +79,7 @@ class _IosHeaderState extends State<IosHeader> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final letters = _greeting.split('');
-    return Padding(
+    return RepaintBoundary(child: Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 16, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +145,7 @@ class _IosHeaderState extends State<IosHeader> with TickerProviderStateMixin {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 

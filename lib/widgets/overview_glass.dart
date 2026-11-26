@@ -499,7 +499,7 @@ class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerPro
   @override
   Widget build(BuildContext context) {
     final r = widget.radius;
-    return AnimatedBuilder(
+    return RepaintBoundary(child: AnimatedBuilder(
       animation: _spin,
       child: LiquidGlass(
         style: LiquidGlassStyle.material,
@@ -541,7 +541,7 @@ class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerPro
           child: inner,
         );
       },
-    );
+    ));
   }
 }
 

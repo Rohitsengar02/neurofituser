@@ -176,7 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         _entranceController.forward(from: 0.0);
 
         // Eagerly preload all Shop Products, Banners, and Images in the background
-        _preloadShopDataAndImages();
+        // The Shop tab now uses bundled demo data, so no network preload.
       }
     });
   }
@@ -216,6 +216,13 @@ class _DashboardScreenState extends State<DashboardScreen>
           bottom: false,
           child: Stack(
             children: [
+              // Furry blurred circles and doodles drift behind the content.
+              // Painted at viewport size and moved with the scroll offset, so
+              // only what's on screen is drawn each frame.
+              if (_selectedBottomNavIndex == 0 || _selectedBottomNavIndex > 4)
+                Positioned.fill(
+                  child: FurBlobsBackdrop(food: _selectedCategoryIndex == 2, scroll: _smoothScroll),
+                ),
               // Swappable Body based on bottom nav
               _selectedBottomNavIndex == 1
                   ? const StepsScreen()
@@ -235,9 +242,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ), // Space for floating bottom nav
                       child: Stack(
                         children: [
-                          // Furry blurred circles and doodles drift behind
-                          // the whole Overview, header included.
-                          Positioned.fill(child: FurBlobsBackdrop(food: _selectedCategoryIndex == 2)),
                           Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -333,7 +337,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
               // Draggable side island (snaps left/right, opens Today slider)
               if (_selectedBottomNavIndex == 0)
-                const Positioned.fill(child: SideIsland()),
+                const Positioned.fill(child: RepaintBoundary(child: SideIsland())),
 
               // Bottom Floating Navigation Bar
               Positioned(
@@ -804,7 +808,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   ];
 
   Widget _buildTopCategoryTabs(_CategoryItem activeCategory) {
-    return CategoryTabBar(
+    return RepaintBoundary(child: CategoryTabBar(
       tabs: [
         for (var i = 0; i < _categories.length; i++)
           CategoryTabData(
@@ -823,7 +827,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           setState(() => _selectedCategoryIndex = index);
         }
       },
-    );
+    ));
   }
 
   // -------------------------------------------------------------
@@ -1686,7 +1690,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   // 7. BOTTOM FLOATING NAVIGATION BAR (MATCHING REFERENCE UI)
   // -------------------------------------------------------------
   Widget _buildFloatingBottomNav() {
-    return CustomFloatingBottomBar(
+    return RepaintBoundary(child: CustomFloatingBottomBar(
       selectedIndex: _selectedBottomNavIndex,
       onItemSelected: (index) {
         setState(() {
@@ -1696,7 +1700,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       onAddPressed: () {
         _showQuickAddActionSheet();
       },
-    );
+    ));
   }
 
   void _showQuickAddActionSheet() {

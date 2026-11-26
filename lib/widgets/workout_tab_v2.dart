@@ -197,7 +197,7 @@ class _WelcomeState extends State<_Welcome> with SingleTickerProviderStateMixin 
           final o = v.clamp(0.0, 1.0);
           final b = (1 - o) * 10;
           Widget w = Transform.translate(offset: from * (1 - v), child: c);
-          if (b > 0.3) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
+          if (b > 0.3 && !LiquidGlass.lite) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
           return Opacity(opacity: o, child: w);
         },
       );

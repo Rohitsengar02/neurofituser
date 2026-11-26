@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -2387,37 +2390,50 @@ class FurBlobsBackdrop extends StatefulWidget {
   /// Food theme: blobs become furry fruit (stems, leaves, kiwi seeds, citrus
   /// segments) and the doodles become food sketches.
   final bool food;
-  const FurBlobsBackdrop({super.key, this.blobCount = 7, this.doodles = true, this.food = false});
+  /// When set, the backdrop sits behind the scroll view (viewport sized)
+  /// and follows this controller, so only what's on screen is painted.
+  final ScrollController? scroll;
+  const FurBlobsBackdrop({super.key, this.blobCount = 7, this.doodles = true, this.food = false, this.scroll});
 
   @override
   State<FurBlobsBackdrop> createState() => _FurBlobsBackdropState();
 }
 
-class _FurBlobsBackdropState extends State<FurBlobsBackdrop>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 60),
-  )..repeat();
+class _FurBlobsBackdropState extends State<FurBlobsBackdrop> {
+  // The drift is very slow (one loop a minute), so 15 updates a second look
+  // the same as 60 and leave the browser free for scrolling.
+  final _t = ValueNotifier<double>(0);
+  final _clock = Stopwatch();
+  Timer? _timer;
+
+  void _sync(bool still) {
+    if (still) {
+      _timer?.cancel();
+      _timer = null;
+      _clock.stop();
+    } else if (_timer == null) {
+      _clock.start();
+      _timer = Timer.periodic(const Duration(milliseconds: 66), (_) {
+        _t.value = (_clock.elapsedMilliseconds / 60000) % 1.0;
+      });
+    }
+  }
 
   @override
   void dispose() {
-    _c.dispose();
+    _timer?.cancel();
+    _t.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     // Reduce Motion: keep the blobs but stop them drifting.
-    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
-      _c.stop();
-    } else if (!_c.isAnimating) {
-      _c.repeat();
-    }
+    _sync(MediaQuery.maybeOf(context)?.disableAnimations ?? false);
     return IgnorePointer(
       child: RepaintBoundary(
         child: CustomPaint(
-          painter: _FurPainter(_c, widget.blobCount, widget.doodles, widget.food),
+          painter: _FurPainter(_t, widget.blobCount, widget.doodles, widget.food, widget.scroll),
           size: Size.infinite,
         ),
       ),
@@ -2426,11 +2442,13 @@ class _FurBlobsBackdropState extends State<FurBlobsBackdrop>
 }
 
 class _FurPainter extends CustomPainter {
-  final Animation<double> t;
+  final ValueListenable<double> t;
   final int count;
   final bool doodles;
   final bool food;
-  _FurPainter(this.t, this.count, this.doodles, this.food) : super(repaint: t);
+  final ScrollController? scroll;
+  _FurPainter(this.t, this.count, this.doodles, this.food, this.scroll)
+      : super(repaint: scroll == null ? t : Listenable.merge([t, scroll]));
 
   static const _foodTints = [
     Color(0xFFFDBA74), // orange
@@ -2452,27 +2470,19 @@ class _FurPainter extends CustomPainter {
     Color(0xFF5EEAD4),
   ];
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final a = t.value * 2 * math.pi;
-    final rnd = math.Random(7);
-    final unit = math.min(size.width, 430.0);
+  static final Map<String, ui.Image> _sprites = {};
 
-    final total = math.max(count, (size.height / 290).ceil());
-    for (var i = 0; i < total; i++) {
-      final bx = i.isEven ? 0.1 + rnd.nextDouble() * 0.35 : 0.55 + rnd.nextDouble() * 0.35;
-      final byPx = 40 + i * 290.0 + (rnd.nextDouble() - 0.5) * 120;
-      final by = byPx / math.max(1, size.height);
-      final r = unit * (0.24 + rnd.nextDouble() * 0.12);
-      final f1 = 1 + rnd.nextInt(3), f2 = 1 + rnd.nextInt(2);
-      final ph = rnd.nextDouble() * 6.28;
-      final cx = bx * size.width + math.sin(a * f1 + ph) * unit * 0.16;
-      final cy = by * size.height + math.cos(a * f2 + ph * 1.3) * unit * 0.18;
-      final c = food ? _foodTints[i % _foodTints.length] : _tints[i % _tints.length];
-      final center = Offset(cx, cy);
-      final breathe = 1 + 0.06 * math.sin(a * 3 + ph);
-      final rr = r * breathe;
-
+  ui.Image _sprite(int i, double r, Color c, double ph) {
+    final rq = (r / 8).round() * 8.0;
+    final key = '$food-$i-${c.toARGB32()}-$rq';
+    final hit = _sprites[key];
+    if (hit != null) return hit;
+    final side = (rq * 2 * 1.35).ceilToDouble();
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    final center = Offset(side / 2, side / 2);
+    final rr = rq;
+    final r2 = math.Random(i * 31 + 5);
       // Soft body.
       canvas.drawCircle(
         center,
@@ -2497,9 +2507,9 @@ class _FurPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2);
       final strands = 90;
       for (var k = 0; k < strands; k++) {
-        final ang = k / strands * 2 * math.pi + rnd.nextDouble() * 0.05;
-        final sway = math.sin(a * 4 + k * 0.7 + ph) * 0.08;
-        final len = rr * (0.1 + rnd.nextDouble() * 0.12);
+        final ang = k / strands * 2 * math.pi + r2.nextDouble() * 0.05;
+        final sway = math.sin(k * 0.7 + ph) * 0.08;
+        final len = rr * (0.1 + r2.nextDouble() * 0.12);
         final p0 = center + Offset(math.cos(ang), math.sin(ang)) * (rr * 0.78);
         final p1 =
             center +
@@ -2507,10 +2517,60 @@ class _FurPainter extends CustomPainter {
                 (rr * 0.78 + len);
         canvas.drawLine(p0, p1, fur);
       }
-      if (food) _fruit(canvas, center, rr, i % 4, c, a + ph);
+      if (food) _fruit(canvas, center, rr, i % 4, c, ph);
+    final img = rec.endRecording().toImageSync(side.toInt(), side.toInt());
+    _sprites[key] = img;
+    return img;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size0) {
+    var size = size0;
+    final a = t.value * 2 * math.pi;
+    final rnd = math.Random(7);
+    final unit = math.min(size.width, 430.0);
+    final view = size0;
+    final sc = scroll;
+    final hasPos = sc != null && sc.hasClients && sc.positions.length == 1 && sc.position.hasContentDimensions;
+    final off = hasPos ? sc.offset : 0.0;
+    // Paint in content coordinates, but only what's inside the viewport.
+    if (hasPos) {
+      size = Size(size.width, sc.position.maxScrollExtent + sc.position.viewportDimension);
+    }
+    canvas.save();
+    canvas.clipRect(Offset.zero & view);
+    canvas.translate(0, -off);
+    final top = off - unit * 0.7, bottom = off + view.height + unit * 0.7;
+
+    final total = math.max(count, (size.height / 290).ceil());
+    for (var i = 0; i < total; i++) {
+      final bx = i.isEven ? 0.1 + rnd.nextDouble() * 0.35 : 0.55 + rnd.nextDouble() * 0.35;
+      final byPx = 40 + i * 290.0 + (rnd.nextDouble() - 0.5) * 120;
+      final by = byPx / math.max(1, size.height);
+      final r = unit * (0.24 + rnd.nextDouble() * 0.12);
+      final f1 = 1 + rnd.nextInt(3), f2 = 1 + rnd.nextInt(2);
+      final ph = rnd.nextDouble() * 6.28;
+      final cx = bx * size.width + math.sin(a * f1 + ph) * unit * 0.16;
+      final cy = by * size.height + math.cos(a * f2 + ph * 1.3) * unit * 0.18;
+      final c = food ? _foodTints[i % _foodTints.length] : _tints[i % _tints.length];
+      final center = Offset(cx, cy);
+      final breathe = (1 + 0.06 * math.sin(a * 3 + ph)) * r / ((r / 8).round() * 8.0);
+      if (cy < top || cy > bottom) continue;
+
+      // Each blob is drawn once into a cached sprite; per frame it only
+      // moves and breathes, which keeps the animated background cheap.
+      final img = _sprite(i, r, c, ph);
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.scale(breathe);
+      canvas.drawImage(img, Offset(-img.width / 2, -img.height / 2), Paint()..filterQuality = FilterQuality.low);
+      canvas.restore();
     }
 
-    if (!doodles) return;
+    if (!doodles) {
+      canvas.restore();
+      return;
+    }
     final ink = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.2
@@ -2526,6 +2586,8 @@ class _FurPainter extends CustomPainter {
         bx * size.width + math.sin(a * 2 + ph) * 18,
         by * size.height + math.cos(a * 2 + ph) * 22,
       );
+      final dsz = 20 + rnd.nextDouble() * 12;
+      if (pos.dy < top || pos.dy > bottom) continue;
       canvas.save();
       canvas.translate(pos.dx, pos.dy);
       canvas.rotate(math.sin(a + ph) * 0.6);
@@ -2537,12 +2599,13 @@ class _FurPainter extends CustomPainter {
         const Color(0xFF475569),
       ][i % 5].withValues(alpha: 0.38);
       if (food) {
-        _foodDoodle(canvas, i % 8, 20 + rnd.nextDouble() * 12, ink);
+        _foodDoodle(canvas, i % 8, dsz, ink);
       } else {
-        _doodle(canvas, i % 8, 18 + rnd.nextDouble() * 12, ink);
+        _doodle(canvas, i % 8, dsz - 2, ink);
       }
       canvas.restore();
     }
+    canvas.restore();
   }
 
   /// Fruit details on a fur blob: stem and leaf, kiwi seeds, berry shine or

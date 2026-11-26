@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,6 +19,13 @@ import 'package:flutter/services.dart';
 enum LiquidGlassStyle { clear, regular, material }
 
 class LiquidGlass extends StatefulWidget {
+  /// Lite mode (on by default for web): card-style glass skips the live
+  /// backdrop blur and uses a slightly denser frosted fill instead, and the
+  /// remaining blurs drop the saturation pass. Live blur is the most
+  /// expensive thing a browser can do per frame, so this keeps scrolling
+  /// smooth while the look stays close.
+  static bool lite = kIsWeb;
+
   final Widget child;
   final BorderRadius borderRadius;
   final EdgeInsetsGeometry? padding;
@@ -89,6 +97,17 @@ class _LiquidGlassState extends State<LiquidGlass> with SingleTickerProviderStat
       LiquidGlassStyle.regular => (24.0, 0.66, 0.48),
       LiquidGlassStyle.material => (28.0, 0.76, 0.6),
     };
+    final lite = LiquidGlass.lite;
+    // In lite mode no surface samples the backdrop; fills get denser so the
+    // frosted look holds without a live blur.
+    final noBlur = lite;
+    final (fTop, fBottom) = !noBlur
+        ? (fillTop, fillBottom)
+        : switch (widget.style) {
+            LiquidGlassStyle.clear => (0.66, 0.5),
+            LiquidGlassStyle.regular => (0.88, 0.76),
+            LiquidGlassStyle.material => (0.86, 0.74),
+          };
     final tint = widget.tint;
     final circle = widget.shape == BoxShape.circle;
     final radius = circle ? null : widget.borderRadius;
@@ -123,10 +142,10 @@ class _LiquidGlassState extends State<LiquidGlass> with SingleTickerProviderStat
                       colors: [
                         Color.alphaBlend((tint ?? Colors.white).withValues(alpha: tint == null ? 0 : 0.10),
                                 Colors.white)
-                            .withValues(alpha: fillTop + 0.08 * p),
+                            .withValues(alpha: fTop + 0.08 * p),
                         Color.alphaBlend((tint ?? Colors.white).withValues(alpha: tint == null ? 0 : 0.18),
                                 Colors.white)
-                            .withValues(alpha: fillBottom + 0.08 * p),
+                            .withValues(alpha: fBottom + 0.08 * p),
                       ],
                     ),
               color: highContrast ? Colors.white : null,
@@ -138,27 +157,43 @@ class _LiquidGlassState extends State<LiquidGlass> with SingleTickerProviderStat
       },
     );
 
-    surface = circle
-        ? ClipOval(child: BackdropFilter(filter: _filter(sigma, 1.45), child: surface))
-        : ClipRRect(borderRadius: radius!, child: BackdropFilter(filter: _filter(sigma, 1.45), child: surface));
+    if (noBlur) {
+      surface = circle ? ClipOval(child: surface) : ClipRRect(borderRadius: radius!, child: surface);
+    } else {
+      final f = lite
+          ? ImageFilter.blur(sigmaX: sigma * 0.6, sigmaY: sigma * 0.6, tileMode: TileMode.mirror)
+          : _filter(sigma, 1.45);
+      surface = circle
+          ? ClipOval(child: BackdropFilter(filter: f, child: surface))
+          : ClipRRect(borderRadius: radius!, child: BackdropFilter(filter: f, child: surface));
+    }
+    surface = RepaintBoundary(child: surface);
 
     if (widget.shadow) {
       surface = DecoratedBox(
         decoration: BoxDecoration(
           shape: widget.shape,
           borderRadius: radius,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F2A1E).withValues(alpha: 0.10),
-              blurRadius: 30,
-              offset: const Offset(0, 14),
-            ),
-            BoxShadow(
-              color: const Color(0xFF0F2A1E).withValues(alpha: 0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: lite
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0F2A1E).withValues(alpha: 0.09),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: const Color(0xFF0F2A1E).withValues(alpha: 0.10),
+                    blurRadius: 30,
+                    offset: const Offset(0, 14),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFF0F2A1E).withValues(alpha: 0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: surface,
       );
@@ -332,7 +367,7 @@ class _ScrollRevealState extends State<ScrollReveal> with SingleTickerProviderSt
           child: Transform.scale(scale: 0.94 + 0.06 * t, child: c),
         );
         final b = (1 - o) * 10;
-        if (b > 0.3) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
+        if (b > 0.3 && !LiquidGlass.lite) w = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
         return Opacity(opacity: Curves.easeOut.transform(o), child: w);
       },
     );
