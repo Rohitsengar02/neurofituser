@@ -10,11 +10,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
-import '../widgets/neuro_dynamic_island.dart';
+import '../widgets/side_island.dart';
+import '../widgets/nutrition_tab_v2.dart';
+import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/dashboard_workout_sections.dart';
-import '../widgets/dashboard_nutrition_sections.dart';
 import '../widgets/dashboard_mental_health_sections.dart';
 import '../widgets/dashboard_shop_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
@@ -68,9 +69,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     _CategoryItem(
       title: 'Nutrition',
       imagePath: 'assets/images/top tabs/nutrition.png',
-      bgColor: const Color(0xFFFEF7E6), // Light Yellow / Cream
-      subBgColor: const Color(0xFFFFFBEB),
-      activeColor: const Color(0xFFD97706),
+      bgColor: const Color(0xFFE3EEFF), // Soft blue
+      subBgColor: const Color(0xFFF0F6FF),
+      activeColor: const Color(0xFF3B82F6),
     ),
     _CategoryItem(
       title: 'Mental Health',
@@ -88,7 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     ),
   ];
 
-  bool _isOverviewLoading = true;
+  bool _isOverviewLoading = false;
   late AnimationController _shimmerController;
 
   // First-Time Registration & Interactive Demo State
@@ -227,11 +228,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // 0. Top Dynamic Island (Tap to expand/collapse metrics & quick actions)
-                          NeuroDynamicIsland(
-                            themeColor: activeCategory.activeColor,
-                          ),
-
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
 
                           // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
                           _buildAnimatedHeader(),
@@ -263,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                               child: _selectedCategoryIndex == 1
                                   ? const DashboardWorkoutTabContent()
                                   : _selectedCategoryIndex == 2
-                                  ? const DashboardNutritionTabContent()
+                                  ? const NutritionTabV2()
                                   : _selectedCategoryIndex == 3
                                   ? const DashboardMentalHealthTabContent()
                                   : _selectedCategoryIndex == 4
@@ -321,6 +318,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ],
                       ),
                     ),
+
+              // Draggable side island (snaps left/right, opens Today slider)
+              if (_selectedBottomNavIndex == 0)
+                const Positioned.fill(child: SideIsland()),
 
               // Bottom Floating Navigation Bar
               Positioned(
@@ -775,211 +776,40 @@ class _DashboardScreenState extends State<DashboardScreen>
   // -------------------------------------------------------------
   // 2. TOP CATEGORY TABS (SHADOW ON ACTIVE + SLIDING UNDERLINE)
   // -------------------------------------------------------------
+  static const List<String> _tabIcons = [
+    'assets/images/top tabs/icons/overview.png',
+    'assets/images/top tabs/icons/workout.png',
+    'assets/images/top tabs/icons/nutrition.png',
+    'assets/images/top tabs/icons/wellness.png',
+    'assets/images/top tabs/icons/shop.png',
+  ];
+  static const List<String> _tabLabels = [
+    'Overview',
+    'Workouts',
+    'Nutrition',
+    'Wellness',
+    'Shop',
+  ];
+
   Widget _buildTopCategoryTabs(_CategoryItem activeCategory) {
-    if (_isOverviewLoading) return _buildTopCategoryTabsSkeleton();
-
-    return AnimatedBuilder(
-      animation: _entranceController,
-      builder: (context, child) {
-        final anim = CurvedAnimation(
-          parent: _entranceController,
-          curve: const Interval(0.05, 0.45, curve: Curves.easeOutCubic),
-        ).value;
-
-        return Transform.translate(
-          offset: Offset(0, (1.0 - anim) * 16.0),
-          child: Opacity(
-            opacity: anim.clamp(0.0, 1.0),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14.0),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const count = 5;
-                  const gap = 8.0;
-                  const underlineHeight = 4.0;
-                  const underlineGap = 8.0; // space between cards and line
-                  final cardWidth =
-                      (constraints.maxWidth - ((count - 1) * gap)) / count;
-                  final cardHeight = cardWidth;
-                  final underlineWidth = cardWidth * 0.55;
-
-                  return SizedBox(
-                    height: cardHeight + underlineGap + underlineHeight + 6,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // ---- Cards row ----
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: cardHeight,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: List.generate(count, (index) {
-                              final item = _categories[index];
-                              final isSelected =
-                                  _selectedCategoryIndex == index;
-                              final isDemoHighlighted =
-                                  _isDemoActive && _demoStep == index;
-
-                              return GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  if (_isDemoActive) {
-                                    _nextDemoStep();
-                                  } else {
-                                    setState(
-                                      () => _selectedCategoryIndex = index,
-                                    );
-                                  }
-                                },
-                                child: AnimatedScale(
-                                  scale: isSelected ? 1.06 : 1.0,
-                                  duration: const Duration(milliseconds: 280),
-                                  curve: Curves.easeOutBack,
-                                  child: SizedBox(
-                                    width: cardWidth,
-                                    height: cardHeight,
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        // Card — no border, shadow only when active
-                                        AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 280,
-                                          ),
-                                          curve: Curves.easeOutCubic,
-                                          width: cardWidth,
-                                          height: cardHeight,
-                                          clipBehavior: Clip.antiAlias,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              22,
-                                            ),
-                                            boxShadow: isSelected
-                                                ? [
-                                                    BoxShadow(
-                                                      color: item.activeColor
-                                                          .withValues(
-                                                            alpha: 0.38,
-                                                          ),
-                                                      blurRadius: 16,
-                                                      spreadRadius: 1,
-                                                      offset: const Offset(
-                                                        0,
-                                                        5,
-                                                      ),
-                                                    ),
-                                                  ]
-                                                : const [],
-                                          ),
-                                          child: AnimatedOpacity(
-                                            duration: const Duration(
-                                              milliseconds: 280,
-                                            ),
-                                            opacity: isSelected ? 1.0 : 0.78,
-                                            child: Image.asset(
-                                              item.imagePath,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  Center(
-                                                    child: Icon(
-                                                      Icons.dashboard_rounded,
-                                                      size: 26,
-                                                      color: item.activeColor,
-                                                    ),
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-
-                                        // Demo pulse badge
-                                        if (isDemoHighlighted)
-                                          Positioned(
-                                            top: -10,
-                                            left: 0,
-                                            right: 0,
-                                            child: Center(
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 2,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: item.activeColor,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: item.activeColor
-                                                          .withValues(
-                                                            alpha: 0.6,
-                                                          ),
-                                                      blurRadius: 8,
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Text(
-                                                  'TAP 👆',
-                                                  style:
-                                                      GoogleFonts.plusJakartaSans(
-                                                        color: Colors.white,
-                                                        fontSize: 8.5,
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-
-                        // ---- Sliding underline under the active tab ----
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 320),
-                          curve: Curves.easeOutCubic,
-                          top: cardHeight + underlineGap,
-                          left:
-                              _selectedCategoryIndex * (cardWidth + gap) +
-                              (cardWidth - underlineWidth) / 2,
-                          width: underlineWidth,
-                          height: underlineHeight,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 320),
-                            decoration: BoxDecoration(
-                              color: activeCategory.activeColor,
-                              borderRadius: BorderRadius.circular(3),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: activeCategory.activeColor.withValues(
-                                    alpha: 0.55,
-                                  ),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
+    return CategoryTabBar(
+      tabs: [
+        for (var i = 0; i < _categories.length; i++)
+          CategoryTabData(
+            label: _tabLabels[i],
+            iconPath: _tabIcons[i],
+            color: _categories[i].activeColor,
+            badge: i == 4 ? '40% OFF' : null,
           ),
-        );
+      ],
+      selectedIndex: _selectedCategoryIndex,
+      highlightIndex: _isDemoActive ? _demoStep : null,
+      onSelected: (index) {
+        if (_isDemoActive) {
+          _nextDemoStep();
+        } else {
+          setState(() => _selectedCategoryIndex = index);
+        }
       },
     );
   }

@@ -41,6 +41,9 @@ flutter:
     - assets/images/
     - assets/images/top tabs/
     - assets/images/top tabs/overview/
+    - assets/images/top tabs/icons/
+    - assets/images/kemo/
+    - assets/images/island/
     - assets/videos/
     - assets/exercises/images/
     - assets/exercises/videos/
