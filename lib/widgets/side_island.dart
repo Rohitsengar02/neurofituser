@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,7 +10,9 @@ import '../screens/date_nutrition_detail_screen.dart';
 import '../screens/kemo_ai_screen.dart';
 import '../screens/log_meal_screen.dart';
 import '../screens/steps_screen.dart';
+import 'island_panels.dart';
 import 'kemo_avatar.dart';
+import 'liquid_glass.dart';
 
 /// Today's numbers shared by the island and its slider.
 class IslandStats {
@@ -45,9 +48,10 @@ String _fmt(int n) {
   return b.toString();
 }
 
-/// A dynamic-island pill that floats on the left or right edge of the
-/// screen. Drag it anywhere; it snaps to the nearest side. Tap it to pull
-/// down the "Today" slider from the top.
+/// A white liquid-glass dynamic island on the left or right edge. It cycles
+/// through Kemo and today's stats one by one. Drag it anywhere and it snaps
+/// to the nearest side. Tap it to reveal the menu button; tap that for the
+/// full options list, each of which opens its own glass panel.
 class SideIsland extends StatefulWidget {
   const SideIsland({super.key});
 
@@ -55,53 +59,37 @@ class SideIsland extends StatefulWidget {
   State<SideIsland> createState() => _SideIslandState();
 }
 
-class _SideIslandState extends State<SideIsland>
-    with SingleTickerProviderStateMixin {
-  static const double _w = 78;
-  static const double _h = 58;
+class _SideIslandState extends State<SideIsland> with TickerProviderStateMixin {
+  static const double _w = 82;
+  static const double _h = 64;
+  static const _spring = Cubic(0.2, 1.25, 0.32, 1);
 
   bool _right = true;
   double _y = 0.42; // fraction of available height
   Offset? _drag; // live position while dragging
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2400),
-  )..repeat();
-
   bool _warm = false;
+  int _slide = 0;
+  Timer? _cycle;
 
-  // Island menu morph (pill -> two-option capsule), iOS style spring.
-  late final AnimationController _menu = AnimationController(
+  // Stage 1: the round menu button pops out beside the island.
+  late final AnimationController _icon = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 520),
-    reverseDuration: const Duration(milliseconds: 300),
+    reverseDuration: const Duration(milliseconds: 240),
   );
-  static const _spring = Cubic(0.2, 1.25, 0.32, 1);
+  // Stage 2: the options list grows out of the island.
+  late final AnimationController _menu = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 560),
+    reverseDuration: const Duration(milliseconds: 280),
+  );
 
-  void _toggleMenu() {
-    HapticFeedback.mediumImpact();
-    if (_menu.isCompleted || _menu.status == AnimationStatus.forward) {
-      _menu.reverse();
-    } else {
-      _menu.forward();
-    }
-  }
-
-  Alignment _origin(Size screen, double top) => Alignment(
-        _right ? 1 : -1,
-        ((top + _h / 2) / screen.height) * 2 - 1,
-      );
-
-  Future<void> _pick(bool stats, Size screen, double top) async {
-    HapticFeedback.selectionClick();
-    final origin = _origin(screen, top);
-    await _menu.reverse();
-    if (!mounted) return;
-    if (stats) {
-      showTodaySlider(context, origin: origin);
-    } else {
-      Navigator.of(context).push(iosZoomRoute(const KemoAiScreen(), origin));
-    }
+  @override
+  void initState() {
+    super.initState();
+    _cycle = Timer.periodic(const Duration(milliseconds: 2800), (_) {
+      if (mounted && _drag == null) setState(() => _slide = (_slide + 1) % 5);
+    });
   }
 
   @override
@@ -115,10 +103,61 @@ class _SideIslandState extends State<SideIsland>
 
   @override
   void dispose() {
+    _cycle?.cancel();
+    _icon.dispose();
     _menu.dispose();
-    _pulse.dispose();
     super.dispose();
   }
+
+  void _tapIsland() {
+    HapticFeedback.mediumImpact();
+    if (_menu.value > 0) {
+      _closeAll();
+    } else if (_icon.value > 0) {
+      _icon.reverse();
+    } else {
+      _icon.forward();
+    }
+  }
+
+  void _openMenu() {
+    HapticFeedback.mediumImpact();
+    _menu.forward();
+  }
+
+  Future<void> _closeAll() async {
+    await Future.wait([_menu.reverse(), _icon.reverse()]);
+  }
+
+  Alignment _origin(Size screen, double top) => Alignment(
+        _right ? 1 : -1,
+        ((top + _h / 2) / screen.height) * 2 - 1,
+      );
+
+  Future<void> _pick(int i, Size screen, double top) async {
+    HapticFeedback.selectionClick();
+    final origin = _origin(screen, top);
+    await _closeAll();
+    if (!mounted) return;
+    final o = _options[i];
+    if (o.$1 == null) {
+      Navigator.of(context).push(iosZoomRoute(const KemoAiScreen(), origin));
+    } else {
+      showIslandPanel(context, o.$1!, origin: origin);
+    }
+  }
+
+  // (panel or null for Kemo, title, subtitle, icon, colour)
+  static const List<(IslandPanel?, String, String, IconData, Color)> _options = [
+    (IslandPanel.stats, 'Stats', 'Today at a glance', Icons.bar_chart_rounded, Color(0xFF16A34A)),
+    (null, 'Kemo AI', 'Ask anything', Icons.auto_awesome_rounded, Color(0xFF14B8A6)),
+    (IslandPanel.water, 'Water', 'Log a glass', Icons.water_drop_rounded, Color(0xFF38BDF8)),
+    (IslandPanel.steps, 'Steps', 'Walk & distance', Icons.directions_walk_rounded, Color(0xFFF97316)),
+    (IslandPanel.meal, 'Log meal', 'Add food fast', Icons.restaurant_rounded, Color(0xFFEC4899)),
+    (IslandPanel.breathe, 'Breathe', 'One-minute calm', Icons.air_rounded, Color(0xFF0D9488)),
+    (IslandPanel.sleep, 'Sleep', 'Last night', Icons.bedtime_rounded, Color(0xFF6366F1)),
+    (IslandPanel.mood, 'Mood', 'Quick check-in', Icons.emoji_emotions_rounded, Color(0xFFF59E0B)),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -131,74 +170,107 @@ class _SideIslandState extends State<SideIsland>
       final top = _drag?.dy ?? restY;
       return Stack(
         children: [
+          // Tap-outside barrier while the button or menu is showing.
+          AnimatedBuilder(
+            animation: Listenable.merge([_icon, _menu]),
+            builder: (context, _) {
+              if (_icon.isDismissed && _menu.isDismissed) return const SizedBox.shrink();
+              return Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _closeAll,
+                  child: ColoredBox(color: Colors.black.withValues(alpha: 0.16 * _menu.value.clamp(0.0, 1.0))),
+                ),
+              );
+            },
+          ),
           AnimatedPositioned(
-            duration: _drag != null
-                ? Duration.zero
-                : const Duration(milliseconds: 420),
+            duration: _drag != null ? Duration.zero : const Duration(milliseconds: 420),
             curve: Curves.easeOutBack,
             left: left,
             top: top,
             child: GestureDetector(
-              onTap: _toggleMenu,
+              onTap: _tapIsland,
               onPanStart: (_) {
-                _menu.reverse();
+                _closeAll();
                 setState(() => _drag = Offset(left, top));
               },
               onPanUpdate: (d) => setState(() {
                 final p = (_drag ?? Offset(left, top)) + d.delta;
-                _drag = Offset(p.dx.clamp(0, c.maxWidth - _w),
-                    p.dy.clamp(minY, maxY));
+                _drag = Offset(p.dx.clamp(0, c.maxWidth - _w), p.dy.clamp(minY, maxY));
               }),
               onPanEnd: (d) {
                 final p = _drag ?? Offset(left, top);
                 final vx = d.velocity.pixelsPerSecond.dx;
                 HapticFeedback.selectionClick();
                 setState(() {
-                  _right = vx.abs() > 600
-                      ? vx > 0
-                      : p.dx + _w / 2 > c.maxWidth / 2;
+                  _right = vx.abs() > 600 ? vx > 0 : p.dx + _w / 2 > c.maxWidth / 2;
                   _y = ((p.dy - minY) / (maxY - minY)).clamp(0.0, 1.0);
                   _drag = null;
                 });
               },
-              child: _pill(dragging: _drag != null),
+              child: _pill(floating: _drag != null),
             ),
           ),
+          // Stage 1: menu button beside the island.
+          AnimatedBuilder(
+            animation: Listenable.merge([_icon, _menu]),
+            builder: (context, _) {
+              if (_icon.isDismissed) return const SizedBox.shrink();
+              final fwd = _icon.status != AnimationStatus.reverse;
+              final t = (fwd ? _spring : Curves.easeInCubic).transform(_icon.value);
+              final hide = 1 - _menu.value.clamp(0.0, 1.0);
+              const s = 52.0;
+              final dx = (_w + 10) * t;
+              return Positioned(
+                top: top + (_h - s) / 2,
+                left: _right ? left - dx + _w - s : left + (_w - s) * (1 - t) + (_w + 10) * t,
+                child: Opacity(
+                  opacity: (_icon.value * hide).clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: 0.4 + 0.6 * t,
+                    child: Transform.rotate(
+                      angle: (1 - t) * (_right ? -1.2 : 1.2),
+                      child: LiquidGlass(
+                        style: LiquidGlassStyle.regular,
+                        shape: BoxShape.circle,
+                        onTap: _openMenu,
+                        child: const SizedBox(
+                          width: s,
+                          height: s,
+                          child: Icon(Icons.apps_rounded, color: _ink, size: 24),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          // Stage 2: options list.
           AnimatedBuilder(
             animation: _menu,
             builder: (context, _) {
               if (_menu.isDismissed) return const SizedBox.shrink();
-              final raw = _menu.value;
-              final t = _menu.status == AnimationStatus.reverse
-                  ? Curves.easeInCubic.transform(raw)
-                  : _spring.transform(raw);
-              const mw = 224.0, mh = 150.0;
-              final w = _w + (mw - _w) * t;
-              final h = _h + (mh - _h) * t;
-              final mt = (top + _h / 2 - h / 2)
-                  .clamp(pad.top + 4, c.maxHeight - h - 100);
-              return Positioned.fill(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _menu.reverse(),
-                        child: ColoredBox(
-                          color: Colors.black
-                              .withValues(alpha: 0.18 * raw.clamp(0.0, 1.0)),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: mt,
-                      left: _right ? null : 6 * t,
-                      right: _right ? 6 * t : null,
-                      width: w,
-                      height: h,
-                      child: _menuCapsule(t, raw, c.biggest, top),
-                    ),
-                  ],
+              final fwd = _menu.status != AnimationStatus.reverse;
+              final t = (fwd ? _spring : Curves.easeInCubic).transform(_menu.value);
+              final mw = math.min(270.0, c.maxWidth - 32);
+              final mh = math.min(430.0, c.maxHeight - pad.top - 140);
+              final mt = (top + _h / 2 - mh / 2).clamp(pad.top + 8, c.maxHeight - mh - 100);
+              final oy = ((top + _h / 2 - mt) / mh) * 2 - 1;
+              return Positioned(
+                top: mt,
+                left: _right ? null : 10,
+                right: _right ? 10 : null,
+                width: mw,
+                height: mh,
+                child: Opacity(
+                  opacity: Curves.easeOut.transform(_menu.value.clamp(0.0, 1.0)),
+                  child: Transform.scale(
+                    scale: 0.25 + 0.75 * t,
+                    alignment: Alignment(_right ? 1 : -1, oy.clamp(-1.0, 1.0)),
+                    child: _menuPanel(c.biggest, top),
+                  ),
                 ),
               );
             },
@@ -208,167 +280,150 @@ class _SideIslandState extends State<SideIsland>
     });
   }
 
-  Widget _menuCapsule(double t, double raw, Size screen, double top) {
-    final r = 22 + (_h / 2 - 22) * (1 - t);
-    Widget option(int i, Widget icon, String title, String sub,
-        VoidCallback onTap) {
-      final a = ((raw - 0.35 - i * 0.12) / 0.45).clamp(0.0, 1.0);
-      final e = Curves.easeOutCubic.transform(a);
-      return Opacity(
-        opacity: e,
-        child: Transform.translate(
-          offset: Offset((_right ? 14 : -14) * (1 - e), 0),
-          child: _MenuOption(
-            icon: icon,
-            title: title,
-            sub: sub,
-            onTap: onTap,
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF14151B), Color(0xFF262833)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(r),
-        boxShadow: [
-          BoxShadow(
-            color: _mint.withValues(alpha: 0.25 * t),
-            blurRadius: 24,
-            spreadRadius: -4,
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: OverflowBox(
-        minWidth: 224,
-        maxWidth: 224,
-        minHeight: 150,
-        maxHeight: 150,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            children: [
+  Widget _menuPanel(Size screen, double top) {
+    return Material(
+      color: Colors.transparent,
+      child: LiquidGlass(
+        style: LiquidGlassStyle.material,
+        borderRadius: BorderRadius.circular(30),
+        padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(children: [
+              const KemoAvatar(size: 38, animate: false),
+              const SizedBox(width: 10),
               Expanded(
-                child: option(
-                  0,
-                  const KemoAvatar(size: 40, animate: false),
-                  'Kemo AI',
-                  'Ask anything',
-                  () => _pick(false, screen, top),
-                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Hi Rohit', style: _f(16, w: FontWeight.w800, c: _ink)),
+                  Text('What do you need?', style: _f(11.5, w: FontWeight.w500, c: const Color(0xFF6B7280))),
+                ]),
               ),
-              Container(
-                height: 1,
-                margin: const EdgeInsets.symmetric(horizontal: 10),
-                color: Colors.white.withValues(alpha: 0.08 * t),
-              ),
-              Expanded(
-                child: option(
-                  1,
-                  SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CustomPaint(
-                      painter: _RingPainter(
-                        IslandStats.eaten / IslandStats.budget,
-                        color: _mint,
-                        track: Colors.white.withValues(alpha: 0.14),
-                        stroke: 4,
+            ]),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _options.length,
+              itemBuilder: (context, i) {
+                final o = _options[i];
+                final a = ((_menu.value - 0.2 - i * 0.07) / 0.5).clamp(0.0, 1.0);
+                final e = Curves.easeOutCubic.transform(a);
+                return Opacity(
+                  opacity: e,
+                  child: Transform.translate(
+                    offset: Offset((_right ? 18 : -18) * (1 - e), 0),
+                    child: _MenuOption(
+                      icon: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: LinearGradient(colors: [o.$5.withValues(alpha: 0.7), o.$5]),
+                          boxShadow: [BoxShadow(color: o.$5.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
+                        ),
+                        child: o.$1 == null
+                            ? const Padding(padding: EdgeInsets.all(3), child: KemoAvatar(size: 32, animate: false))
+                            : Icon(o.$4, color: Colors.white, size: 20),
                       ),
-                      child: const Icon(Icons.bar_chart_rounded,
-                          color: Colors.white, size: 18),
+                      title: o.$2,
+                      sub: o.$3,
+                      onTap: () => _pick(i, screen, top),
                     ),
                   ),
-                  'Stats',
-                  'Today at a glance',
-                  () => _pick(true, screen, top),
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
-        ),
+        ]),
       ),
     );
   }
 
-  Widget _pill({required bool dragging}) {
-    final r = const Radius.circular(_h / 2);
-    const edge = Radius.circular(10);
-    final floating = dragging;
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (context, child) {
-        final glow = 0.25 + 0.2 * math.sin(_pulse.value * 2 * math.pi).abs();
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          width: _w,
-          height: _h,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF14151B), Color(0xFF23252E)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+  Widget _slideFor(int i) {
+    Widget stat(double v, Color col, IconData ic, String label) => Column(
+          key: ValueKey(i),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CustomPaint(
+                painter: _RingPainter(v, color: col, track: col.withValues(alpha: 0.16), stroke: 3.5),
+                child: Icon(ic, size: 15, color: col),
+              ),
             ),
-            borderRadius: floating
-                ? BorderRadius.all(r)
-                : BorderRadius.horizontal(
-                    left: _right ? r : edge,
-                    right: _right ? edge : r,
-                  ),
-            boxShadow: [
-              BoxShadow(
-                color: _mint.withValues(alpha: glow),
-                blurRadius: 18,
-                spreadRadius: -2,
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: child,
+            const SizedBox(height: 3),
+            Text(label, style: _f(11, w: FontWeight.w800, c: _ink)),
+          ],
         );
-      },
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        textDirection: _right ? TextDirection.ltr : TextDirection.rtl,
-        children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: CustomPaint(
-              painter: _RingPainter(
-                IslandStats.eaten / IslandStats.budget,
-                color: _mint,
-                track: Colors.white.withValues(alpha: 0.12),
-                stroke: 4,
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(6),
-                child: KemoAvatar(size: 32, animate: false),
+    switch (i) {
+      case 1:
+        return stat(IslandStats.eaten / IslandStats.budget, const Color(0xFF16A34A), Icons.local_fire_department_rounded,
+            '${IslandStats.left}');
+      case 2:
+        return stat(IslandStats.steps / IslandStats.stepGoal, const Color(0xFFF97316), Icons.directions_walk_rounded,
+            '${(IslandStats.steps / 1000).toStringAsFixed(1)}k');
+      case 3:
+        return ValueListenableBuilder<int>(
+          key: ValueKey(i),
+          valueListenable: IslandStats.waterMl,
+          builder: (_, ml, _) => stat(ml / IslandStats.waterGoal, const Color(0xFF38BDF8), Icons.water_drop_rounded,
+              '${(ml / 1000).toStringAsFixed(1)}L'),
+        );
+      case 4:
+        return stat(0.86, const Color(0xFF6366F1), Icons.bedtime_rounded, '7h12');
+      default:
+        return const KemoAvatar(key: ValueKey(0), size: 44, animate: false);
+    }
+  }
+
+  Widget _pill({required bool floating}) {
+    const r = Radius.circular(_h / 2);
+    const edge = Radius.circular(14);
+    return SizedBox(
+      width: _w,
+      height: _h,
+      child: LiquidGlass(
+        style: LiquidGlassStyle.regular,
+        borderRadius: floating
+            ? const BorderRadius.all(r)
+            : BorderRadius.horizontal(left: _right ? r : edge, right: _right ? edge : r),
+        child: Row(
+          textDirection: _right ? TextDirection.ltr : TextDirection.rtl,
+          children: [
+            const SizedBox(width: 8),
+            Expanded(
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 520),
+                  switchInCurve: _spring,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (w, a) => FadeTransition(
+                    opacity: a,
+                    child: ScaleTransition(
+                      scale: Tween(begin: 0.6, end: 1.0).animate(a),
+                      child: SlideTransition(
+                        position: Tween(begin: const Offset(0, 0.35), end: Offset.zero).animate(a),
+                        child: w,
+                      ),
+                    ),
+                  ),
+                  child: _slideFor(_slide),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            _right ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-            color: Colors.white54,
-            size: 18,
-          ),
-        ],
+            // Grab handle on the inner edge.
+            Container(
+              width: 4,
+              height: 22,
+              margin: const EdgeInsets.symmetric(horizontal: 7),
+              decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(2)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1212,9 +1267,9 @@ class _MenuOptionState extends State<_MenuOption> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.fromLTRB(6, 7, 8, 7),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: _down ? 0.1 : 0),
+          color: Colors.black.withValues(alpha: _down ? 0.05 : 0),
           borderRadius: BorderRadius.circular(16),
         ),
         child: AnimatedScale(
@@ -1229,15 +1284,15 @@ class _MenuOptionState extends State<_MenuOption> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.title, style: _f(15, w: FontWeight.w700)),
+                    Text(widget.title, style: _f(15, w: FontWeight.w700, c: _ink)),
                     Text(widget.sub,
                         style: _f(11.5,
-                            w: FontWeight.w500, c: Colors.white60)),
+                            w: FontWeight.w500, c: const Color(0xFF6B7280))),
                   ],
                 ),
               ),
               const Icon(Icons.chevron_right_rounded,
-                  color: Colors.white38, size: 20),
+                  color: Colors.black26, size: 20),
             ],
           ),
         ),

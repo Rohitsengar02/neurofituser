@@ -17,11 +17,11 @@ import '../widgets/ios_header.dart';
 import '../widgets/workout_tab_v2.dart';
 import '../widgets/smooth_scroll.dart';
 import '../widgets/nutrition_tab_v3.dart';
+import '../widgets/wellness_tab_v3.dart';
+import '../widgets/shop_tab_v3.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
-import '../widgets/dashboard_mental_health_sections.dart';
-import '../widgets/dashboard_shop_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
 import 'trainers_screen.dart';
@@ -237,8 +237,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           // Furry blurred circles and doodles drift behind
                           // the whole Overview, header included.
-                          if (_selectedCategoryIndex <= 2)
-                            Positioned.fill(child: FurBlobsBackdrop(food: _selectedCategoryIndex == 2)),
+                          Positioned.fill(child: FurBlobsBackdrop(food: _selectedCategoryIndex == 2)),
                           Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -292,9 +291,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   : _selectedCategoryIndex == 2
                                   ? const NutritionTabV3()
                                   : _selectedCategoryIndex == 3
-                                  ? const DashboardMentalHealthTabContent()
+                                  ? const WellnessTabV3()
                                   : _selectedCategoryIndex == 4
-                                  ? const DashboardShopTabContent()
+                                  ? const ShopTabV3()
                                   : Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
