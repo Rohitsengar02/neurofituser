@@ -24,16 +24,17 @@ import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
-import 'trainers_screen.dart';
-import 'social_screen.dart';
+import '../trainer/trainers_page.dart';
+import '../trainer/panel_data.dart';
+import '../trainer/panel_onboarding.dart';
+import '../trainer/trainer_panel.dart';
+import '../community/community_page.dart';
+import '../shop/cart_page.dart';
+import '../shop/orders_page.dart';
 import 'profile_screen.dart';
 import 'rewards_screen.dart';
 import 'ai_coach_screen.dart';
-import 'shop_screen.dart';
 import 'challenges_screen.dart';
-import 'orders_screen.dart';
-import 'wishlist_screen.dart';
-import 'offers_screen.dart';
 import 'transform_screen.dart';
 import 'vendor_registration_screen.dart';
 import 'streak_detail_screen.dart';
@@ -149,9 +150,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     },
   ];
 
+  void _onPanel() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    PanelStore.I.addListener(_onPanel);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -183,6 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
+    PanelStore.I.removeListener(_onPanel);
     _smoothScroll.dispose();
     _demoCountdownTimer?.cancel();
     _demoPulseController.dispose();
@@ -193,6 +200,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Trainer panel mode swaps the whole home for the coach panel.
+    if (PanelStore.I.panelMode) return const TrainerPanelShell();
     final activeCategory = _categories[_selectedCategoryIndex];
 
     return Scaffold(
@@ -227,9 +236,9 @@ class _DashboardScreenState extends State<DashboardScreen>
               _selectedBottomNavIndex == 1
                   ? const StepsScreen()
                   : _selectedBottomNavIndex == 2
-                  ? const TrainersScreen()
+                  ? const TrainersPage()
                   : _selectedBottomNavIndex == 3
-                  ? const SocialScreen()
+                  ? const CommunityPage()
                   : _selectedBottomNavIndex == 4
                   ? const ProfileScreen()
                   : SingleChildScrollView(
@@ -313,7 +322,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                                   CrossAxisAlignment.stretch,
                                               children: [
                                                 OverviewHomeCards(),
-                                                SizedBox(height: 28),
+                                                SizedBox(height: 16),
+                                                YourTrainerCard(),
+                                                SizedBox(height: 12),
                                                 OverviewGlassSections(),
                                                 SizedBox(height: 28),
                                                 AchievementsSection(),
@@ -1897,12 +1908,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         bgColor: const Color(0xFFFFE4E6),
                         onTap: () {
                           Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ShopScreen(),
-                            ),
-                          );
+                          setState(() {
+                            _selectedBottomNavIndex = 0;
+                            _selectedCategoryIndex = 4;
+                          });
                         },
                       ),
                       _buildQuickActionItem(
@@ -1915,7 +1924,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const OrdersScreen(),
+                              builder: (context) => const OrdersPage(),
                             ),
                           );
                         },
@@ -1930,7 +1939,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const WishlistScreen(),
+                              builder: (context) => const WishlistPage(),
                             ),
                           );
                         },
@@ -1945,7 +1954,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const OffersScreen(),
+                              builder: (context) => const OffersPage(),
                             ),
                           );
                         },
@@ -1990,7 +1999,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                           bgColor: const Color(0xFFF3E8FF),
                           borderColor: const Color(0xFFE9D5FF),
                           imageAsset: 'assets/images/trainer_panel_3d.jpg',
-                          onTap: () {},
+                          onTap: () {
+                            Navigator.pop(context);
+                            openTrainerPanel(context);
+                          },
                         ),
                       ),
                     ],

@@ -44,7 +44,19 @@ Future<T?> shopPush<T>(BuildContext context, Widget page) => Navigator.of(contex
 class ShopBackdrop extends StatefulWidget {
   final Color tint;
   final Color tint2;
-  const ShopBackdrop({super.key, this.tint = shopOrange, this.tint2 = const Color(0xFF8B5CF6)});
+  /// Floating object glyphs; defaults to shop objects.
+  final List<IconData>? icons;
+  /// Page fill under the blobs (dark for the trainer onboarding).
+  final Color base;
+  final Color bubble;
+  const ShopBackdrop({
+    super.key,
+    this.tint = shopOrange,
+    this.tint2 = const Color(0xFF8B5CF6),
+    this.icons,
+    this.base = shopBg,
+    this.bubble = const Color(0x8CFFFFFF),
+  });
   @override
   State<ShopBackdrop> createState() => _ShopBackdropState();
 }
@@ -75,14 +87,15 @@ class _ShopBackdropState extends State<ShopBackdrop> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
-        child: CustomPaint(painter: _BackdropPainter(_t, widget.tint, widget.tint2), size: Size.infinite),
+        child: CustomPaint(painter: _BackdropPainter(_t, widget.tint, widget.tint2, widget.icons ?? _BackdropPainter._icons, widget.base, widget.bubble), size: Size.infinite),
       );
 }
 
 class _BackdropPainter extends CustomPainter {
   final ValueNotifier<double> t;
-  final Color tint, tint2;
-  _BackdropPainter(this.t, this.tint, this.tint2) : super(repaint: t);
+  final Color tint, tint2, base, bubble;
+  final List<IconData> icons;
+  _BackdropPainter(this.t, this.tint, this.tint2, this.icons, this.base, this.bubble) : super(repaint: t);
 
   static const _icons = [
     Icons.shopping_bag_rounded,
@@ -102,7 +115,6 @@ class _BackdropPainter extends CustomPainter {
       s: 18 + r.nextDouble() * 18,
       sp: 0.15 + r.nextDouble() * 0.25,
       ph: r.nextDouble() * 6.28,
-      icon: _icons[i % _icons.length],
     );
   });
   static final Map<String, TextPainter> _glyphs = {};
@@ -123,7 +135,7 @@ class _BackdropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final time = t.value;
-    canvas.drawRect(Offset.zero & size, Paint()..color = shopBg);
+    canvas.drawRect(Offset.zero & size, Paint()..color = base);
     void blob(Offset c, double r, Color col) => canvas.drawCircle(
           c,
           r,
@@ -137,20 +149,21 @@ class _BackdropPainter extends CustomPainter {
       final o = _objs[i];
       final y = ((o.y - time * o.sp * 0.04) % 1.0) * (size.height + 80) - 40;
       final x = o.x * size.width + math.sin(time * o.sp + o.ph) * 14;
-      final col = (i.isEven ? tint : tint2).withValues(alpha: 0.13);
+      final dark = base.computeLuminance() < 0.2;
+      final col = (i.isEven ? tint : tint2).withValues(alpha: dark ? 0.32 : 0.13);
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(math.sin(time * 0.5 + o.ph) * 0.35);
-      final bubble = o.s * 1.9;
-      canvas.drawCircle(Offset.zero, bubble / 2, Paint()..color = Colors.white.withValues(alpha: 0.55));
-      final g = _glyph(o.icon, o.s, col);
+      final bd = o.s * 1.9;
+      canvas.drawCircle(Offset.zero, bd / 2, Paint()..color = bubble);
+      final g = _glyph(icons[i % icons.length], o.s, col);
       g.paint(canvas, Offset(-g.width / 2, -g.height / 2));
       canvas.restore();
     }
   }
 
   @override
-  bool shouldRepaint(_BackdropPainter old) => old.tint != tint || old.tint2 != tint2;
+  bool shouldRepaint(_BackdropPainter old) => old.tint != tint || old.tint2 != tint2 || old.base != base;
 }
 
 // =====================================================================
@@ -166,8 +179,10 @@ class ShopPage extends StatelessWidget {
   final Widget body;
   final Widget? bottom;
   final Color tint;
+  final List<IconData>? icons;
   const ShopPage({
     super.key,
+    this.icons,
     required this.title,
     this.caption,
     this.actions = const [],
@@ -181,7 +196,7 @@ class ShopPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: shopBg,
       body: Stack(children: [
-        Positioned.fill(child: ShopBackdrop(tint: tint)),
+        Positioned.fill(child: ShopBackdrop(tint: tint, icons: icons)),
         SafeArea(
           bottom: false,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
