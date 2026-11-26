@@ -111,12 +111,11 @@ class _SideIslandState extends State<SideIsland> with TickerProviderStateMixin {
 
   void _tapIsland() {
     HapticFeedback.mediumImpact();
+    // One tap opens the full options list straight away.
     if (_menu.value > 0) {
       _closeAll();
-    } else if (_icon.value > 0) {
-      _icon.reverse();
     } else {
-      _icon.forward();
+      _menu.forward();
     }
   }
 

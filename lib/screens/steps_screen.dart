@@ -1,9 +1,40 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:permission_handler/permission_handler.dart';
-import '../widgets/staggered_slide_fade.dart';
-import 'live_walk_screen.dart';
+
+import '../services/step_tracker.dart';
+import '../widgets/apple_kit.dart';
+import '../widgets/liquid_glass.dart';
+import 'walk_map_screen.dart';
+
+// Steps, in the Apple Health style of the reference: a soft violet hero
+// with today's count and a stepped day curve, a calendar carousel, glass
+// stat cards and a Start button that opens the live walk map. Every
+// number comes from the phone's step sensor via StepTracker.
+
+const _v1 = Color(0xFF6E4E9E);
+const _v2 = Color(0xFF9B7BB9);
+const _v3 = Color(0xFFD7B3D2);
+const _bg = Color(0xFFF1ECF6);
+const _violet = Color(0xFF7C3AED);
+const _orange = Color(0xFFF97316);
+const _green = Color(0xFF16A34A);
+const _blue = Color(0xFF3B82F6);
+const _pink = Color(0xFFEC4899);
+
+String _fmt(int n) {
+  final s = n.toString();
+  final b = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+    b.write(s[i]);
+  }
+  return b.toString();
+}
+
+const _wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 class StepsScreen extends StatefulWidget {
   const StepsScreen({super.key});
@@ -13,1240 +44,635 @@ class StepsScreen extends StatefulWidget {
 }
 
 class _StepsScreenState extends State<StepsScreen> {
+  final t = StepTracker.instance;
+  late DateTime _sel = _today;
+
+  static DateTime get _today {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  bool get _isToday => _sel == _today;
+
   @override
   void initState() {
     super.initState();
-    _requestAllPermissions();
-  }
-
-  Future<void> _requestAllPermissions() async {
-    try {
-      await [
-        Permission.location,
-        Permission.locationWhenInUse,
-        Permission.locationAlways,
-        Permission.activityRecognition,
-        Permission.sensors,
-      ].request();
-    } catch (_) {}
+    t.start();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFFBFBFD),
-      child: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 110), // Padding for floating nav
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              StaggeredSlideFade(
-                index: 0,
-                child: _buildHeader(),
-              ),
-              const SizedBox(height: 16),
-              StaggeredSlideFade(
-                index: 1,
-                child: _buildCalendarCarousel(),
-              ),
-              const SizedBox(height: 24),
-              StaggeredSlideFade(
-                index: 2,
-                child: _buildHeroStepsCard(),
-              ),
-              const SizedBox(height: 16),
-              StaggeredSlideFade(
-                index: 3,
-                child: _buildStatsRow(),
-              ),
-              const SizedBox(height: 24),
-              StaggeredSlideFade(
-                index: 4,
-                child: _buildStartWalkingCard(),
-              ),
-              const SizedBox(height: 24),
-              StaggeredSlideFade(
-                index: 5,
-                child: _buildChartsSection(),
-              ),
-              const SizedBox(height: 24),
-              StaggeredSlideFade(
-                index: 6,
-                child: _buildAchievementsSection(),
-              ),
-              const SizedBox(height: 24),
-              StaggeredSlideFade(
-                index: 7,
-                child: IntrinsicHeight(
-                  child: _buildBottomInsightsSection(),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Steps',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
-                    letterSpacing: -1.0,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Every step brings you closer to your goals. 👣',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF0F172A)),
-                const SizedBox(width: 6),
-                Text(
-                  'Today',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF0F172A)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarCarousel() {
-    // Generate dates (e.g. today and past 14 days)
-    final now = DateTime.now();
-    final dates = List.generate(15, (index) => now.subtract(Duration(days: 14 - index)));
-    
-    return ShaderMask(
-      shaderCallback: (Rect bounds) {
-        return const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Colors.transparent,
-            Colors.white,
-            Colors.white,
-            Colors.transparent,
-          ],
-          stops: [0.0, 0.05, 0.95, 1.0],
-        ).createShader(bounds);
-      },
-      blendMode: BlendMode.dstIn,
-      child: SizedBox(
-        height: 70,
-        child: ListView.builder(
-          physics: const BouncingScrollPhysics(),
-          scrollDirection: Axis.horizontal,
-          itemCount: dates.length,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemBuilder: (context, index) {
-            final date = dates[index];
-            final isToday = index == dates.length - 1; // Assuming last item is today
-            
-            final dayName = ['M', 'T', 'W', 'T', 'F', 'S', 'S'][date.weekday - 1];
-            
-            return Container(
-              width: 50,
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                gradient: isToday ? const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
-                ) : null,
-                color: isToday ? null : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: isToday ? null : Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: isToday ? [
-                  BoxShadow(
-                    color: const Color(0xFF16A34A).withValues(alpha: 0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ] : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    dayName,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isToday ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${date.day}',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: isToday ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeroStepsCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Container(
-        height: 200,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF16A34A).withValues(alpha: 0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            // Background Image
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/steps_poster.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-            
-            // Dark Gradient from Left (50% width)
+    final pushed = Navigator.of(context).canPop() && ModalRoute.of(context)?.isFirst == false;
+    final bottomGap = pushed ? 24.0 : 104.0;
+    return Scaffold(
+      backgroundColor: _bg,
+      body: ListenableBuilder(
+        listenable: t,
+        builder: (context, _) {
+          final steps = t.stepsOn(_sel);
+          return Stack(children: [
+            // Soft violet wash behind the hero, fading into the page.
             Positioned(
-              left: 0,
               top: 0,
-              bottom: 0,
-              width: MediaQuery.of(context).size.width * 0.55,
-              child: Container(
-                decoration: BoxDecoration(
+              left: 0,
+              right: 0,
+              height: 560,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.85),
-                      Colors.black.withValues(alpha: 0.6),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.6, 1.0],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_v1, _v2, _v3],
+                  ),
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [_bg.withValues(alpha: 0), _bg],
+                      stops: const [0.72, 1],
+                    ),
                   ),
                 ),
               ),
             ),
-
-            // Left Side Content
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            SafeArea(
+              bottom: false,
+              child: ListView(
+                padding: EdgeInsets.only(bottom: bottomGap + 90),
+                physics: const BouncingScrollPhysics(),
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        "Today's Steps",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF4ADE80),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Live",
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF4ADE80),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "8,752",
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF4ADE80),
-                      letterSpacing: -2.0,
-                      height: 1.0,
-                    ),
-                  ),
-                  Text(
-                    "/ 10,000 Steps",
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.star_rounded, color: Color(0xFFFCD34D), size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        "You're doing amazing!",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  // Bottom Progress Bar
-                  Row(
-                    children: [
-                      Text(
-                        "87%",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        "of daily goal",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: 130,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: 0.87,
-                        minHeight: 6,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4ADE80)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatsRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(child: _buildStatItem(Icons.location_on_rounded, const Color(0xFF10B981), "6.24", "km", "Distance")),
-          const SizedBox(width: 8),
-          Expanded(child: _buildStatItem(Icons.local_fire_department_rounded, const Color(0xFFF97316), "412", "kcal", "Calories")),
-          const SizedBox(width: 8),
-          Expanded(child: _buildStatItem(Icons.schedule_rounded, const Color(0xFF3B82F6), "72", "min", "Active Time")),
-          const SizedBox(width: 8),
-          Expanded(child: _buildStatItem(Icons.stairs_rounded, const Color(0xFF8B5CF6), "18", "floors", "Climbed")),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(IconData icon, Color color, String value, String unit, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(width: 2),
-              Text(
-                unit,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF64748B),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStartWalkingCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Shoe Image
-            Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFFDCFCE7),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Image.asset(
-                'assets/images/steps_green_shoe.jpg',
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Text Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Start Walking',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.directions_walk_rounded, color: Color(0xFF16A34A), size: 16),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Track your steps, distance, calories and improve your health.',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF64748B),
-                      height: 1.3,
-                    ),
-                  ),
+                  _top(pushed),
+                  _hero(steps),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _buildMiniTag(Icons.gps_fixed_rounded, 'GPS Tracking'),
-                      _buildMiniTag(Icons.bar_chart_rounded, 'Live Stats'),
-                      _buildMiniTag(Icons.track_changes_rounded, 'Goal Progress'),
-                    ],
-                  ),
+                  _calendar(),
+                  const SizedBox(height: 16),
+                  ScrollReveal(child: _statsGrid(steps)),
+                  const SizedBox(height: 12),
+                  ScrollReveal(child: _hourly()),
+                  const SizedBox(height: 12),
+                  ScrollReveal(child: _week()),
+                  const SizedBox(height: 12),
+                  ScrollReveal(child: _goal()),
+                  const SizedBox(height: 12),
+                  ScrollReveal(child: _sensor()),
                 ],
               ),
+            ),
+            Positioned(left: 16, right: 16, bottom: bottomGap, child: _startButton()),
+          ]);
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- top
+
+  Widget _top(bool pushed) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: Row(children: [
+          if (pushed) ...[
+            LiquidGlass(
+              style: LiquidGlassStyle.clear,
+              shape: BoxShape.circle,
+              shadow: false,
+              onTap: () => Navigator.of(context).maybePop(),
+              child: const SizedBox(width: 40, height: 40, child: Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.white)),
             ),
             const SizedBox(width: 10),
-            // Play Button
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.heavyImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const LiveWalkScreen(initialSteps: 2846, stepGoal: 10000),
-                  ),
-                );
-              },
-              child: Column(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF16A34A).withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Start Now',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF16A34A),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMiniTag(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: const Color(0xFF64748B)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF64748B),
-            ),
+          Text('Steps', style: akT(32, w: FontWeight.w500, c: Colors.white, ls: -0.8)),
+          const Spacer(),
+          LiquidGlass(
+            style: LiquidGlassStyle.clear,
+            shadow: false,
+            borderRadius: BorderRadius.circular(22),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.local_fire_department_outlined, size: 17, color: Colors.white),
+              const SizedBox(width: 4),
+              Text('${_streak()}', style: akN(15, c: Colors.white, w: FontWeight.w500)),
+            ]),
           ),
-        ],
-      ),
-    );
+        ]),
+      );
+
+  int _streak() {
+    var d = _today, n = 0;
+    while (t.stepsOn(d) >= t.goal) {
+      n++;
+      d = d.subtract(const Duration(days: 1));
+    }
+    return n;
   }
 
-  Widget _buildChartsSection() {
+  // ---------------------------------------------------------------- hero
+
+  Widget _hero(int steps) {
+    final label = _isToday ? 'Today' : '${_wd[_sel.weekday - 1]}, ${_sel.day} ${_mo[_sel.month - 1]}';
+    final pct = steps / t.goal;
+    final expected = _isToday ? (DateTime.now().hour + DateTime.now().minute / 60) / 22 : 1.0;
+    final onTrack = pct >= expected.clamp(0.0, 1.0) * 0.9;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _buildStepsOverviewChart()),
-          const SizedBox(width: 16),
-          Expanded(child: _buildWeeklyProgressChart()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepsOverviewChart() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  'Steps Overview',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'View All',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: akT(15, w: FontWeight.w500, c: Colors.white.withValues(alpha: 0.85))),
+        const SizedBox(height: 2),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: steps.toDouble()),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (_, v, _) => Text(_fmt(v.round()), style: akN(56, c: Colors.white, w: FontWeight.w500, ls: -2)),
           ),
-          const SizedBox(height: 12),
-          // Time Toggle
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildTimeToggle('H', false),
-                _buildTimeToggle('D', true),
-                _buildTimeToggle('W', false),
-                _buildTimeToggle('M', false),
-                _buildTimeToggle('Y', false),
-              ],
-            ),
+          const SizedBox(width: 6),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text('steps', style: akT(17, w: FontWeight.w500, c: Colors.white.withValues(alpha: 0.85))),
           ),
-          const SizedBox(height: 16),
-          Text(
-            '8,752 Steps',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          Text(
-            'Today',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Mock Bar Chart
-          SizedBox(
-            height: 100,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildBar(15, false),
-                _buildBar(30, false),
-                _buildBar(10, false),
-                _buildBar(45, false),
-                _buildBar(25, false),
-                _buildBar(60, false),
-                _buildBar(85, true), // Active Peak
-                _buildBar(50, false),
-                _buildBar(40, false),
-                _buildBar(20, false),
-                _buildBar(35, false),
-                _buildBar(5, false),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('12 AM', style: _chartLabelStyle()),
-              Text('6 AM', style: _chartLabelStyle()),
-              Text('12 PM', style: _chartLabelStyle()),
-              Text('6 PM', style: _chartLabelStyle()),
-              Text('12 AM', style: _chartLabelStyle()),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeToggle(String text, bool isActive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF16A34A) : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 9,
-          fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-          color: isActive ? Colors.white : const Color(0xFF64748B),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBar(double height, bool isActive) {
-    return Container(
-      width: 6,
-      height: height,
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF16A34A) : const Color(0xFF16A34A).withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(4),
-      ),
-    );
-  }
-
-  TextStyle _chartLabelStyle() {
-    return GoogleFonts.plusJakartaSans(
-      fontSize: 8,
-      fontWeight: FontWeight.w600,
-      color: const Color(0xFF94A3B8),
-    );
-  }
-
-  Widget _buildWeeklyProgressChart() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  'Weekly Progress',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'View All',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '61,284',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          Text(
-            'Total Steps\n21 Aug – 27 Aug',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF64748B),
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 19),
-          // Weekly Bars
-          SizedBox(
-            height: 80,
-            child: Stack(
-              children: [
-                // Goal Line
-                Positioned(
-                  top: 30,
-                  left: 0,
-                  right: 0,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          height: 1,
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: const Color(0xFF16A34A).withValues(alpha: 0.3),
-                              width: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF16A34A),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '10K',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 7,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Bars
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildWeeklyBar(50, true),
-                    _buildWeeklyBar(45, true),
-                    _buildWeeklyBar(70, true),
-                    _buildWeeklyBar(35, false),
-                    _buildWeeklyBar(80, true),
-                    _buildWeeklyBar(25, false),
-                    _buildWeeklyBar(40, true),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Text('M', style: _chartLabelStyle()),
-              Text('T', style: _chartLabelStyle()),
-              Text('W', style: _chartLabelStyle()),
-              Text('T', style: _chartLabelStyle()),
-              Text('F', style: _chartLabelStyle()),
-              Text('S', style: _chartLabelStyle()),
-              Text('S', style: _chartLabelStyle()),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              _buildLegend(const Color(0xFF16A34A), 'Goal Achieved'),
-              _buildLegend(const Color(0xFFE2E8F0), 'Goal Not Met'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeeklyBar(double height, bool goalMet) {
-    return Container(
-      width: 8,
-      height: height,
-      decoration: BoxDecoration(
-        color: goalMet ? const Color(0xFF16A34A) : const Color(0xFF16A34A).withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(4),
-      ),
-    );
-  }
-
-  Widget _buildLegend(Color color, String text) {
-    return Row(
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 8,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF94A3B8),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAchievementsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Achievements',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              Text(
-                'View All',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
-          ),
-        ),
+        ]),
         const SizedBox(height: 16),
         SizedBox(
-          height: 110,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            children: [
-              _buildAchievementBadge(const Color(0xFF10B981), Icons.directions_walk_rounded, '10K', '10K Steps', 'Achieved'),
-              const SizedBox(width: 16),
-              _buildAchievementBadge(const Color(0xFF3B82F6), Icons.directions_walk_rounded, '25K', '25K Steps', 'Achieved'),
-              const SizedBox(width: 16),
-              _buildAchievementBadge(const Color(0xFF8B5CF6), Icons.directions_walk_rounded, '50K', '50K Steps', 'Achieved'),
-              const SizedBox(width: 16),
-              _buildAchievementBadge(const Color(0xFFF97316), Icons.local_fire_department_rounded, '', '7 Day Streak', 'Achieved'),
-              const SizedBox(width: 16),
-              _buildAchievementBadge(const Color(0xFFF59E0B), Icons.emoji_events_rounded, '', 'Weekend Warrior', 'Achieved'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAchievementBadge(Color color, IconData icon, String textInside, String title, String status) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 65,
-              height: 70,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.2),
-                shape: BoxShape.circle, 
-              ),
-            ),
-            Container(
-              width: 50,
-              height: 55,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: Colors.white, size: 20),
-                  if (textInside.isNotEmpty)
-                    Text(
-                      textInside,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          title,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-        Text(
-          status,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomInsightsSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Step Insights Card
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFF1F5F9)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.trending_up_rounded, color: Color(0xFF16A34A), size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Step Insights',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  RichText(
-                    text: TextSpan(
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF64748B),
-                        height: 1.4,
-                      ),
-                      children: const [
-                        TextSpan(text: 'Your average steps this week is '),
-                        TextSpan(
-                          text: '8,746 steps.',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF16A34A),
-                          ),
-                        ),
-                      ],
+          height: 190,
+          child: _isToday
+              ? Stack(children: [
+                  Positioned.fill(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 1400),
+                      curve: Curves.easeOutCubic,
+                      builder: (_, v, _) => CustomPaint(painter: _DayCurve(t.hours, t.goal, v)),
                     ),
                   ),
-                  const Spacer(),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.arrow_upward_rounded, color: Color(0xFF16A34A), size: 10),
-                            const SizedBox(width: 2),
-                            Text(
-                              '14%',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF16A34A),
-                              ),
-                            ),
-                          ],
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 8,
+                    child: Center(
+                      child: LiquidGlass(
+                        style: LiquidGlassStyle.clear,
+                        shadow: false,
+                        borderRadius: BorderRadius.circular(20),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        child: Text(
+                          steps == 0 ? 'Start moving' : onTrack ? 'On Track' : 'Keep going',
+                          style: akT(13, w: FontWeight.w500, c: Colors.white),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'vs last week',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Daily Tip Card
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFF1F5F9)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.lightbulb_outline_rounded, color: Color(0xFFF59E0B), size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Daily Tip',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'A 10-minute walk after meals can improve digestion and boost your energy.',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF64748B),
-                      height: 1.4,
                     ),
                   ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Image.asset(
-                      'assets/images/steps_daily_tip.jpg',
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+                ])
+              : Center(
+                  child: _DayRing(pct: pct, label: '${(pct * 100).round()}% of goal'),
+                ),
+        ),
+        if (_isToday) ...[
+          const SizedBox(height: 6),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            for (final l in ['12 AM', '6 AM', '12 PM', '6 PM', '12 AM'])
+              Text(l, style: akT(11.5, w: FontWeight.w600, c: Colors.white.withValues(alpha: 0.8))),
+          ]),
         ],
+      ]),
+    );
+  }
+
+  // ------------------------------------------------------------ calendar
+
+  Widget _calendar() {
+    const n = 30;
+    return SizedBox(
+      height: 92,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        reverse: true,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: n,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final d = _today.subtract(Duration(days: i));
+          final s = t.stepsOn(d);
+          final sel = d == _sel;
+          return AkPress(
+            onTap: () => setState(() => _sel = d),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 260),
+              curve: akSpring,
+              width: 56,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                color: sel ? Colors.white : Colors.white.withValues(alpha: 0.55),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+                boxShadow: sel
+                    ? [BoxShadow(color: _v1.withValues(alpha: 0.25), blurRadius: 14, offset: const Offset(0, 6))]
+                    : const [],
+              ),
+              child: Column(children: [
+                Text(i == 0 ? 'Today' : _wd[d.weekday - 1], style: akT(11, w: FontWeight.w700, c: sel ? _violet : akMuted)),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: Stack(alignment: Alignment.center, children: [
+                    CircularProgressIndicator(
+                      value: (s / t.goal).clamp(0.0, 1.0),
+                      strokeWidth: 3.5,
+                      strokeCap: StrokeCap.round,
+                      color: s >= t.goal ? _green : _violet,
+                      backgroundColor: _violet.withValues(alpha: 0.12),
+                    ),
+                    Text('${d.day}', style: akN(13, c: akInk)),
+                  ]),
+                ),
+              ]),
+            ),
+          );
+        },
       ),
     );
   }
+
+  // --------------------------------------------------------------- stats
+
+  Widget _statsGrid(int steps) {
+    final km = steps * StepTracker.strideM / 1000;
+    final kcal = (steps * StepTracker.kcalPerStep).round();
+    final min = steps ~/ 110;
+    final items = [
+      ('Distance', km.toStringAsFixed(2), 'km', Icons.route_rounded, _blue),
+      ('Calories', '$kcal', 'kcal', Icons.local_fire_department_rounded, _orange),
+      ('Active', '$min', 'min', Icons.timer_rounded, _green),
+      ('Goal', '${(steps / t.goal * 100).round()}', '%', Icons.flag_rounded, _violet),
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(children: [
+        for (var r = 0; r < 2; r++) ...[
+          Row(children: [
+            for (var c = 0; c < 2; c++) ...[
+              Expanded(child: _statCard(items[r * 2 + c])),
+              if (c == 0) const SizedBox(width: 12),
+            ],
+          ]),
+          if (r == 0) const SizedBox(height: 12),
+        ],
+      ]),
+    );
+  }
+
+  Widget _statCard((String, String, String, IconData, Color) s) => LiquidGlass(
+        style: LiquidGlassStyle.material,
+        borderRadius: BorderRadius.circular(26),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text(s.$1, style: akT(14, w: FontWeight.w500)),
+            const Spacer(),
+            Icon(s.$4, size: 18, color: s.$5),
+          ]),
+          const SizedBox(height: 14),
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(s.$2, style: akN(30, w: FontWeight.w500)))),
+            const SizedBox(width: 4),
+            Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(s.$3, style: akT(13, c: akMuted))),
+          ]),
+        ]),
+      );
+
+  // -------------------------------------------------------------- hourly
+
+  Widget _hourly() {
+    final h = _isToday ? t.hours : List.filled(24, 0);
+    final mx = math.max(1, h.reduce(math.max));
+    return AkGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('By the hour', style: akT(16, w: FontWeight.w700)),
+          const Spacer(),
+          Text(_isToday ? 'Today' : 'Kept for today only', style: akT(12, c: akMuted)),
+        ]),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 96,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            for (var i = 0; i < 24; i++)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(end: h[i] / mx),
+                    duration: Duration(milliseconds: 500 + i * 25),
+                    curve: akSpring,
+                    builder: (_, v, _) => Container(
+                      height: math.max(3, 96 * v),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(3),
+                        color: h[i] == 0
+                            ? _violet.withValues(alpha: 0.1)
+                            : i == DateTime.now().hour && _isToday
+                                ? _violet
+                                : _violet.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 6),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          for (final l in ['12a', '6a', '12p', '6p', '11p']) Text(l, style: akT(11, c: akFaint)),
+        ]),
+      ]),
+    );
+  }
+
+  // ---------------------------------------------------------------- week
+
+  Widget _week() {
+    final days = [for (var i = 6; i >= 0; i--) _today.subtract(Duration(days: i))];
+    final vals = [for (final d in days) t.stepsOn(d)];
+    final mx = math.max(t.goal, vals.reduce(math.max)).toDouble();
+    final logged = vals.where((v) => v > 0).toList();
+    final avg = logged.isEmpty ? 0 : logged.reduce((a, b) => a + b) ~/ logged.length;
+    final best = vals.reduce(math.max);
+    return AkGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Last 7 days', style: akT(16, w: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Row(children: [
+          Text('Avg ${_fmt(avg)}', style: akT(12.5, c: akMuted)),
+          const SizedBox(width: 12),
+          Text('Best ${_fmt(best)}', style: akT(12.5, c: akMuted)),
+        ]),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 120,
+          child: Stack(children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 100 * (1 - t.goal / mx),
+              child: Row(children: [
+                Expanded(child: CustomPaint(painter: _Dash(), size: const Size(double.infinity, 1))),
+                const SizedBox(width: 4),
+                Text('Goal', style: akT(10.5, w: FontWeight.w700, c: _green)),
+              ]),
+            ),
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              for (var i = 0; i < 7; i++)
+                Expanded(
+                  child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(end: vals[i] / mx),
+                      duration: Duration(milliseconds: 600 + i * 70),
+                      curve: akSpring,
+                      builder: (_, v, _) => Container(
+                        width: 22,
+                        height: math.max(4, 100 * v),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: vals[i] >= t.goal ? [_green, const Color(0xFF86EFAC)] : [_v1, _v3],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(i == 6 ? 'Today' : _wd[days[i].weekday - 1].substring(0, 1),
+                        style: akT(11, w: FontWeight.w700, c: i == 6 ? akInk : akMuted)),
+                  ]),
+                ),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  // ---------------------------------------------------------------- goal
+
+  Widget _goal() => AkGlass(
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Daily goal', style: akT(16, w: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text('${_fmt(t.goal)} steps', style: akN(24, w: FontWeight.w500)),
+            ]),
+          ),
+          for (final d in [-500, 500])
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: AkPress(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  t.setGoal((t.goal + d).clamp(2000, 30000));
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: _violet.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: Icon(d < 0 ? Icons.remove_rounded : Icons.add_rounded, color: _violet),
+                ),
+              ),
+            ),
+        ]),
+      );
+
+  // -------------------------------------------------------------- sensor
+
+  Widget _sensor() {
+    final (title, body, color, icon) = switch (t.source) {
+      'sensor' => ('Phone step sensor', 'Counting with your phone\'s built-in step counter, even when the app is closed.', _green, Icons.sensors_rounded),
+      'motion' => ('Motion sensor', 'No step counter chip found, so steps are counted from the accelerometer while the app is open.', _blue, Icons.vibration_rounded),
+      'denied' => ('Permission needed', 'Allow Physical activity in your phone settings so NeuroFit can count steps.', _orange, Icons.lock_outline_rounded),
+      'unavailable' => ('No sensor here', 'This device has no step or motion sensor. Open NeuroFit on your phone to count steps.', _pink, Icons.sensors_off_rounded),
+      _ => ('Connecting to sensors…', 'Looking for your phone\'s step counter.', akMuted, Icons.sync_rounded),
+    };
+    return AkGlass(
+      child: Row(children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+          child: Icon(icon, color: color),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: akT(14.5, w: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(body, style: akT(12.5, w: FontWeight.w500, c: akMuted, h: 1.35)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  // --------------------------------------------------------------- start
+
+  Widget _startButton() => AkPress(
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          Navigator.of(context).push(PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 600),
+            reverseTransitionDuration: const Duration(milliseconds: 380),
+            pageBuilder: (_, _, _) => const WalkMapScreen(),
+            transitionsBuilder: (_, a, _, child) {
+              final c = CurvedAnimation(parent: a, curve: const Cubic(0.18, 1.0, 0.3, 1), reverseCurve: Curves.easeInCubic);
+              return FadeTransition(
+                opacity: c,
+                child: ScaleTransition(scale: Tween(begin: 0.92, end: 1.0).animate(c), child: child),
+              );
+            },
+          ));
+        },
+        child: Container(
+          height: 60,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(colors: [Color(0xFF111827), Color(0xFF374151)]),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 20, offset: const Offset(0, 10))],
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: const BoxDecoration(color: Color(0xFF22C55E), shape: BoxShape.circle),
+              child: const Icon(Icons.play_arrow_rounded, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text('Start walk', style: akT(17, w: FontWeight.w800, c: Colors.white)),
+          ]),
+        ),
+      );
+}
+
+/// Cumulative steps through the day as a stepped curve, like the reference.
+class _DayCurve extends CustomPainter {
+  final List<int> hours;
+  final int goal;
+  final double t;
+  _DayCurve(this.hours, this.goal, this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final now = DateTime.now();
+    final nowX = (now.hour + now.minute / 60) / 24;
+    var cum = 0;
+    final pts = <Offset>[];
+    final total = hours.fold(0, (a, b) => a + b);
+    final top = math.max(goal * 0.6, total * 1.15).toDouble();
+    final base = size.height - 6;
+    final h = base - 40;
+    pts.add(Offset(0, base));
+    for (var i = 0; i < 24; i++) {
+      final x0 = i / 24 * size.width;
+      if (i / 24 > nowX) break;
+      pts.add(Offset(x0, base - h * cum / top));
+      cum += hours[i];
+      final x1 = math.min((i + 1) / 24, nowX) * size.width;
+      pts.add(Offset(x0 + (x1 - x0) * 0.35, base - h * cum / top));
+      pts.add(Offset(x1, base - h * cum / top));
+    }
+    // Animate by revealing left to right.
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, size.width * nowX * t + 2, size.height));
+    final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+    for (final p in pts.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    final fill = Path.from(path)
+      ..lineTo(pts.last.dx, base)
+      ..close();
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withValues(alpha: 0.35), Colors.white.withValues(alpha: 0.02)],
+        ).createShader(Offset.zero & size),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white,
+    );
+    canvas.restore();
+    // "Now" marker.
+    final nx = pts.last.dx * t;
+    canvas.drawLine(Offset(nx, pts.last.dy), Offset(nx, base), Paint()
+      ..color = Colors.white.withValues(alpha: 0.7)
+      ..strokeWidth = 1.2);
+    canvas.drawCircle(Offset(nx, pts.last.dy), 6, Paint()..color = Colors.white);
+    // Dotted axis.
+    final dot = Paint()..color = Colors.white.withValues(alpha: 0.6);
+    for (var x = 0.0; x <= size.width; x += 9) {
+      canvas.drawCircle(Offset(x, size.height - 1), 1, dot);
+    }
+    for (final f in [0.0, 0.5, 1.0]) {
+      canvas.drawLine(Offset(f * size.width, size.height - 6), Offset(f * size.width, size.height + 4),
+          Paint()
+            ..color = Colors.white
+            ..strokeWidth = 1.2);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DayCurve o) => true;
+}
+
+class _DayRing extends StatelessWidget {
+  final double pct;
+  final String label;
+  const _DayRing({required this.pct, required this.label});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 160,
+        height: 160,
+        child: Stack(alignment: Alignment.center, children: [
+          SizedBox(
+            width: 160,
+            height: 160,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: pct.clamp(0.0, 1.0)),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.easeOutCubic,
+              builder: (_, v, _) => CircularProgressIndicator(
+                value: v,
+                strokeWidth: 10,
+                strokeCap: StrokeCap.round,
+                color: Colors.white,
+                backgroundColor: Colors.white24,
+              ),
+            ),
+          ),
+          Text(label, textAlign: TextAlign.center, style: akT(14, w: FontWeight.w700, c: Colors.white)),
+        ]),
+      );
+}
+
+class _Dash extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = _green.withValues(alpha: 0.6)
+      ..strokeWidth = 1.2;
+    for (var x = 0.0; x < size.width; x += 7) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 3.5, 0), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
