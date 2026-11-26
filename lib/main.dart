@@ -1,3 +1,4 @@
+import 'services/widget_sync.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -40,6 +41,8 @@ Future<void> _startApp() async {
   ]);
 
   runApp(const NeurofitApp());
+  // Android home screen widgets.
+  WidgetSync.init();
 }
 
 class NeurofitApp extends StatelessWidget {

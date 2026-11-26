@@ -24,6 +24,11 @@ import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
+import 'kemo_ai_screen.dart';
+import 'water_screen.dart';
+import '../services/widget_sync.dart';
+import '../trainer/trainer_data.dart';
+import '../trainer/trainer_hub.dart';
 import '../trainer/trainers_page.dart';
 import '../trainer/panel_data.dart';
 import '../trainer/panel_onboarding.dart';
@@ -154,10 +159,44 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (mounted) setState(() {});
   }
 
+  // A tap on an Android home screen widget opens the matching screen.
+  void _onWidgetRoute() {
+    final r = WidgetSync.route.value;
+    if (r == null || !mounted) return;
+    WidgetSync.route.value = null;
+    if (PanelStore.I.panelMode) PanelStore.I.exitPanel();
+    Navigator.of(context).popUntil((x) => x.isFirst);
+    setState(() {
+      switch (r) {
+        case 'steps':
+          _selectedBottomNavIndex = 1;
+        case 'meal':
+          _selectedBottomNavIndex = 0;
+          _selectedCategoryIndex = 2;
+        case 'workout':
+          _selectedBottomNavIndex = 0;
+          _selectedCategoryIndex = 1;
+        case 'trainer':
+          _selectedBottomNavIndex = 2;
+        default:
+          _selectedBottomNavIndex = 0;
+          _selectedCategoryIndex = 0;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (r == 'water') openWaterScreen(context);
+      if (r == 'kemo') Navigator.push(context, MaterialPageRoute(builder: (_) => const KemoAiScreen()));
+      if (r == 'trainer' && TrainerStore.I.active) Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkoutPlanPage()));
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     PanelStore.I.addListener(_onPanel);
+    WidgetSync.route.addListener(_onWidgetRoute);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onWidgetRoute());
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -190,6 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void dispose() {
     PanelStore.I.removeListener(_onPanel);
+    WidgetSync.route.removeListener(_onWidgetRoute);
     _smoothScroll.dispose();
     _demoCountdownTimer?.cancel();
     _demoPulseController.dispose();

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/nf_bg_water" android:orientation="vertical" android:padding="14dp">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="💧  WATER" android:textColor="#CCFFFFFF" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.1"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="center_vertical">
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="bottom">
+            <TextView android:id="@+id/ml" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="1,250" android:textColor="#FFFFFFFF" android:textSize="28sp" android:textStyle="bold"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="3dp" android:layout_marginBottom="4dp"
+                android:text="ml" android:textColor="#CCFFFFFF" android:textSize="13sp" android:textStyle="bold"/>
+        </LinearLayout>
+        <TextView android:id="@+id/goal" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="of 2,500 ml · 50%" android:textColor="#CCFFFFFF" android:textSize="11sp"/>
+        <ImageView android:id="@+id/bar" android:layout_width="match_parent" android:layout_height="8dp" android:layout_marginTop="8dp" android:scaleType="fitXY"/>
+    </LinearLayout>
+    <TextView android:id="@+id/add" android:layout_width="match_parent" android:layout_height="36dp"
+        android:background="@drawable/nf_pill_white" android:gravity="center"
+        android:text="+ 250 ml" android:textColor="#FF1D4ED8" android:textSize="13sp" android:textStyle="bold"/>
+</LinearLayout>

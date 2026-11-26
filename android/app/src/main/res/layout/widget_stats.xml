@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/nf_bg_light" android:orientation="vertical" android:padding="16dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="Today" android:textColor="#FF111827" android:textSize="17sp" android:textStyle="bold"/>
+        <TextView android:id="@+id/date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Thursday, 26 Nov" android:textColor="#FF7C3AED" android:textSize="11.5sp" android:textStyle="bold"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+        <LinearLayout android:id="@+id/col1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:orientation="vertical" android:gravity="center_horizontal">
+            <FrameLayout android:layout_width="54dp" android:layout_height="54dp">
+                <ImageView android:id="@+id/ring1" android:layout_width="match_parent" android:layout_height="match_parent"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
+                    android:text="👟" android:textSize="18sp"/>
+            </FrameLayout>
+            <TextView android:id="@+id/val1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="8,542" android:textColor="#FF111827" android:textSize="14sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Steps" android:textColor="#FF6B7280" android:textSize="10.5sp"/>
+        </LinearLayout>
+        <LinearLayout android:id="@+id/col2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:orientation="vertical" android:gravity="center_horizontal">
+            <FrameLayout android:layout_width="54dp" android:layout_height="54dp">
+                <ImageView android:id="@+id/ring2" android:layout_width="match_parent" android:layout_height="match_parent"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
+                    android:text="🔥" android:textSize="18sp"/>
+            </FrameLayout>
+            <TextView android:id="@+id/val2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="1,420" android:textColor="#FF111827" android:textSize="14sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="kcal eaten" android:textColor="#FF6B7280" android:textSize="10.5sp"/>
+        </LinearLayout>
+        <LinearLayout android:id="@+id/col3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:orientation="vertical" android:gravity="center_horizontal">
+            <FrameLayout android:layout_width="54dp" android:layout_height="54dp">
+                <ImageView android:id="@+id/ring3" android:layout_width="match_parent" android:layout_height="match_parent"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
+                    android:text="💧" android:textSize="18sp"/>
+            </FrameLayout>
+            <TextView android:id="@+id/val3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="1.3 L" android:textColor="#FF111827" android:textSize="14sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Water" android:textColor="#FF6B7280" android:textSize="10.5sp"/>
+        </LinearLayout>
+        <LinearLayout android:id="@+id/col4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:orientation="vertical" android:gravity="center_horizontal">
+            <FrameLayout android:layout_width="54dp" android:layout_height="54dp">
+                <ImageView android:id="@+id/ring4" android:layout_width="match_parent" android:layout_height="match_parent"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
+                    android:text="🌙" android:textSize="18sp"/>
+            </FrameLayout>
+            <TextView android:id="@+id/val4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="7h 20m" android:textColor="#FF111827" android:textSize="14sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Sleep" android:textColor="#FF6B7280" android:textSize="10.5sp"/>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

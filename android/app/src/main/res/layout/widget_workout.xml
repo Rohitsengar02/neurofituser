@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/nf_bg_workout" android:orientation="vertical" android:padding="16dp">
+    <TextView android:id="@+id/streak" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="🔥 12 day streak" android:textColor="#FFFFFFFF" android:textSize="12sp" android:textStyle="bold"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="TODAY\'S WORKOUT" android:textColor="#B3FFFFFF" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.1"/>
+            <TextView android:id="@+id/name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Push day" android:textColor="#FFFFFFFF" android:textSize="20sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:id="@+id/sub" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Chest · shoulders · triceps" android:textColor="#CCFFFFFF" android:textSize="11sp" android:maxLines="2"/>
+        </LinearLayout>
+        <FrameLayout android:layout_width="64dp" android:layout_height="64dp" android:layout_marginStart="8dp">
+            <ImageView android:id="@+id/ring" android:layout_width="match_parent" android:layout_height="match_parent"/>
+            <TextView android:id="@+id/count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
+                android:text="0/5" android:textColor="#FFFFFFFF" android:textSize="14sp" android:textStyle="bold"/>
+        </FrameLayout>
+    </LinearLayout>
+    <TextView android:id="@+id/start" android:layout_width="match_parent" android:layout_height="38dp"
+        android:background="@drawable/nf_pill_white" android:gravity="center"
+        android:text="Start ▶" android:textColor="#FFE11D48" android:textSize="14sp" android:textStyle="bold"/>
+</LinearLayout>
