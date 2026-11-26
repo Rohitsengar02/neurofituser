@@ -14,7 +14,7 @@ import '../widgets/neuro_island_dock.dart';
 import '../widgets/dashboard_motion.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/kemo.dart';
-import '../widgets/tabs_v2/overview_v5.dart';
+import '../widgets/tabs_v2/overview_v6.dart';
 import '../widgets/tabs_v2/workouts_tab.dart';
 import '../widgets/tabs_v2/nutrition_tab.dart';
 import '../widgets/tabs_v2/wellness_tab.dart';
@@ -58,10 +58,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     _CategoryItem(
       title: 'Overview',
       imagePath: 'assets/images/top tabs/overview.png',
-      bgColor: const Color(0xFFEFE9FF), // Lavender
-      subBgColor: const Color(0xFFF8F5FF),
-      activeColor: const Color(0xFF6D28D9),
-      heroColor: const Color(0xFFD6C6FF),
+      bgColor: kOverviewNeon, // Neon green, one solid colour
+      subBgColor: kOverviewNeon,
+      activeColor: const Color(0xFF0E0F0C),
+      heroColor: kOverviewNeon,
     ),
     _CategoryItem(
       title: 'Workouts',
@@ -231,7 +231,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               activeCategory.heroColor, // Vivid tab colour at the top
               activeCategory.bgColor, // Softening
               activeCategory.subBgColor, // Pastel
-              const Color(0xFFFBFBFD), // Clean background
+              // Overview keeps one solid neon colour; its white sheet
+              // starts below the stat cards.
+              _selectedCategoryIndex == 0
+                  ? activeCategory.subBgColor
+                  : const Color(0xFFFBFBFD), // Clean background
             ],
           ),
         ),
@@ -262,9 +266,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                       child: RevealScope(
                         child: SingleChildScrollView(
                           physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.only(
-                            bottom: 110,
-                          ), // Space for floating bottom nav
+                          padding: EdgeInsets.only(
+                            // Overview's white sheet carries its own space
+                            // for the floating bottom nav.
+                            bottom: _selectedCategoryIndex == 0 ? 0 : 110,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -305,7 +311,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       ? const WellnessTabV2()
                                       : _selectedCategoryIndex == 4
                                       ? const DashboardShopTabContent()
-                                      : const OverviewTabV5(),
+                                      : const OverviewTabV6(),
                                 ),
                               ),
                             ],
