@@ -12,8 +12,7 @@ import 'package:video_player/video_player.dart';
 
 import '../widgets/side_island.dart';
 import '../widgets/overview_glass.dart';
-import '../widgets/overview_health_tiles.dart';
-import '../widgets/body_morph_backdrop.dart';
+import '../widgets/overview_home_cards.dart';
 import '../widgets/nutrition_tab_v2.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
@@ -279,37 +278,27 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                                         const SizedBox(height: 18),
 
-                                        // Hero Banner Card ("Stay Consistent, See Results!")
-                                        _buildAnimatedHeroBanner(),
-
-                                        const SizedBox(height: 16),
-
-                                        // Overview Image Carousel Cards (Image Only, No Text)
-                                        _buildOverviewCategoryCardsCarousel(),
-
-                                        const SizedBox(height: 20),
-
-                                        // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
-                                        const HealthTilesGrid(),
-
-                                        const SizedBox(height: 24),
-
-                                        // Apple-style glass widgets: Your Progress carousel
-                                        // (tap to grow) and Today widgets
-                                        // Human figure behind the sections morphs
-                                        // (fat down, muscle up) as you scroll.
-                                        const BodyMorphBackdrop(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              OverviewGlassSections(),
-                                              SizedBox(height: 28),
-                                              AchievementsSection(),
-                                              SizedBox(height: 24),
-                                              ArticlesTipsSection(),
-                                            ],
-                                          ),
+                                        // Furry blurred circles and doodles drift
+                                        // behind the white Overview cards.
+                                        const Stack(
+                                          children: [
+                                            Positioned.fill(
+                                              child: FurBlobsBackdrop(),
+                                            ),
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                OverviewHomeCards(),
+                                                SizedBox(height: 28),
+                                                OverviewGlassSections(),
+                                                SizedBox(height: 28),
+                                                AchievementsSection(),
+                                                SizedBox(height: 24),
+                                                ArticlesTipsSection(),
+                                              ],
+                                            ),
+                                          ],
                                         ),
 
                                         const SizedBox(height: 20),
