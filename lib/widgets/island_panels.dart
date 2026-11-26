@@ -8,7 +8,7 @@ import '../screens/steps_screen.dart';
 import 'apple_kit.dart';
 import 'liquid_glass.dart';
 import 'side_island.dart' show IslandStats;
-import 'wellness_tab_v3.dart' show WellnessState;
+import '../home/wellness/wellness_tab_v3.dart' show WellnessState;
 
 // White liquid-glass panels that grow out of the side island, one per menu
 // option: Stats, Water, Steps, Breathe, Sleep, Mood and Log meal.
