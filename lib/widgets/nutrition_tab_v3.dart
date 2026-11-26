@@ -1,3 +1,4 @@
+import 'ticker_gate.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -53,11 +54,8 @@ void _openLog(BuildContext context) =>
 class NutritionTabV3 extends StatelessWidget {
   const NutritionTabV3({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+  /// The tab's sections, built lazily by the home scroll view.
+  static const List<Widget> sections = [
         SizedBox(height: 18),
         _Welcome(),
         SizedBox(height: 14),
@@ -69,7 +67,7 @@ class NutritionTabV3 extends StatelessWidget {
         _Head("Today's meals", action: 'Log meal'),
         _Meals(),
         _Head('Hydration'),
-        ScrollReveal(child: _WaterCard()),
+        ScrollReveal(child: TickerGate(child: _WaterCard())),
         SizedBox(height: 16),
         ScrollReveal(child: _ScanCard()),
         _Head('Vitamins & minerals'),
@@ -85,7 +83,13 @@ class NutritionTabV3 extends StatelessWidget {
         _Head('Supplements'),
         ScrollReveal(child: _Supplements()),
         SizedBox(height: 20),
-      ],
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: sections,
     );
   }
 }

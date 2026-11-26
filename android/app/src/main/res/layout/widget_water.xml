@@ -2,20 +2,31 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
     android:background="@drawable/nf_bg_water" android:orientation="vertical" android:padding="14dp">
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="💧  WATER" android:textColor="#CCFFFFFF" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.1"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/nf_chip_glass"
+            android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="3dp" android:paddingBottom="3dp"
+            android:text="💧 WATER" android:textColor="#FFFFFFFF" android:textSize="10sp" android:fontFamily="sans-serif-medium" android:letterSpacing="0.08"/>
+        <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+        <TextView android:id="@+id/glasses" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="5 🥛" android:textColor="#E6FFFFFF" android:textSize="11sp" android:fontFamily="sans-serif-medium"/>
+    </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="center_vertical">
         <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="bottom">
             <TextView android:id="@+id/ml" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="1,250" android:textColor="#FFFFFFFF" android:textSize="28sp" android:textStyle="bold"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="3dp" android:layout_marginBottom="4dp"
-                android:text="ml" android:textColor="#CCFFFFFF" android:textSize="13sp" android:textStyle="bold"/>
+                android:text="1,250" android:textColor="#FFFFFFFF" android:textSize="28sp" android:fontFamily="sans-serif-black"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="3dp" android:layout_marginBottom="5dp"
+                android:text="ml" android:textColor="#CCFFFFFF" android:textSize="12sp" android:fontFamily="sans-serif-medium"/>
         </LinearLayout>
-        <TextView android:id="@+id/goal" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="of 2,500 ml · 50%" android:textColor="#CCFFFFFF" android:textSize="11sp"/>
-        <ImageView android:id="@+id/bar" android:layout_width="match_parent" android:layout_height="8dp" android:layout_marginTop="8dp" android:scaleType="fitXY"/>
+        <ImageView android:id="@+id/bar" android:layout_width="match_parent" android:layout_height="10dp" android:layout_marginTop="6dp" android:scaleType="fitXY"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp">
+<ViewFlipper android:id="@+id/flip" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoStart="true" android:flipInterval="3800" android:inAnimation="@anim/nf_in" android:outAnimation="@anim/nf_out">
+    <TextView android:id="@+id/flip_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E6FFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="of 2,500 ml · 50%"/>
+    <TextView android:id="@+id/flip_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E6FFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="of 2,500 ml · 50%"/>
+    <TextView android:id="@+id/flip_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#E6FFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="of 2,500 ml · 50%"/>
+</ViewFlipper>
+        </LinearLayout>
     </LinearLayout>
     <TextView android:id="@+id/add" android:layout_width="match_parent" android:layout_height="36dp"
         android:background="@drawable/nf_pill_white" android:gravity="center"
-        android:text="+ 250 ml" android:textColor="#FF1D4ED8" android:textSize="13sp" android:textStyle="bold"/>
+        android:text="+ 250 ml" android:textColor="#FF1D4ED8" android:textSize="13sp" android:fontFamily="sans-serif-black"/>
 </LinearLayout>

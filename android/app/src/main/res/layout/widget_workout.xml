@@ -1,26 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@drawable/nf_bg_workout" android:orientation="vertical" android:padding="16dp">
-    <TextView android:id="@+id/streak" android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="🔥 12 day streak" android:textColor="#FFFFFFFF" android:textSize="12sp" android:textStyle="bold"/>
+    android:background="@drawable/nf_bg_workout" android:orientation="vertical" android:padding="14dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/streak" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/nf_chip_glass"
+            android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="3dp" android:paddingBottom="3dp"
+            android:text="🔥 12 day streak" android:textColor="#FFFFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium"/>
+        <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="TODAY" android:textColor="#CCFFFFFF" android:textSize="10sp" android:fontFamily="sans-serif-medium" android:letterSpacing="0.12"/>
+    </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
         android:orientation="horizontal" android:gravity="center_vertical">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="TODAY\'S WORKOUT" android:textColor="#B3FFFFFF" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.1"/>
             <TextView android:id="@+id/name" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Push day" android:textColor="#FFFFFFFF" android:textSize="20sp" android:textStyle="bold" android:maxLines="1"/>
+                android:text="Push day" android:textColor="#FFFFFFFF" android:textSize="21sp" android:fontFamily="sans-serif-black" android:maxLines="1"/>
             <TextView android:id="@+id/sub" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Chest · shoulders · triceps" android:textColor="#CCFFFFFF" android:textSize="11sp" android:maxLines="2"/>
+                android:text="Chest · shoulders · triceps" android:textColor="#D9FFFFFF" android:textSize="11sp" android:maxLines="1" android:ellipsize="end"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp">
+<ViewFlipper android:id="@+id/flip" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoStart="true" android:flipInterval="3800" android:inAnimation="@anim/nf_in" android:outAnimation="@anim/nf_out">
+    <TextView android:id="@+id/flip_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFFFF" android:textSize="11.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Next · Barbell bench press 4×8"/>
+    <TextView android:id="@+id/flip_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFFFF" android:textSize="11.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Next · Barbell bench press 4×8"/>
+    <TextView android:id="@+id/flip_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFFFF" android:textSize="11.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Next · Barbell bench press 4×8"/>
+    <TextView android:id="@+id/flip_4" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFFFF" android:textSize="11.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Next · Barbell bench press 4×8"/>
+    <TextView android:id="@+id/flip_5" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFFFF" android:textSize="11.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Next · Barbell bench press 4×8"/>
+</ViewFlipper>
+            </LinearLayout>
         </LinearLayout>
-        <FrameLayout android:layout_width="64dp" android:layout_height="64dp" android:layout_marginStart="8dp">
+        <FrameLayout android:layout_width="66dp" android:layout_height="66dp" android:layout_marginStart="8dp">
             <ImageView android:id="@+id/ring" android:layout_width="match_parent" android:layout_height="match_parent"/>
             <TextView android:id="@+id/count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
-                android:text="0/5" android:textColor="#FFFFFFFF" android:textSize="14sp" android:textStyle="bold"/>
+                android:text="0/5" android:textColor="#FFFFFFFF" android:textSize="14sp" android:fontFamily="sans-serif-black"/>
         </FrameLayout>
     </LinearLayout>
     <TextView android:id="@+id/start" android:layout_width="match_parent" android:layout_height="38dp"
         android:background="@drawable/nf_pill_white" android:gravity="center"
-        android:text="Start ▶" android:textColor="#FFE11D48" android:textSize="14sp" android:textStyle="bold"/>
+        android:text="Start ▶" android:textColor="#FFE11D48" android:textSize="14sp" android:fontFamily="sans-serif-black"/>
 </LinearLayout>

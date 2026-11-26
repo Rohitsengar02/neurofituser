@@ -54,11 +54,8 @@ const _today = [
 class WorkoutTabV2 extends StatelessWidget {
   const WorkoutTabV2({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+  /// The tab's sections, built lazily by the home scroll view.
+  static const List<Widget> sections = [
         SizedBox(height: 18),
         _Welcome(),
         SizedBox(height: 16),
@@ -80,7 +77,13 @@ class WorkoutTabV2 extends StatelessWidget {
         _Head('Challenges'),
         ScrollReveal(child: _Challenges()),
         SizedBox(height: 20),
-      ],
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: sections,
     );
   }
 }

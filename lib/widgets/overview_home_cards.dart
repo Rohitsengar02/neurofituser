@@ -1,3 +1,4 @@
+import 'ticker_gate.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -66,29 +67,24 @@ void _openFrom(BuildContext context, Widget page) {
 class OverviewHomeCards extends StatelessWidget {
   const OverviewHomeCards({super.key});
 
+  /// The cards as separate sections, built lazily by the home scroll view.
+  static const List<Widget> sections = [
+    _Rise(0, StreakHeroCard()),
+    SizedBox(height: 22),
+    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: _Rise(1, _NutritionCard())),
+    SizedBox(height: 16),
+    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: _Rise(2, _StepsCard())),
+    SizedBox(height: 16),
+    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: _Rise(3, _TrainersCard())),
+    SizedBox(height: 16),
+    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: _Rise(4, _CommunityCard())),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return const Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Rise(0, StreakHeroCard()),
-        SizedBox(height: 22),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Rise(1, _NutritionCard()),
-              SizedBox(height: 16),
-              _Rise(2, _StepsCard()),
-              SizedBox(height: 16),
-              _Rise(3, _TrainersCard()),
-              SizedBox(height: 16),
-              _Rise(4, _CommunityCard()),
-            ],
-          ),
-        ),
-      ],
+      children: sections,
     );
   }
 }
@@ -1413,7 +1409,7 @@ class _CommunityCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const _LiveDot(),
+                        const TickerGate(child: _LiveDot()),
                         const SizedBox(width: 6),
                         Text(
                           '2.4k active now',
@@ -2414,7 +2410,10 @@ class _FurBlobsBackdropState extends State<FurBlobsBackdrop> {
     } else if (_timer == null) {
       _clock.start();
       _timer = Timer.periodic(const Duration(milliseconds: 66), (_) {
-        _t.value = (_clock.elapsedMilliseconds / 60000) % 1.0;
+        // Skip while another page covers the home screen.
+        if (mounted && TickerMode.valuesOf(context).enabled) {
+          _t.value = (_clock.elapsedMilliseconds / 60000) % 1.0;
+        }
       });
     }
   }

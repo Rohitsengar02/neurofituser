@@ -3,36 +3,50 @@
     android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
     android:background="@drawable/nf_bg_dark" android:orientation="vertical" android:padding="14dp">
     <LinearLayout android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="NeuroFit" android:textColor="#FFFFFFFF" android:textSize="15sp" android:textStyle="bold"/>
-        <TextView android:id="@+id/sub" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:layout_marginStart="8dp" android:text="Quick actions" android:textColor="#99FFFFFF" android:textSize="11sp" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:layout_width="26dp" android:layout_height="26dp" android:background="@drawable/nf_bubble" android:gravity="center"
+            android:text="N" android:textColor="#FFFFFFFF" android:textSize="13sp" android:fontFamily="sans-serif-black"/>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="NeuroFit" android:textColor="#FFFFFFFF" android:textSize="14sp" android:fontFamily="sans-serif-black"/>
+<ViewFlipper android:id="@+id/flip" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoStart="true" android:flipInterval="3800" android:inAnimation="@anim/nf_in" android:outAnimation="@anim/nf_out">
+    <TextView android:id="@+id/flip_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#B3FFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Quick actions"/>
+    <TextView android:id="@+id/flip_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#B3FFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Quick actions"/>
+    <TextView android:id="@+id/flip_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#B3FFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:text="Quick actions"/>
+</ViewFlipper>
+        </LinearLayout>
+        <TextView android:id="@+id/streak" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/nf_chip_glass"
+            android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="3dp" android:paddingBottom="3dp"
+            android:text="🔥 12" android:textColor="#FFFFFFFF" android:textSize="11sp" android:fontFamily="sans-serif-medium"/>
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
         android:layout_marginTop="10dp" android:orientation="horizontal">
         <LinearLayout android:id="@+id/a1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
             android:layout_marginStart="0dp" android:background="@drawable/nf_tile_glass" android:orientation="vertical" android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💧" android:textSize="22sp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:text="Water" android:textColor="#FFFFFFFF" android:textSize="11sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="40dp" android:layout_height="40dp" android:gravity="center" android:background="@drawable/nf_chip_glass"
+                android:text="💧" android:textSize="20sp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="Water" android:textColor="#FFFFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/a2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
             android:layout_marginStart="8dp" android:background="@drawable/nf_tile_glass" android:orientation="vertical" android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🏋️" android:textSize="22sp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:text="Workout" android:textColor="#FFFFFFFF" android:textSize="11sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="40dp" android:layout_height="40dp" android:gravity="center" android:background="@drawable/nf_chip_glass"
+                android:text="🏋️" android:textSize="20sp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="Workout" android:textColor="#FFFFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/a3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
             android:layout_marginStart="8dp" android:background="@drawable/nf_tile_glass" android:orientation="vertical" android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🍽️" android:textSize="22sp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:text="Log meal" android:textColor="#FFFFFFFF" android:textSize="11sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="40dp" android:layout_height="40dp" android:gravity="center" android:background="@drawable/nf_chip_glass"
+                android:text="🍽️" android:textSize="20sp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="Meal" android:textColor="#FFFFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/a4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
             android:layout_marginStart="8dp" android:background="@drawable/nf_tile_glass" android:orientation="vertical" android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🤖" android:textSize="22sp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:text="Ask Kemo" android:textColor="#FFFFFFFF" android:textSize="11sp" android:textStyle="bold" android:maxLines="1"/>
+            <TextView android:layout_width="40dp" android:layout_height="40dp" android:gravity="center" android:background="@drawable/nf_chip_glass"
+                android:text="🤖" android:textSize="20sp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="Kemo" android:textColor="#FFFFFFFF" android:textSize="10.5sp" android:fontFamily="sans-serif-medium" android:maxLines="1"/>
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

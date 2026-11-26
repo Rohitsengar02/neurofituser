@@ -69,12 +69,12 @@ class _ShopBackdropState extends State<ShopBackdrop> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    if (kIsWeb) {
-      final sw = Stopwatch()..start();
-      _timer = Timer.periodic(const Duration(milliseconds: 40), (_) => _t.value = sw.elapsedMilliseconds / 1000);
-    } else {
-      _ticker = createTicker((d) => _t.value = d.inMicroseconds / 1e6)..start();
-    }
+    // The objects drift slowly, so ~25 updates a second look the same as the
+    // display rate and keep phones and browsers free for scrolling.
+    final sw = Stopwatch()..start();
+    _timer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      if (TickerMode.valuesOf(context).enabled) _t.value = sw.elapsedMilliseconds / 1000;
+    });
   }
 
   @override

@@ -93,6 +93,10 @@ class WidgetSync {
         'workout_sub': day.$2,
         'workout_total': day.$3.length,
         'workout_done': done,
+        'workout_moves': [
+          ...day.$3.where((e) => !t.isDone(e.name)),
+          ...day.$3.where((e) => t.isDone(e.name)),
+        ].map((e) => '${e.name} ${e.sets}').join('|'),
         'coach': t.active && t.trainer != null ? t.trainer!.name : '',
       };
       for (final e in data.entries) {

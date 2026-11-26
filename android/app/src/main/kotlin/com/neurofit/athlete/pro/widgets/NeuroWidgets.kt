@@ -11,6 +11,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.SweepGradient
+import android.graphics.Matrix
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.widget.RemoteViews
@@ -37,14 +41,20 @@ internal fun fmt(n: Int): String = NumberFormat.getIntegerInstance(Locale.US).fo
 internal fun open(context: Context, route: String): PendingIntent =
     HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java, Uri.parse("neurofit://$route"))
 
-/** Progress ring drawn into a bitmap (RemoteViews has no arc view). */
-internal fun ring(context: Context, dp: Int, progress: Float, color: Int, track: Int, strokeDp: Float = 9f): Bitmap {
+/** Progress ring drawn into a bitmap (RemoteViews has no arc view): a soft
+ *  track, a gradient arc from [color2] to [color] with a glow, and a bright
+ *  dot at its tip. */
+internal fun ring(
+    context: Context, dp: Int, progress: Float, color: Int, track: Int,
+    strokeDp: Float = 9f, color2: Int = color,
+): Bitmap {
   val d = context.resources.displayMetrics.density
   val px = (dp * d).toInt().coerceAtLeast(8)
   val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
   val c = Canvas(bmp)
   val s = strokeDp * d
-  val r = RectF(s / 2, s / 2, px - s / 2, px - s / 2)
+  val pad = s / 2 + 3 * d
+  val r = RectF(pad, pad, px - pad, px - pad)
   val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     style = Paint.Style.STROKE
     strokeWidth = s
@@ -52,14 +62,27 @@ internal fun ring(context: Context, dp: Int, progress: Float, color: Int, track:
     this.color = track
   }
   c.drawArc(r, 0f, 360f, false, p)
-  p.color = color
-  val sweep = 360f * progress.coerceIn(0f, 1f)
-  if (sweep > 0.5f) c.drawArc(r, -90f, sweep, false, p)
+  val f = progress.coerceIn(0f, 1f)
+  val sweep = 360f * f
+  if (sweep > 0.5f) {
+    val cx = px / 2f
+    val g = SweepGradient(cx, cx, intArrayOf(color2, color, color), floatArrayOf(0f, f.coerceAtLeast(0.05f), 1f))
+    g.setLocalMatrix(Matrix().apply { setRotate(-90f, cx, cx) })
+    p.shader = g
+    p.color = color
+    p.setShadowLayer(3 * d, 0f, 0f, (color and 0x00FFFFFF) or 0x66000000)
+    c.drawArc(r, -90f, sweep, false, p)
+    // Tip dot.
+    val a = Math.toRadians((sweep - 90f).toDouble())
+    val rad = r.width() / 2
+    val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = Color.WHITE; setShadowLayer(2 * d, 0f, 0f, 0x55000000) }
+    c.drawCircle(cx + (rad * Math.cos(a)).toFloat(), cx + (rad * Math.sin(a)).toFloat(), s * 0.28f, dot)
+  }
   return bmp
 }
 
-/** Rounded horizontal bar. */
-internal fun bar(context: Context, wDp: Int, hDp: Int, progress: Float, color: Int, track: Int): Bitmap {
+/** Rounded horizontal bar with a gradient fill. */
+internal fun bar(context: Context, wDp: Int, hDp: Int, progress: Float, color: Int, track: Int, color2: Int = color): Bitmap {
   val d = context.resources.displayMetrics.density
   val w = (wDp * d).toInt()
   val h = (hDp * d).toInt()
@@ -68,11 +91,20 @@ internal fun bar(context: Context, wDp: Int, hDp: Int, progress: Float, color: I
   val p = Paint(Paint.ANTI_ALIAS_FLAG)
   p.color = track
   c.drawRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), h / 2f, h / 2f, p)
-  p.color = color
   val fw = (w * progress.coerceIn(0f, 1f)).coerceAtLeast(h.toFloat())
+  p.shader = LinearGradient(0f, 0f, fw, 0f, color2, color, Shader.TileMode.CLAMP)
   c.drawRoundRect(RectF(0f, 0f, fw, h.toFloat()), h / 2f, h / 2f, p)
   return bmp
 }
+
+/** Fills the ViewFlipper lines flip_1..flip_[count], cycling [lines]. */
+internal fun flips(v: RemoteViews, lines: List<String>, count: Int = 3) {
+  if (lines.isEmpty()) return
+  val ids = intArrayOf(R.id.flip_1, R.id.flip_2, R.id.flip_3, R.id.flip_4, R.id.flip_5)
+  for (i in 0 until count.coerceAtMost(ids.size)) v.setTextViewText(ids[i], lines[i % lines.size])
+}
+
+internal fun pct(a: Int, b: Int): Int = (a * 100L / b.coerceAtLeast(1)).toInt().coerceIn(0, 999)
 
 /** Asks every NeuroFit widget of [cls] to redraw from the saved data. */
 internal fun refresh(context: Context, cls: Class<*>) {
@@ -95,10 +127,16 @@ class StepsWidget : HomeWidgetProvider() {
     val km = steps * 0.00078
     for (id in appWidgetIds) {
       val v = RemoteViews(context.packageName, R.layout.widget_steps)
-      v.setImageViewBitmap(R.id.ring, ring(context, 118, steps / goal.toFloat(), Color.WHITE, 0x40FFFFFF))
+      v.setImageViewBitmap(R.id.ring, ring(context, 118, steps / goal.toFloat(), Color.WHITE, 0x33FFFFFF, 10f, 0xB3FFFFFF.toInt()))
       v.setTextViewText(R.id.steps, fmt(steps))
       v.setTextViewText(R.id.goal, "of ${fmt(goal)}")
-      v.setTextViewText(R.id.foot, String.format(Locale.US, "%.1f km · %d kcal", km, (steps * 0.04).toInt()))
+      v.setTextViewText(R.id.pct, "${pct(steps, goal)}%")
+      val left = goal - steps
+      flips(v, listOf(
+          String.format(Locale.US, "👟 %.1f km walked", km),
+          "🔥 ${fmt((steps * 0.04).toInt())} kcal burned",
+          if (left > 0) "💪 ${fmt(left)} steps to go" else "🏆 Goal smashed!",
+      ))
       v.setOnClickPendingIntent(R.id.root, open(context, "steps"))
       appWidgetManager.updateAppWidget(id, v)
     }
@@ -120,10 +158,16 @@ class StatsWidget : HomeWidgetProvider() {
     for (id in appWidgetIds) {
       val v = RemoteViews(context.packageName, R.layout.widget_stats)
       v.setTextViewText(R.id.date, SimpleDateFormat("EEEE, d MMM", Locale.US).format(Date()))
-      v.setImageViewBitmap(R.id.ring1, ring(context, 54, steps / stepGoal.toFloat(), 0xFF7C3AED.toInt(), track, 6f))
-      v.setImageViewBitmap(R.id.ring2, ring(context, 54, eaten / budget.toFloat(), 0xFFF97316.toInt(), track, 6f))
-      v.setImageViewBitmap(R.id.ring3, ring(context, 54, water / waterGoal.toFloat(), 0xFF0EA5E9.toInt(), track, 6f))
-      v.setImageViewBitmap(R.id.ring4, ring(context, 54, 0.92f, 0xFF6366F1.toInt(), track, 6f))
+      v.setImageViewBitmap(R.id.ring1, ring(context, 54, steps / stepGoal.toFloat(), 0xFF7C3AED.toInt(), track, 6f, 0xFFC084FC.toInt()))
+      v.setImageViewBitmap(R.id.ring2, ring(context, 54, eaten / budget.toFloat(), 0xFFF97316.toInt(), track, 6f, 0xFFFBBF24.toInt()))
+      v.setImageViewBitmap(R.id.ring3, ring(context, 54, water / waterGoal.toFloat(), 0xFF0EA5E9.toInt(), track, 6f, 0xFF67E8F9.toInt()))
+      v.setImageViewBitmap(R.id.ring4, ring(context, 54, 0.92f, 0xFF6366F1.toInt(), track, 6f, 0xFFA5B4FC.toInt()))
+      val kLeft = budget - eaten
+      flips(v, listOf(
+          "You're ${pct(steps, stepGoal)}% to your step goal",
+          if (kLeft >= 0) "${fmt(kLeft)} kcal left in today's budget" else "${fmt(-kLeft)} kcal over budget",
+          "Water ${pct(water, waterGoal)}% · sleep $sleep",
+      ))
       v.setTextViewText(R.id.val1, fmt(steps))
       v.setTextViewText(R.id.val2, fmt(eaten))
       v.setTextViewText(R.id.val3, String.format(Locale.US, "%.1f L", water / 1000.0))
@@ -142,9 +186,17 @@ class StatsWidget : HomeWidgetProvider() {
 class QuickActionsWidget : HomeWidgetProvider() {
   override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
     val coach = widgetData.str("coach", "")
+    val streak = widgetData.num("streak", 0)
+    val water = widgetData.num("water", 0)
+    val waterGoal = widgetData.num("water_goal", 2500)
     for (id in appWidgetIds) {
       val v = RemoteViews(context.packageName, R.layout.widget_quick)
-      v.setTextViewText(R.id.sub, if (coach.isEmpty()) "Quick actions" else "Coach · $coach")
+      v.setTextViewText(R.id.streak, "🔥 $streak")
+      flips(v, listOf(
+          "Quick actions",
+          if (coach.isEmpty()) "Ask Kemo anything ✨" else "Coach · $coach",
+          "💧 ${pct(water, waterGoal)}% of water goal",
+      ))
       v.setOnClickPendingIntent(R.id.a1, open(context, "water"))
       v.setOnClickPendingIntent(R.id.a2, open(context, "workout"))
       v.setOnClickPendingIntent(R.id.a3, open(context, "meal"))
@@ -187,8 +239,14 @@ class WaterWidget : HomeWidgetProvider() {
     for (id in appWidgetIds) {
       val v = RemoteViews(context.packageName, R.layout.widget_water)
       v.setTextViewText(R.id.ml, fmt(water))
-      v.setTextViewText(R.id.goal, "of ${fmt(goal)} ml · ${(water * 100 / goal).coerceAtMost(999)}%")
-      v.setImageViewBitmap(R.id.bar, bar(context, 130, 8, water / goal.toFloat(), Color.WHITE, 0x40FFFFFF))
+      v.setTextViewText(R.id.glasses, "🥛 ${water / 250}")
+      v.setImageViewBitmap(R.id.bar, bar(context, 130, 8, water / goal.toFloat(), Color.WHITE, 0x33FFFFFF, 0xFF7DD3FC.toInt()))
+      val left = goal - water
+      flips(v, listOf(
+          "of ${fmt(goal)} ml · ${pct(water, goal)}%",
+          if (left > 0) "${fmt(left)} ml to go 💧" else "Goal reached 🎉",
+          "Tap +250 after each glass",
+      ))
       v.setOnClickPendingIntent(R.id.add, add)
       v.setOnClickPendingIntent(R.id.root, open(context, "water"))
       appWidgetManager.updateAppWidget(id, v)
@@ -206,13 +264,16 @@ class WorkoutWidget : HomeWidgetProvider() {
     val total = widgetData.num("workout_total", 5).coerceAtLeast(1)
     val done = widgetData.num("workout_done", 0)
     val coach = widgetData.str("coach", "")
+    val moves = widgetData.str("workout_moves", "Barbell bench press 4 × 8").split('|').filter { it.isNotBlank() }
     for (id in appWidgetIds) {
       val v = RemoteViews(context.packageName, R.layout.widget_workout)
+      val lines = moves.take(5).mapIndexed { i, m -> if (i == 0 && done < total) "Next · $m" else "• $m" }
+      flips(v, if (lines.isEmpty()) listOf("Rest & recover") else lines, 5)
       v.setTextViewText(R.id.streak, "🔥 $streak day streak")
       v.setTextViewText(R.id.name, name)
       v.setTextViewText(R.id.sub, if (coach.isEmpty()) sub else "$sub · with $coach")
       v.setTextViewText(R.id.count, "$done/$total")
-      v.setImageViewBitmap(R.id.ring, ring(context, 64, done / total.toFloat(), Color.WHITE, 0x40FFFFFF, 7f))
+      v.setImageViewBitmap(R.id.ring, ring(context, 64, done / total.toFloat(), Color.WHITE, 0x33FFFFFF, 7f, 0xB3FFFFFF.toInt()))
       v.setTextViewText(R.id.start, if (done >= total) "Done ✓" else if (done > 0) "Continue ▶" else "Start ▶")
       v.setOnClickPendingIntent(R.id.start, open(context, if (coach.isEmpty()) "workout" else "trainer"))
       v.setOnClickPendingIntent(R.id.root, open(context, "workout"))

@@ -8,6 +8,7 @@ import '../shop/shop_ui.dart';
 import '../widgets/apple_kit.dart';
 import '../widgets/liquid_glass.dart';
 import '../widgets/net_img.dart';
+import '../widgets/ticker_gate.dart';
 import 'panel_onboarding.dart';
 import 'trainer_data.dart';
 import 'trainer_hub.dart';
@@ -187,14 +188,21 @@ class RatingPill extends StatelessWidget {
       );
 }
 
-class LiveDot extends StatefulWidget {
+class LiveDot extends StatelessWidget {
   final String label;
   const LiveDot({super.key, this.label = 'LIVE'});
   @override
-  State<LiveDot> createState() => _LiveDotState();
+  Widget build(BuildContext context) => TickerGate(child: _LiveDotCore(label: label));
 }
 
-class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
+class _LiveDotCore extends StatefulWidget {
+  final String label;
+  const _LiveDotCore({required this.label});
+  @override
+  State<_LiveDotCore> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDotCore> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
   @override
   void dispose() {
