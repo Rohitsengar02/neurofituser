@@ -43,6 +43,37 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Home screen widgets (lib/services/widget_sync.dart feeds them) -->
+        <receiver android:name=".widgets.StepsWidget" android:exported="false" android:label="@string/l_steps">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/nf_steps_info"/>
+        </receiver>
+        <receiver android:name=".widgets.StatsWidget" android:exported="false" android:label="@string/l_stats">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/nf_stats_info"/>
+        </receiver>
+        <receiver android:name=".widgets.QuickActionsWidget" android:exported="false" android:label="@string/l_quick">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/nf_quick_info"/>
+        </receiver>
+        <receiver android:name=".widgets.WaterWidget" android:exported="false" android:label="@string/l_water">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/nf_water_info"/>
+        </receiver>
+        <receiver android:name=".widgets.WorkoutWidget" android:exported="false" android:label="@string/l_workout">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/nf_workout_info"/>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

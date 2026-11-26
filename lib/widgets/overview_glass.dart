@@ -1,3 +1,4 @@
+import 'ticker_gate.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -474,19 +475,31 @@ class _ProgressWidget extends StatelessWidget {
 
 /// iPhone-style widget: green glass fill (like the Workouts card) inside a
 /// slowly turning gradient border that glows softly.
-class _GlowBorderPanel extends StatefulWidget {
+/// Pauses the spinning border while the panel is off screen.
+class _GlowBorderPanel extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
   final double radius;
   final Color color;
-  const _GlowBorderPanel(
+  const _GlowBorderPanel({required this.child, required this.padding, required this.color, this.radius = 30});
+  @override
+  Widget build(BuildContext context) =>
+      TickerGate(child: _GlowBorderPanelCore(padding: padding, color: color, radius: radius, child: child));
+}
+
+class _GlowBorderPanelCore extends StatefulWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  final double radius;
+  final Color color;
+  const _GlowBorderPanelCore(
       {required this.child, required this.padding, required this.color, this.radius = 30});
 
   @override
-  State<_GlowBorderPanel> createState() => _GlowBorderPanelState();
+  State<_GlowBorderPanelCore> createState() => _GlowBorderPanelState();
 }
 
-class _GlowBorderPanelState extends State<_GlowBorderPanel> with SingleTickerProviderStateMixin {
+class _GlowBorderPanelState extends State<_GlowBorderPanelCore> with SingleTickerProviderStateMixin {
   late final AnimationController _spin =
       AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
 

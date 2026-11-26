@@ -24,7 +24,7 @@ class LiquidGlass extends StatefulWidget {
   /// remaining blurs drop the saturation pass. Live blur is the most
   /// expensive thing a browser can do per frame, so this keeps scrolling
   /// smooth while the look stays close.
-  static bool lite = kIsWeb;
+  static bool lite = true;
 
   final Widget child;
   final BorderRadius borderRadius;

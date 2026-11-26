@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="w_steps">Steps today with a progress ring</string>
+    <string name="w_stats">Steps, calories, water and sleep at a glance</string>
+    <string name="w_quick">Log water, start a workout, log a meal or ask Kemo</string>
+    <string name="w_water">Water intake with a +250 ml button</string>
+    <string name="w_workout">Today\'s workout and your streak</string>
+    <string name="l_steps">NeuroFit Steps</string>
+    <string name="l_stats">NeuroFit Today</string>
+    <string name="l_quick">NeuroFit Quick actions</string>
+    <string name="l_water">NeuroFit Water</string>
+    <string name="l_workout">NeuroFit Workout</string>
+</resources>

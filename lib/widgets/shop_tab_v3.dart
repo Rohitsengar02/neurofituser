@@ -45,13 +45,11 @@ void _addToCart(BuildContext context, Product p) => addToBag(context, p);
 class ShopTabV3 extends StatelessWidget {
   const ShopTabV3({super.key});
 
-  @override
-  Widget build(BuildContext context) {
+  /// The tab's sections, built lazily by the home scroll view.
+  static List<Widget> sections(BuildContext context) {
     final protein = _products.where((p) => p.cat == 'Protein').toList();
     final gear = _products.where((p) => p.cover).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return [
         const SizedBox(height: 18),
         const AkWelcome(caption: 'SHOP · FREE DELIVERY OVER ₹999', words: ['Gear', 'up,', 'Rohit'], accent: _orange),
         const SizedBox(height: 14),
@@ -95,7 +93,14 @@ class ShopTabV3 extends StatelessWidget {
         const SizedBox(height: 18),
         const ScrollReveal(child: _Trust()),
         const SizedBox(height: 24),
-      ],
+      ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: sections(context),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'ticker_gate.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -43,6 +44,12 @@ class JournalEntry {
 // =====================================================================
 
 class WellnessTabV3 extends StatefulWidget {
+  /// The tab's sections, built lazily by the home scroll view.
+  static List<Widget> get sections {
+    GameProgress.load();
+    return _WellnessTabV3State.sections;
+  }
+
   const WellnessTabV3({super.key});
 
   @override
@@ -56,11 +63,8 @@ class _WellnessTabV3State extends State<WellnessTabV3> {
     GameProgress.load();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+  /// The tab's sections, built lazily by the home scroll view.
+  static const List<Widget> sections = [
         SizedBox(height: 18),
         AkWelcome(
           caption: 'WELLNESS · MIND SCORE 82',
@@ -87,11 +91,17 @@ class _WellnessTabV3State extends State<WellnessTabV3> {
         AkHead('Mindful minutes'),
         ScrollReveal(child: _MindfulWeek()),
         AkHead('Soundscapes'),
-        _Sounds(),
+        TickerGate(child: _Sounds()),
         AkHead('Daily affirmation'),
         _Affirmations(),
         SizedBox(height: 20),
-      ],
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: sections,
     );
   }
 }

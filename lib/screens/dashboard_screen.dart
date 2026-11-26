@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
 import '../widgets/side_island.dart';
+import '../widgets/ticker_gate.dart';
 import '../widgets/overview_glass.dart';
 import '../widgets/overview_home_cards.dart';
 import '../widgets/ios_header.dart';
@@ -24,6 +25,11 @@ import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
 import '../widgets/custom_floating_bottom_bar.dart';
 import 'steps_screen.dart';
+import 'kemo_ai_screen.dart';
+import 'water_screen.dart';
+import '../services/widget_sync.dart';
+import '../trainer/trainer_data.dart';
+import '../trainer/trainer_hub.dart';
 import '../trainer/trainers_page.dart';
 import '../trainer/panel_data.dart';
 import '../trainer/panel_onboarding.dart';
@@ -150,14 +156,123 @@ class _DashboardScreenState extends State<DashboardScreen>
     },
   ];
 
+
+  // ---------------------------------------------------------------
+  // HOME SCROLL: header and tabs, then the active tab's sections in a
+  // lazy sliver list, so only what is near the screen is built.
+  // ---------------------------------------------------------------
+  DateTime _tabSwitchedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _lastTab = 0;
+
+  List<Widget> _tabSections(BuildContext context) => switch (_selectedCategoryIndex) {
+        1 => WorkoutTabV2.sections,
+        2 => NutritionTabV3.sections,
+        3 => WellnessTabV3.sections,
+        4 => ShopTabV3.sections(context),
+        _ => const [
+            SizedBox(height: 14),
+            ...OverviewHomeCards.sections,
+            SizedBox(height: 16),
+            YourTrainerCard(),
+            SizedBox(height: 12),
+            OverviewGlassSections(),
+            SizedBox(height: 28),
+            AchievementsSection(),
+            SizedBox(height: 24),
+            ArticlesTipsSection(),
+            SizedBox(height: 20),
+          ],
+      };
+
+  Widget _homeScroll(BuildContext context, _CategoryItem activeCategory) {
+    if (_lastTab != _selectedCategoryIndex) {
+      _lastTab = _selectedCategoryIndex;
+      _tabSwitchedAt = DateTime.now();
+    }
+    final sections = _tabSections(context);
+    final tab = _selectedCategoryIndex;
+    final fresh = DateTime.now().difference(_tabSwitchedAt).inMilliseconds < 500;
+    return CustomScrollView(
+      controller: _smoothScroll,
+      physics: const BouncingScrollPhysics(decelerationRate: ScrollDecelerationRate.fast),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 14),
+              TickerGate(
+                child: IosHeader(
+                  name: 'Rohit',
+                  streak: 12,
+                  onStreak: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreakDetailScreen())),
+                  onAvatar: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildTopCategoryTabs(activeCategory),
+            ],
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.only(bottom: 110), // Space for floating bottom nav
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => _TabEnter(
+                key: ValueKey('tab$tab-$i'),
+                animate: fresh && DateTime.now().difference(_tabSwitchedAt).inMilliseconds < 500,
+                child: sections[i],
+              ),
+              childCount: sections.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _onPanel() {
     if (mounted) setState(() {});
+  }
+
+  // A tap on an Android home screen widget opens the matching screen.
+  void _onWidgetRoute() {
+    final r = WidgetSync.route.value;
+    if (r == null || !mounted) return;
+    WidgetSync.route.value = null;
+    if (PanelStore.I.panelMode) PanelStore.I.exitPanel();
+    Navigator.of(context).popUntil((x) => x.isFirst);
+    setState(() {
+      switch (r) {
+        case 'steps':
+          _selectedBottomNavIndex = 1;
+        case 'meal':
+          _selectedBottomNavIndex = 0;
+          _selectedCategoryIndex = 2;
+        case 'workout':
+          _selectedBottomNavIndex = 0;
+          _selectedCategoryIndex = 1;
+        case 'trainer':
+          _selectedBottomNavIndex = 2;
+        default:
+          _selectedBottomNavIndex = 0;
+          _selectedCategoryIndex = 0;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (r == 'water') openWaterScreen(context);
+      if (r == 'kemo') Navigator.push(context, MaterialPageRoute(builder: (_) => const KemoAiScreen()));
+      if (r == 'trainer' && TrainerStore.I.active) Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkoutPlanPage()));
+    });
   }
 
   @override
   void initState() {
     super.initState();
     PanelStore.I.addListener(_onPanel);
+    WidgetSync.route.addListener(_onWidgetRoute);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onWidgetRoute());
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -179,6 +294,10 @@ class _DashboardScreenState extends State<DashboardScreen>
         setState(() {
           _isOverviewLoading = false;
         });
+        // Nothing shows the skeleton or demo pulse after loading; a repeating
+        // controller would keep the app drawing frames forever.
+        _shimmerController.stop();
+        _demoPulseController.stop();
         _entranceController.forward(from: 0.0);
 
         // Eagerly preload all Shop Products, Banners, and Images in the background
@@ -190,6 +309,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void dispose() {
     PanelStore.I.removeListener(_onPanel);
+    WidgetSync.route.removeListener(_onWidgetRoute);
     _smoothScroll.dispose();
     _demoCountdownTimer?.cancel();
     _demoPulseController.dispose();
@@ -241,110 +361,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ? const CommunityPage()
                   : _selectedBottomNavIndex == 4
                   ? const ProfileScreen()
-                  : SingleChildScrollView(
-                      controller: _smoothScroll,
-                      physics: const BouncingScrollPhysics(
-                        decelerationRate: ScrollDecelerationRate.fast,
-                      ),
-                      padding: const EdgeInsets.only(
-                        bottom: 110,
-                      ), // Space for floating bottom nav
-                      child: Stack(
-                        children: [
-                          Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 0. Top Dynamic Island (Tap to expand/collapse metrics & quick actions)
-                          const SizedBox(height: 14),
-
-                          // 1. Top Header (Blur Staggered Greeting, Animated Badge, Streak Pill)
-                          IosHeader(
-                            name: 'Rohit',
-                            streak: 12,
-                            onStreak: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const StreakDetailScreen(),
-                              ),
-                            ),
-                            onAvatar: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ProfileScreen(),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // 2. Fixed Top Category Tabs
-                          _buildTopCategoryTabs(activeCategory),
-
-                          // 3. Smooth Animated Switcher for Tab Content
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 350),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder: (child, animation) {
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0.04, 0.0),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: KeyedSubtree(
-                              key: ValueKey<int>(_selectedCategoryIndex),
-                              child: _selectedCategoryIndex == 1
-                                  ? const WorkoutTabV2()
-                                  : _selectedCategoryIndex == 2
-                                  ? const NutritionTabV3()
-                                  : _selectedCategoryIndex == 3
-                                  ? const WellnessTabV3()
-                                  : _selectedCategoryIndex == 4
-                                  ? const ShopTabV3()
-                                  : Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const SizedBox(height: 14),
-
-                                        // Furry blurred circles and doodles drift
-                                        // behind the white Overview cards.
-                                        const Stack(
-                                          children: [
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.stretch,
-                                              children: [
-                                                OverviewHomeCards(),
-                                                SizedBox(height: 16),
-                                                YourTrainerCard(),
-                                                SizedBox(height: 12),
-                                                OverviewGlassSections(),
-                                                SizedBox(height: 28),
-                                                AchievementsSection(),
-                                                SizedBox(height: 24),
-                                                ArticlesTipsSection(),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(height: 20),
-                                      ],
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                        ],
-                      ),
-                    ),
+                  : _homeScroll(context, activeCategory),
 
               // Draggable side island (snaps left/right, opens Today slider)
               if (_selectedBottomNavIndex == 0)
@@ -2593,6 +2610,30 @@ class _OverviewBentoVideoPlayerState extends State<_OverviewBentoVideoPlayer> {
               : 400,
           child: VideoPlayer(_controller!),
         ),
+      ),
+    );
+  }
+}
+
+
+/// Fade and slide in a tab section right after a tab switch (the old
+/// AnimatedSwitcher look); sections built later while scrolling just appear.
+class _TabEnter extends StatelessWidget {
+  final bool animate;
+  final Widget child;
+  const _TabEnter({super.key, required this.animate, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!animate) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (_, v, c) => Opacity(
+        opacity: v,
+        child: FractionalTranslation(translation: Offset(0.04 * (1 - v), 0), child: c),
       ),
     );
   }
