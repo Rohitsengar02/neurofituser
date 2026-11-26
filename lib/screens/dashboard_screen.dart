@@ -16,7 +16,7 @@ import '../widgets/overview_home_cards.dart';
 import '../widgets/ios_header.dart';
 import '../widgets/workout_tab_v2.dart';
 import '../widgets/smooth_scroll.dart';
-import '../widgets/nutrition_tab_v2.dart';
+import '../widgets/nutrition_tab_v3.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
 import '../widgets/dashboard_overview_sections.dart';
@@ -237,8 +237,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           // Furry blurred circles and doodles drift behind
                           // the whole Overview, header included.
-                          if (_selectedCategoryIndex <= 1)
-                            const Positioned.fill(child: FurBlobsBackdrop()),
+                          if (_selectedCategoryIndex <= 2)
+                            Positioned.fill(child: FurBlobsBackdrop(food: _selectedCategoryIndex == 2)),
                           Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -290,7 +290,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                               child: _selectedCategoryIndex == 1
                                   ? const WorkoutTabV2()
                                   : _selectedCategoryIndex == 2
-                                  ? const NutritionTabV2()
+                                  ? const NutritionTabV3()
                                   : _selectedCategoryIndex == 3
                                   ? const DashboardMentalHealthTabContent()
                                   : _selectedCategoryIndex == 4
