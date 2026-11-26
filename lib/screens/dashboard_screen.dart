@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
 import '../widgets/side_island.dart';
+import '../widgets/overview_glass.dart';
 import '../widgets/nutrition_tab_v2.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
@@ -291,20 +292,13 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                                         const SizedBox(height: 24),
 
-                                        // Today's Progress Carousel (Calories, Workouts, Goals, Sleep)
-                                        _buildAnimatedProgressCarousel(),
+                                        // Apple-style glass widgets: Your Progress carousel
+                                        // (tap to grow) and Today widgets
+                                        const OverviewGlassSections(),
 
                                         // Show extended sections only on Overview Tab (Index 0)
                                         if (_selectedCategoryIndex == 0) ...[
-                                          const SizedBox(height: 24),
-                                          const TodaysPlanSection(),
-                                          const SizedBox(height: 24),
-                                          const NutritionSummarySection(),
-                                          const SizedBox(height: 24),
-                                          const WaterIntakeSection(),
-                                          const SizedBox(height: 24),
-                                          const MindMoodSection(),
-                                          const SizedBox(height: 24),
+                                          const SizedBox(height: 28),
                                           const AchievementsSection(),
                                           const SizedBox(height: 24),
                                           const ArticlesTipsSection(),
