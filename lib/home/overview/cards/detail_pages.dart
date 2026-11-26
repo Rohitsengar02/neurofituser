@@ -500,7 +500,7 @@ class _TrainersDetailPage extends StatelessWidget {
         label: 'See all trainers',
         onTap: () => Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const TrainersScreen())),
+        ).push(trainersRoute()),
       ),
       children: [
         for (final tr in _trainers)
@@ -605,63 +605,37 @@ class _CommunityDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const posts = [
-      (
-        'Neha Patel',
-        'Finished the 30-day plank challenge 🎉 Day 1 was 40 s, today 3 min 10 s!',
-        342,
-        48,
-        '12m',
-        3,
-      ),
-      (
-        'Rahul Sharma',
-        'New PR on deadlift: 180 kg × 3. Slow eccentrics really work.',
-        518,
-        71,
-        '1h',
-        0,
-      ),
-      (
-        'Anjali Mehta',
-        'Meal prep Sunday: 5 high-protein bowls under 500 kcal. Recipe in comments.',
-        289,
-        36,
-        '3h',
-        1,
-      ),
+    final posts = [
+      for (final p in CommunityStore.I.visible.take(5))
+        (p.name, p.text.isNotEmpty ? p.text : (p.workoutTitle ?? ''), p.likes, p.commentCount, ago(p.at), p.avatar ?? ''),
     ];
-    const challenges = [
-      (
-        '10K Steps Weekend',
-        '312 joined · ends Sun',
-        Icons.directions_walk_rounded,
-        _green,
-      ),
-      (
-        'Push-up Ladder',
-        '1.1K joined · 7 days',
-        Icons.fitness_center_rounded,
-        _orange,
-      ),
-      (
-        'Mindful Mornings',
-        '640 joined · 14 days',
-        Icons.self_improvement_rounded,
-        _purple,
-      ),
+    const looks = [
+      (Icons.directions_walk_rounded, _green),
+      (Icons.fitness_center_rounded, _orange),
+      (Icons.self_improvement_rounded, _purple),
     ];
+    final challenges = [
+      for (var i = 0; i < _Challenges.list.value.length; i++)
+        (
+          _Challenges.title(_Challenges.list.value[i]),
+          _Challenges.sub(_Challenges.list.value[i]),
+          looks[i % looks.length].$1,
+          looks[i % looks.length].$2,
+        ),
+    ];
+    final today = CommunityStore.I.visible.where((p) => _today(p.at)).length;
     return _DetailScaffold(
       title: 'Community',
-      subtitle: '2.4k people active now',
+      subtitle: '$today ${today == 1 ? 'post' : 'posts'} today',
       bottom: _PrimaryButton(
         icon: Icons.groups_rounded,
         label: 'Open community',
         onTap: () => Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const SocialScreen())),
+        ).push(communityRoute()),
       ),
       children: [
+        if (challenges.isNotEmpty)
         _panel(
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -727,9 +701,9 @@ class _CommunityDetailPage extends StatelessWidget {
                       width: 38,
                       height: 38,
                       child: _photo(
-                        _trainers[p.$6].$5,
+                        p.$6,
                         p.$1,
-                        _trainers[p.$6].$6,
+                        _blue,
                         radius: 19,
                       ),
                     ),

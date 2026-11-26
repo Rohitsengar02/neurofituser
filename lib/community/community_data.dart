@@ -3,10 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../trainer/trainer_data.dart' show unsplash;
+import '../backend/live_backend.dart';
+import '../backend/me.dart';
+import '../backend/media.dart';
+import '../backend/sync_store.dart';
 
 // Community feed: photo, before/after, workout and poll posts with likes,
-// comments, saves, reports and the user's own posts (images included).
+// comments, saves, reports and the user's own posts. Everything is shared
+// through the NeuroFit API (photos on Cloudflare R2) and cached offline.
 
 enum PostKind { photo, beforeAfter, workout, poll, text }
 
@@ -24,10 +28,12 @@ class Comment {
   final DateTime at;
   int likes;
   bool liked;
-  Comment(this.name, this.text, this.at, {this.avatar, this.likes = 0, this.liked = false});
-  Map<String, dynamic> toJson() => {'n': name, 't': text, 'a': at.millisecondsSinceEpoch, 'av': avatar, 'l': likes, 'lk': liked};
+  String id;
+  Comment(this.name, this.text, this.at, {this.avatar, this.likes = 0, this.liked = false, String? id})
+      : id = id ?? 'cmt_${DateTime.now().microsecondsSinceEpoch}';
+  Map<String, dynamic> toJson() => {'n': name, 't': text, 'a': at.millisecondsSinceEpoch, 'av': avatar, 'l': likes, 'lk': liked, 'i': id};
   static Comment fromJson(Map<String, dynamic> j) =>
-      Comment(j['n'], j['t'], DateTime.fromMillisecondsSinceEpoch(j['a']), avatar: j['av'], likes: j['l'] ?? 0, liked: j['lk'] ?? false);
+      Comment(j['n'], j['t'], DateTime.fromMillisecondsSinceEpoch(j['a']), avatar: j['av'], likes: j['l'] ?? 0, liked: j['lk'] ?? false, id: j['i']);
 }
 
 class Post {
@@ -47,6 +53,10 @@ class Post {
   bool liked, saved, reported, tried;
   final List<Comment> comments;
   final List<String> tags;
+
+  /// Comments on the server (only the latest is loaded until opened).
+  int serverComments = 0;
+  int get commentCount => comments.length > serverComments ? comments.length : serverComments;
 
   Post({
     required this.id,
@@ -101,6 +111,7 @@ class Post {
         'tr': tried,
         'cm': comments.map((c) => c.toJson()).toList(),
         'tg': tags,
+        'sc': serverComments,
       };
 
   static Post fromJson(Map<String, dynamic> j) => Post(
@@ -127,31 +138,116 @@ class Post {
         tried: j['tr'] ?? false,
         comments: [for (final c in j['cm'] ?? []) Comment.fromJson(Map<String, dynamic>.from(c))],
         tags: List<String>.from(j['tg'] ?? []),
-      );
+      )..serverComments = j['sc'] ?? 0;
 }
 
 class CommunityStore extends ChangeNotifier {
   CommunityStore._() {
     _load();
+    SyncStore.I.on('posts_updated', refresh);
   }
   static final CommunityStore I = CommunityStore._();
-  static const _key = 'community_v1';
+  static const _key = 'community_v2';
 
   final List<Post> posts = [];
-  final Set<String> following = {'@rahul.lifts', '@anjali.fit'};
+  final Set<String> following = {};
+  bool loaded = false;
+  Future<void>? _loading;
 
   List<Post> get visible => posts.where((p) => !p.reported).toList();
+
+  static void _bg(Future<Object?> f) => f.catchError((_) => null);
+  static DateTime _at(Object? v) => DateTime.tryParse('${v ?? ''}')?.toLocal() ?? DateTime.now();
+
+  static Post _fromServer(Map<String, dynamic> j) {
+    final kind = PostKind.values.where((k) => k.name == j['kind']).firstOrNull ?? PostKind.text;
+    final options = [for (final o in (j['options'] as List? ?? const [])) o.toString()];
+    final votes = [for (final v in (j['votes'] as List? ?? const [])) (v as num).toInt()];
+    final last = j['lastComment'];
+    final avatar = (j['avatarUrl'] ?? '').toString();
+    final mine = j['mine'] == true;
+    return Post(
+      id: (j['id'] ?? '').toString(),
+      name: (j['name'] ?? 'Member').toString(),
+      handle: (j['handle'] ?? '@member').toString(),
+      text: (j['text'] ?? '').toString(),
+      at: _at(j['createdAt']),
+      kind: kind,
+      avatar: mine && avatar.isEmpty ? null : avatar,
+      coach: j['coach'] == true,
+      mine: mine,
+      pics: [for (final u in (j['pics'] as List? ?? const [])) Pic(url: u.toString())],
+      stat: j['stat']?.toString(),
+      workoutTitle: j['workoutTitle']?.toString(),
+      exercises: [
+        for (final e in (j['exercises'] as List? ?? const []))
+          if (e is List && e.length >= 2) (e[0].toString(), e[1].toString()) else if (e is Map) ((e['name'] ?? '').toString(), (e['sets'] ?? '').toString()),
+      ],
+      options: options,
+      votes: votes.length == options.length ? votes : null,
+      myVote: (j['myVote'] as num?)?.toInt(),
+      likes: (j['likes'] as num?)?.toInt() ?? 0,
+      liked: j['liked'] == true,
+      saved: j['saved'] == true,
+      reported: j['reported'] == true,
+      tried: j['tried'] == true,
+      comments: [
+        if (last is Map)
+          Comment((last['name'] ?? 'Member').toString(), (last['text'] ?? '').toString(), _at(last['createdAt']),
+              avatar: (last['avatarUrl'] ?? '').toString().isEmpty ? null : last['avatarUrl'].toString(), id: last['id']?.toString()),
+      ],
+      tags: [for (final t in (j['tags'] as List? ?? const [])) t.toString()],
+    )..serverComments = (j['commentsCount'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Latest posts from the server (own posts still uploading stay on top).
+  Future<void> refresh() => _loading ??= _refresh().whenComplete(() => _loading = null);
+
+  Future<void> _refresh() async {
+    try {
+      final j = await Api.get('/community/posts?limit=50');
+      final fresh = [for (final p in Api.list(j)) _fromServer(p)];
+      final ids = {for (final p in fresh) p.id};
+      final pending = posts.where((p) => p.mine && !ids.contains(p.id) && _uploading.contains(p.id));
+      posts
+        ..clear()
+        ..addAll([...pending, ...fresh]);
+      loaded = true;
+      notifyListeners();
+      _save();
+    } catch (_) {}
+  }
+
+  /// Opening a post's comments loads all of them.
+  Future<void> loadComments(Post p) async {
+    try {
+      final j = await Api.get('/community/posts/${p.id}/comments');
+      final list = [
+        for (final c in Api.list(j))
+          Comment((c['name'] ?? 'Member').toString(), (c['text'] ?? '').toString(), _at(c['createdAt']),
+              avatar: (c['avatarUrl'] ?? '').toString().isEmpty ? null : c['avatarUrl'].toString(),
+              likes: (c['likes'] as num?)?.toInt() ?? 0, liked: c['liked'] == true, id: c['id']?.toString()),
+      ];
+      p.comments
+        ..clear()
+        ..addAll(list);
+      p.serverComments = list.length;
+      notifyListeners();
+    } catch (_) {}
+  }
 
   void like(Post p, {bool only = false}) {
     if (only && p.liked) return;
     p.liked = !p.liked;
     p.likes += p.liked ? 1 : -1;
     _changed();
+    _bg(Api.send('POST', '/community/posts/${p.id}/like', {'on': p.liked}));
   }
 
   void save(Post p) {
     p.saved = !p.saved;
     _changed();
+    _bg(Api.send('POST', '/community/posts/${p.id}/save', {'on': p.saved}));
   }
 
   void vote(Post p, int i) {
@@ -159,42 +255,80 @@ class CommunityStore extends ChangeNotifier {
     p.myVote = i;
     p.votes[i]++;
     _changed();
+    _bg(Api.send('POST', '/community/posts/${p.id}/vote', {'option': i}));
   }
 
   void comment(Post p, String text) {
-    p.comments.add(Comment('Rohit', text, DateTime.now()));
+    final c = Comment(Me.first.isEmpty ? 'You' : Me.first, text, DateTime.now(), avatar: Me.photo.isEmpty ? null : Me.photo);
+    p.comments.add(c);
+    p.serverComments++;
     _changed();
+    _bg(Api.send('POST', '/community/posts/${p.id}/comments', {'id': c.id, 'text': text}));
   }
 
   void likeComment(Comment c) {
     c.liked = !c.liked;
     c.likes += c.liked ? 1 : -1;
     _changed();
+    _bg(Api.send('POST', '/community/comments/${c.id}/like'));
   }
 
   void report(Post p) {
     p.reported = true;
     _changed();
+    _bg(Api.send('POST', '/community/posts/${p.id}/report'));
   }
 
   void tryWorkout(Post p) {
     p.tried = !p.tried;
     _changed();
+    _bg(Api.send('POST', '/community/posts/${p.id}/try', {'on': p.tried}));
   }
 
   void delete(Post p) {
     posts.remove(p);
     _changed();
+    _bg(Api.send('DELETE', '/community/posts/${p.id}'));
   }
 
   void toggleFollow(String handle) {
     following.contains(handle) ? following.remove(handle) : following.add(handle);
     _changed();
+    SyncStore.I.put('community', 'following', {'handles': following.toList()});
   }
 
+  final Set<String> _uploading = {};
+
+  /// Shows the post at once, uploads its photos to R2, then publishes it.
   void add(Post p) {
     posts.insert(0, p);
+    _uploading.add(p.id);
     _changed();
+    () async {
+      final urls = <String>[];
+      for (final pic in p.pics) {
+        if (pic.url.startsWith('http')) {
+          urls.add(pic.url);
+        } else if (pic.bytes != null) {
+          final u = await Media.upload(pic.bytes!, folder: 'community');
+          if (u != null) urls.add(u);
+        }
+      }
+      try {
+        await Api.send('POST', '/community/posts', {
+          'id': p.id,
+          'kind': p.kind.name,
+          'text': p.text,
+          'pics': urls,
+          'stat': p.stat,
+          'workoutTitle': p.workoutTitle,
+          'exercises': [for (final e in p.exercises) [e.$1, e.$2]],
+          'options': p.options,
+          'tags': p.tags,
+        });
+      } catch (_) {}
+      _uploading.remove(p.id);
+    }();
   }
 
   void _changed() {
@@ -203,163 +337,34 @@ class CommunityStore extends ChangeNotifier {
   }
 
   Future<void> _load() async {
-    _seed();
     try {
       final pr = await SharedPreferences.getInstance();
       final raw = pr.getString(_key);
-      if (raw == null) return;
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      final mine = [for (final p in j['mine'] ?? []) Post.fromJson(Map<String, dynamic>.from(p))];
-      final state = Map<String, dynamic>.from(j['state'] ?? {});
-      for (final p in posts) {
-        final s = state[p.id];
-        if (s == null) continue;
-        p.liked = s['lk'] ?? false;
-        p.likes = s['l'] ?? p.likes;
-        p.saved = s['sv'] ?? false;
-        p.reported = s['r'] ?? false;
-        p.tried = s['tr'] ?? false;
-        if (s['mv'] != null && p.myVote == null) {
-          p.myVote = s['mv'];
-          p.votes[p.myVote!]++;
-        }
-        for (final c in s['cm'] ?? []) {
-          p.comments.add(Comment.fromJson(Map<String, dynamic>.from(c)));
-        }
+      if (raw != null) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        posts.addAll([for (final p in j['posts'] ?? []) Post.fromJson(Map<String, dynamic>.from(p))]);
+        following.addAll(List<String>.from(j['fol'] ?? const []));
+        notifyListeners();
       }
-      following
-        ..clear()
-        ..addAll(List<String>.from(j['fol'] ?? following));
-      posts.insertAll(0, mine);
-      notifyListeners();
+      final f = await SyncStore.I.get('community', 'following');
+      if (f != null) {
+        following
+          ..clear()
+          ..addAll(List<String>.from(f['handles'] ?? const []));
+      }
     } catch (_) {}
+    refresh();
   }
 
   Future<void> _save() async {
     try {
       final pr = await SharedPreferences.getInstance();
-      // Own posts (with photos) are capped so local storage stays small.
-      final mine = posts.where((p) => p.mine).take(8).map((p) => p.toJson()).toList();
-      final state = {
-        for (final p in posts.where((p) => !p.mine))
-          p.id: {
-            'lk': p.liked,
-            'l': p.likes,
-            'sv': p.saved,
-            'r': p.reported,
-            'tr': p.tried,
-            'mv': p.myVote,
-            'cm': p.comments.where((c) => c.name == 'Rohit').map((c) => c.toJson()).toList(),
-          }
-      };
-      await pr.setString(_key, jsonEncode({'mine': mine, 'state': state, 'fol': following.toList()}));
+      // The last 40 posts are kept for offline use; photos only as URLs.
+      final keep = [
+        for (final p in posts.take(40))
+          if (p.pics.every((x) => x.bytes == null || x.url.isNotEmpty)) p.toJson()..['p'] = [for (final x in p.pics) {'u': x.url}],
+      ];
+      await pr.setString(_key, jsonEncode({'posts': keep, 'fol': following.toList()}));
     } catch (_) {}
-  }
-
-  void _seed() {
-    final now = DateTime.now();
-    Comment c(String n, String t, int min, String av, [int l = 0]) => Comment(n, t, now.subtract(Duration(minutes: min)), avatar: av, likes: l);
-    posts
-      ..clear()
-      ..addAll([
-        Post(
-          id: 's1',
-          name: 'Anjali Mehta',
-          handle: '@anjali.fit',
-          avatar: '1548690312-e3b507d8c110',
-          coach: true,
-          at: now.subtract(const Duration(minutes: 38)),
-          kind: PostKind.beforeAfter,
-          text: 'My client Priya after 12 weeks of consistent training and simple Indian meals. No crash diets, just patience 💜',
-          pics: [Pic(url: unsplash('1531746020798-e6953c6e8e04', 700)), Pic(url: unsplash('1544005313-94ddf0286df2', 700))],
-          stat: '-9 kg · 12 weeks',
-          likes: 2140,
-          tags: ['#transformation', '#fatloss'],
-          comments: [
-            c('Riya', 'This is so motivating! 😍', 20, '1524504388940-b1c1722653e1', 24),
-            c('Dev', 'What was the weekly split?', 12, '1567013127542-490d757e51fc', 3),
-          ],
-        ),
-        Post(
-          id: 's2',
-          name: 'Rahul Sharma',
-          handle: '@rahul.lifts',
-          avatar: '1567013127542-490d757e51fc',
-          coach: true,
-          at: now.subtract(const Duration(hours: 2)),
-          kind: PostKind.workout,
-          text: 'Short on time? Here is my 30-minute push session. Save it and tag me when you try it 🔥',
-          workoutTitle: '30-min push day',
-          exercises: const [('Barbell bench press', '4 × 8'), ('Incline dumbbell press', '3 × 10'), ('Seated shoulder press', '3 × 10'), ('Triceps dip', '3 × 12')],
-          likes: 860,
-          tags: ['#workout', '#push'],
-          comments: [c('Kunal', 'Did this today, chest is on fire', 50, '1583454110551-21f2fa2afe61', 11)],
-        ),
-        Post(
-          id: 's3',
-          name: 'Neha Patel',
-          handle: '@neha.yoga',
-          avatar: '1518611012118-696072aa579a',
-          coach: true,
-          at: now.subtract(const Duration(hours: 4)),
-          kind: PostKind.poll,
-          text: 'When do you like to train? 🧘',
-          options: const ['Early morning', 'Lunch break', 'Evening', 'Late night'],
-          votes: [412, 96, 538, 121],
-          likes: 310,
-          tags: ['#poll'],
-        ),
-        Post(
-          id: 's4',
-          name: 'Vikram Singh',
-          handle: '@vikram.physique',
-          avatar: '1583454110551-21f2fa2afe61',
-          coach: true,
-          at: now.subtract(const Duration(hours: 6)),
-          kind: PostKind.photo,
-          text: 'Leg day done. Remember: the squat rack is not a curl station 😂',
-          pics: [Pic(url: unsplash('1534438327276-14e5300c3a48', 900))],
-          likes: 1520,
-          tags: ['#legday'],
-          comments: [c('Sana', 'Haha so true', 120, '1534528741775-53994a69daeb', 8)],
-        ),
-        Post(
-          id: 's5',
-          name: 'Sara Khan',
-          handle: '@sara.moves',
-          avatar: '1534528741775-53994a69daeb',
-          at: now.subtract(const Duration(hours: 9)),
-          kind: PostKind.photo,
-          text: 'Morning run views. 6 km before work, feeling unstoppable today ☀️',
-          pics: [Pic(url: unsplash('1476480862126-209bfaa8edc8', 900)), Pic(url: unsplash('1571019613454-1cb2f99b2d8b', 900))],
-          likes: 640,
-          tags: ['#running'],
-        ),
-        Post(
-          id: 's6',
-          name: 'Arjun Kapoor',
-          handle: '@arjun.hiit',
-          avatar: '1571019613454-1cb2f99b2d8b',
-          coach: true,
-          at: now.subtract(const Duration(hours: 20)),
-          kind: PostKind.beforeAfter,
-          text: '16 weeks of lean bulking with my client Aman. Strength up on every lift.',
-          pics: [Pic(url: unsplash('1567013127542-490d757e51fc', 700)), Pic(url: unsplash('1583454110551-21f2fa2afe61', 700))],
-          stat: '+6 kg lean · 16 weeks',
-          likes: 1930,
-          tags: ['#musclegain'],
-        ),
-        Post(
-          id: 's7',
-          name: 'Isha Verma',
-          handle: '@isha.eats',
-          avatar: '1524504388940-b1c1722653e1',
-          at: now.subtract(const Duration(days: 1, hours: 3)),
-          kind: PostKind.text,
-          text: 'Protein tip: a cup of roasted chana has about 15 g of protein and costs less than a chai. Snack smarter! 🌱',
-          likes: 450,
-          tags: ['#nutrition'],
-        ),
-      ]);
   }
 }

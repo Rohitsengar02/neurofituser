@@ -110,6 +110,11 @@ class Connectivity extends ChangeNotifier {
   bool online = true;
   int pending = 0;
 
+  void setPending(int n) {
+    pending = n;
+    notifyListeners();
+  }
+
   void _set(bool v) {
     if (online == v) return;
     online = v;
@@ -242,8 +247,7 @@ class LiveBackendClient extends http.BaseClient {
     final body = utf8.decode(bytes, allowMalformed: true);
     final headers = Map<String, String>.from(request.headers)..remove('Authorization');
     await LocalDb.I.outboxAdd(request.method, url.toString(), body, headers);
-    Connectivity.I.pending = await LocalDb.I.outboxCount();
-    Connectivity.I.notifyListeners();
+    Connectivity.I.setPending(await LocalDb.I.outboxCount());
     Object? echo;
     try {
       echo = body.isEmpty ? null : jsonDecode(body);
@@ -303,8 +307,7 @@ class Outbox {
         if (res.statusCode >= 500) break; // server trouble; try again later
         await LocalDb.I.outboxRemove(it['id'] as Object); // done (or rejected for good)
       }
-      Connectivity.I.pending = await LocalDb.I.outboxCount();
-      Connectivity.I.notifyListeners();
+      Connectivity.I.setPending(await LocalDb.I.outboxCount());
     } finally {
       _running = false;
     }

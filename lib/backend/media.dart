@@ -35,7 +35,7 @@ class Media {
     if (b64 == null || b64.isEmpty) return null;
     if (b64.startsWith('http')) return b64;
     try {
-      return upload(base64Decode(b64.replaceFirst(RegExp(r'^data:[^;]+;base64,'), '')), folder: folder);
+      return await upload(base64Decode(b64.replaceFirst(RegExp(r'^data:[^;]+;base64,'), '')), folder: folder);
     } catch (_) {
       return null;
     }

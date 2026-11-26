@@ -10,5 +10,7 @@ class Me {
   static String get first => name.split(RegExp(r'\s+')).first;
   static String get email => UserBackendService.instance.currentUser?.email ?? '';
   static String get uid => UserBackendService.instance.currentUser?.uid ?? '';
+  static String get handle => '@${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '')}';
+  static String get initial => first.isEmpty ? 'Y' : first[0].toUpperCase();
   static String get photo => UserBackendService.instance.currentUser?.photoUrl ?? '';
 }
