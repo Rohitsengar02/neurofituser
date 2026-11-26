@@ -70,6 +70,40 @@ class _SideIslandState extends State<SideIsland>
 
   bool _warm = false;
 
+  // Island menu morph (pill -> two-option capsule), iOS style spring.
+  late final AnimationController _menu = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+    reverseDuration: const Duration(milliseconds: 300),
+  );
+  static const _spring = Cubic(0.2, 1.25, 0.32, 1);
+
+  void _toggleMenu() {
+    HapticFeedback.mediumImpact();
+    if (_menu.isCompleted || _menu.status == AnimationStatus.forward) {
+      _menu.reverse();
+    } else {
+      _menu.forward();
+    }
+  }
+
+  Alignment _origin(Size screen, double top) => Alignment(
+        _right ? 1 : -1,
+        ((top + _h / 2) / screen.height) * 2 - 1,
+      );
+
+  Future<void> _pick(bool stats, Size screen, double top) async {
+    HapticFeedback.selectionClick();
+    final origin = _origin(screen, top);
+    await _menu.reverse();
+    if (!mounted) return;
+    if (stats) {
+      showTodaySlider(context, origin: origin);
+    } else {
+      Navigator.of(context).push(iosZoomRoute(const KemoAiScreen(), origin));
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -81,6 +115,7 @@ class _SideIslandState extends State<SideIsland>
 
   @override
   void dispose() {
+    _menu.dispose();
     _pulse.dispose();
     super.dispose();
   }
@@ -104,11 +139,11 @@ class _SideIslandState extends State<SideIsland>
             left: left,
             top: top,
             child: GestureDetector(
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                showTodaySlider(context);
+              onTap: _toggleMenu,
+              onPanStart: (_) {
+                _menu.reverse();
+                setState(() => _drag = Offset(left, top));
               },
-              onPanStart: (_) => setState(() => _drag = Offset(left, top)),
               onPanUpdate: (d) => setState(() {
                 final p = (_drag ?? Offset(left, top)) + d.delta;
                 _drag = Offset(p.dx.clamp(0, c.maxWidth - _w),
@@ -129,9 +164,142 @@ class _SideIslandState extends State<SideIsland>
               child: _pill(dragging: _drag != null),
             ),
           ),
+          AnimatedBuilder(
+            animation: _menu,
+            builder: (context, _) {
+              if (_menu.isDismissed) return const SizedBox.shrink();
+              final raw = _menu.value;
+              final t = _menu.status == AnimationStatus.reverse
+                  ? Curves.easeInCubic.transform(raw)
+                  : _spring.transform(raw);
+              const mw = 224.0, mh = 150.0;
+              final w = _w + (mw - _w) * t;
+              final h = _h + (mh - _h) * t;
+              final mt = (top + _h / 2 - h / 2)
+                  .clamp(pad.top + 4, c.maxHeight - h - 100);
+              return Positioned.fill(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _menu.reverse(),
+                        child: ColoredBox(
+                          color: Colors.black
+                              .withValues(alpha: 0.18 * raw.clamp(0.0, 1.0)),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: mt,
+                      left: _right ? null : 6 * t,
+                      right: _right ? 6 * t : null,
+                      width: w,
+                      height: h,
+                      child: _menuCapsule(t, raw, c.biggest, top),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       );
     });
+  }
+
+  Widget _menuCapsule(double t, double raw, Size screen, double top) {
+    final r = 22 + (_h / 2 - 22) * (1 - t);
+    Widget option(int i, Widget icon, String title, String sub,
+        VoidCallback onTap) {
+      final a = ((raw - 0.35 - i * 0.12) / 0.45).clamp(0.0, 1.0);
+      final e = Curves.easeOutCubic.transform(a);
+      return Opacity(
+        opacity: e,
+        child: Transform.translate(
+          offset: Offset((_right ? 14 : -14) * (1 - e), 0),
+          child: _MenuOption(
+            icon: icon,
+            title: title,
+            sub: sub,
+            onTap: onTap,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF14151B), Color(0xFF262833)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(r),
+        boxShadow: [
+          BoxShadow(
+            color: _mint.withValues(alpha: 0.25 * t),
+            blurRadius: 24,
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: OverflowBox(
+        minWidth: 224,
+        maxWidth: 224,
+        minHeight: 150,
+        maxHeight: 150,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            children: [
+              Expanded(
+                child: option(
+                  0,
+                  const KemoAvatar(size: 40, animate: false),
+                  'Kemo AI',
+                  'Ask anything',
+                  () => _pick(false, screen, top),
+                ),
+              ),
+              Container(
+                height: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                color: Colors.white.withValues(alpha: 0.08 * t),
+              ),
+              Expanded(
+                child: option(
+                  1,
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CustomPaint(
+                      painter: _RingPainter(
+                        IslandStats.eaten / IslandStats.budget,
+                        color: _mint,
+                        track: Colors.white.withValues(alpha: 0.14),
+                        stroke: 4,
+                      ),
+                      child: const Icon(Icons.bar_chart_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                  'Stats',
+                  'Today at a glance',
+                  () => _pick(true, screen, top),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _pill({required bool dragging}) {
@@ -206,27 +374,49 @@ class _SideIslandState extends State<SideIsland>
   }
 }
 
-/// Pulls the Today slider down from the top of the screen.
-Future<void> showTodaySlider(BuildContext context) {
+/// iOS-style spring used when a sheet grows out of the island.
+const Curve _iosSpring = Cubic(0.18, 1.12, 0.32, 1);
+
+Widget _zoomFrom(Alignment origin, Animation<double> a, Widget child) {
+  final fwd = a.status != AnimationStatus.reverse;
+  final t = (fwd ? _iosSpring : Curves.easeInCubic).transform(a.value);
+  return Opacity(
+    opacity: Curves.easeOut.transform((a.value * 2.2).clamp(0.0, 1.0)),
+    child: Transform.scale(
+      scale: 0.2 + 0.8 * t,
+      alignment: origin,
+      child: child,
+    ),
+  );
+}
+
+/// Opens a page that zooms out of the island, like an iPhone app launch.
+Route<void> iosZoomRoute(Widget page, Alignment origin) => PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 560),
+      reverseTransitionDuration: const Duration(milliseconds: 340),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, a, __, child) => AnimatedBuilder(
+        animation: a,
+        builder: (_, c) => _zoomFrom(origin, a, c!),
+        child: child,
+      ),
+    );
+
+/// Grows the Today slider out of the island with a soft spring.
+Future<void> showTodaySlider(BuildContext context,
+    {Alignment origin = Alignment.topCenter}) {
   return showGeneralDialog(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Close',
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    transitionDuration: const Duration(milliseconds: 460),
+    transitionDuration: const Duration(milliseconds: 560),
     pageBuilder: (context, a, b) => const _TodaySlider(),
-    transitionBuilder: (context, a, b, child) {
-      final curved = CurvedAnimation(
-        parent: a,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return SlideTransition(
-        position: Tween(begin: const Offset(0, -1), end: Offset.zero)
-            .animate(curved),
-        child: child,
-      );
-    },
+    transitionBuilder: (context, a, b, child) => AnimatedBuilder(
+      animation: a,
+      builder: (_, c) => _zoomFrom(origin, a, c!),
+      child: child,
+    ),
   );
 }
 
@@ -988,4 +1178,70 @@ class _DonutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _MenuOption extends StatefulWidget {
+  final Widget icon;
+  final String title;
+  final String sub;
+  final VoidCallback onTap;
+
+  const _MenuOption({
+    required this.icon,
+    required this.title,
+    required this.sub,
+    required this.onTap,
+  });
+
+  @override
+  State<_MenuOption> createState() => _MenuOptionState();
+}
+
+class _MenuOptionState extends State<_MenuOption> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _down = true),
+      onTapCancel: () => setState(() => _down = false),
+      onTapUp: (_) {
+        setState(() => _down = false);
+        widget.onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _down ? 0.1 : 0),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: AnimatedScale(
+          scale: _down ? 0.96 : 1,
+          duration: const Duration(milliseconds: 140),
+          child: Row(
+            children: [
+              SizedBox(width: 42, child: Center(child: widget.icon)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title, style: _f(15, w: FontWeight.w700)),
+                    Text(widget.sub,
+                        style: _f(11.5,
+                            w: FontWeight.w500, c: Colors.white60)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white38, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
