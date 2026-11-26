@@ -12,6 +12,8 @@ import 'package:video_player/video_player.dart';
 
 import '../widgets/side_island.dart';
 import '../widgets/overview_glass.dart';
+import '../widgets/overview_health_tiles.dart';
+import '../widgets/body_morph_backdrop.dart';
 import '../widgets/nutrition_tab_v2.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/dashboard_3d_icons.dart';
@@ -288,21 +290,27 @@ class _DashboardScreenState extends State<DashboardScreen>
                                         const SizedBox(height: 20),
 
                                         // Overview Bento Grid (Left Double-Height Looping Video + Right 2 Vertical Image Cards)
-                                        _buildAnimatedOverviewBentoGrid(),
+                                        const HealthTilesGrid(),
 
                                         const SizedBox(height: 24),
 
                                         // Apple-style glass widgets: Your Progress carousel
                                         // (tap to grow) and Today widgets
-                                        const OverviewGlassSections(),
-
-                                        // Show extended sections only on Overview Tab (Index 0)
-                                        if (_selectedCategoryIndex == 0) ...[
-                                          const SizedBox(height: 28),
-                                          const AchievementsSection(),
-                                          const SizedBox(height: 24),
-                                          const ArticlesTipsSection(),
-                                        ],
+                                        // Human figure behind the sections morphs
+                                        // (fat down, muscle up) as you scroll.
+                                        const BodyMorphBackdrop(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              OverviewGlassSections(),
+                                              SizedBox(height: 28),
+                                              AchievementsSection(),
+                                              SizedBox(height: 24),
+                                              ArticlesTipsSection(),
+                                            ],
+                                          ),
+                                        ),
 
                                         const SizedBox(height: 20),
                                       ],
