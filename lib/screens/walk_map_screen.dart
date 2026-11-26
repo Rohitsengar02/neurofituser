@@ -22,17 +22,31 @@ class _Style {
   final List<String> subs;
   final bool dark;
   final String credit;
-  const _Style(this.name, this.url, this.subs, this.dark, this.credit);
+  final List<double>? filter; // colour matrix applied to each tile
+  const _Style(this.name, this.url, this.subs, this.dark, this.credit, [this.filter]);
 }
 
+// All styles use free OpenStreetMap-based tile servers that need no API key
+// or sign-up. Light and Dark are OpenStreetMap tiles recoloured on device.
+const _osm = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const _osmCredit = '© OpenStreetMap contributors';
+
 const _styles = [
-  _Style('Light', 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', ['a', 'b', 'c', 'd'], false,
-      '© OpenStreetMap contributors © CARTO'),
-  _Style('Dark', 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', ['a', 'b', 'c', 'd'], true,
-      '© OpenStreetMap contributors © CARTO'),
-  _Style('Voyager', 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', ['a', 'b', 'c', 'd'], false,
-      '© OpenStreetMap contributors © CARTO'),
-  _Style('Streets', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', [], false, '© OpenStreetMap contributors'),
+  _Style('Light', _osm, [], false, _osmCredit, <double>[
+    0.55, 0.30, 0.08, 0, 30,
+    0.22, 0.62, 0.08, 0, 30,
+    0.22, 0.30, 0.42, 0, 42,
+    0, 0, 0, 1, 0,
+  ]),
+  _Style('Dark', _osm, [], true, _osmCredit, <double>[
+    -0.50, -0.30, -0.06, 0, 228,
+    -0.22, -0.60, -0.06, 0, 232,
+    -0.18, -0.30, -0.40, 0, 245,
+    0, 0, 0, 1, 0,
+  ]),
+  _Style('Streets', _osm, [], false, _osmCredit),
+  _Style('Humanitarian', 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', ['a', 'b', 'c'], false,
+      '© OpenStreetMap contributors, HOT'),
   _Style('Terrain', 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', ['a', 'b', 'c'], false,
       '© OpenStreetMap contributors, SRTM © OpenTopoMap'),
 ];
@@ -232,9 +246,11 @@ class _WalkMapScreenState extends State<WalkMapScreen> with TickerProviderStateM
                 TileLayer(
                   urlTemplate: st.url,
                   subdomains: st.subs,
-                  retinaMode: RetinaMode.isHighDensity(context),
                   userAgentPackageName: 'com.neurofit.app',
                   tileDisplay: const TileDisplay.fadeIn(),
+                  tileBuilder: st.filter == null
+                      ? null
+                      : (context, tile, _) => ColorFiltered(colorFilter: ColorFilter.matrix(st.filter!), child: tile),
                 ),
                 if (_route.length > 1)
                   PolylineLayer(polylines: [
@@ -541,6 +557,9 @@ class _WalkMapScreenState extends State<WalkMapScreen> with TickerProviderStateM
         ),
       );
 
+  Widget _filtered(_Style s, Widget w) =>
+      s.filter == null ? w : ColorFiltered(colorFilter: ColorFilter.matrix(s.filter!), child: w);
+
   void _pickStyle() {
     showModalBottomSheet(
       context: context,
@@ -586,11 +605,11 @@ class _WalkMapScreenState extends State<WalkMapScreen> with TickerProviderStateM
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(17),
-                        child: Image.network(
+                        child: _filtered(s, Image.network(
                           preview,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Container(color: s.dark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB)),
-                        ),
+                        )),
                       ),
                     ),
                     const SizedBox(height: 6),
