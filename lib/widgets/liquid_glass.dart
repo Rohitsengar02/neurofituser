@@ -321,9 +321,16 @@ class _ScrollRevealState extends State<ScrollReveal> with SingleTickerProviderSt
     }
     final pos = Scrollable.maybeOf(context)?.position;
     if (pos != _pos) {
-      _pos?.removeListener(_check);
-      _pos = pos?..addListener(_check);
+      _pos?.removeListener(_onScroll);
+      _pos = pos?..addListener(_onScroll);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  // Re-check after layout too: a fast scroll can land on the final offset
+  // before this item has its new position.
+  void _onScroll() {
+    _check();
     WidgetsBinding.instance.addPostFrameCallback((_) => _check());
   }
 
@@ -341,7 +348,7 @@ class _ScrollRevealState extends State<ScrollReveal> with SingleTickerProviderSt
   }
 
   void _start() {
-    _pos?.removeListener(_check);
+    _pos?.removeListener(_onScroll);
     Future.delayed(Duration(milliseconds: widget.delayMs), () {
       if (mounted) _c.forward();
     });
@@ -349,7 +356,7 @@ class _ScrollRevealState extends State<ScrollReveal> with SingleTickerProviderSt
 
   @override
   void dispose() {
-    _pos?.removeListener(_check);
+    _pos?.removeListener(_onScroll);
     _c.dispose();
     super.dispose();
   }
