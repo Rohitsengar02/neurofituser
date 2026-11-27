@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'constants/api_constants.dart';
-import 'demo/demo_backend.dart';
 import 'backend/live_backend.dart';
 import 'backend/local_db.dart';
 import 'backend/sync_store.dart';
@@ -20,15 +19,9 @@ import 'theme/app_theme.dart';
 import 'services/fcm_notification_service.dart';
 
 void main() {
-  if (ApiConstants.demoMode) {
-    // Answer every backend call on the device with demo data.
-    final realClient = http.Client();
-    http.runWithClient(_startApp, () => DemoBackendClient(realClient));
-  } else {
-    // Live API: tokens, offline cache and the offline outbox (lib/backend/live_backend.dart).
-    final realClient = http.Client();
-    http.runWithClient(_startApp, () => LiveBackendClient(realClient));
-  }
+  // Live API: tokens, offline cache and the offline outbox (lib/backend/live_backend.dart).
+  final realClient = http.Client();
+  http.runWithClient(_startApp, () => LiveBackendClient(realClient));
 }
 
 Future<void> _startApp() async {

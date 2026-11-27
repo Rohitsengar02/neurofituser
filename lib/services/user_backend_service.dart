@@ -102,10 +102,11 @@ class UserBackendService extends ChangeNotifier {
   /// Last sign-in error, in words the user can act on (shown by the auth screens).
   String? lastError;
 
-  /// Google OAuth client ids come from the build (no secrets in the code):
+  /// Google OAuth client ids (public ids, not secrets). Override per build with
   ///   --dart-define=GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com
   ///   --dart-define=GOOGLE_IOS_CLIENT_ID=yyyy.apps.googleusercontent.com (iPhone only)
-  static const _webClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+  static const _webClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID',
+      defaultValue: '465865494955-7q16j5dqtsnt8rusbdicmsiftjo6mf0j.apps.googleusercontent.com');
   static const _iosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -224,23 +225,21 @@ class UserBackendService extends ChangeNotifier {
 
   Future<UserModel?> signInWithRealGoogle() async {
     lastError = null;
-    if (ApiConstants.demoMode) {
-      final user = UserModel(uid: 'demo', name: 'Demo Athlete', email: 'demo@neurofit.app', authProvider: 'google');
-      _currentUser = user;
-      await _saveSessionLocally(user);
-      notifyListeners();
-      return user;
-    }
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null; // cancelled
       final auth = await googleUser.authentication;
       final idToken = auth.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        lastError = 'Google did not return a sign-in token. Google sign-in needs GOOGLE_WEB_CLIENT_ID in this build.';
+      final accessToken = auth.accessToken;
+      // Web sign-in often returns only an access token; the server verifies either.
+      if ((idToken == null || idToken.isEmpty) && (accessToken == null || accessToken.isEmpty)) {
+        lastError = 'Google did not return a sign-in token. Try again.';
         throw ApiError(lastError!);
       }
-      final j = await Api.send('POST', '/auth/google', {'idToken': idToken});
+      final j = await Api.send('POST', '/auth/google', {
+        if (idToken != null && idToken.isNotEmpty) 'idToken': idToken,
+        if (accessToken != null && accessToken.isNotEmpty) 'accessToken': accessToken,
+      });
       return await _signedIn(j);
     } on ApiError catch (e) {
       lastError = e.message;
