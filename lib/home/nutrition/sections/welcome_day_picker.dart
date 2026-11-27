@@ -22,7 +22,7 @@ class _WelcomeState extends State<_Welcome> with SingleTickerProviderStateMixin 
 
   @override
   Widget build(BuildContext context) {
-    const words = ['Fuel', 'your', 'day,', 'Rohit'];
+    final words = ['Fuel', 'your', 'day,', Me.first];
     Widget blurIn(int i, Widget w) {
       final a = CurvedAnimation(parent: _c, curve: Interval(0.06 * i, 0.5 + 0.08 * i, curve: _spring));
       return AnimatedBuilder(

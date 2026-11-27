@@ -1,77 +1,150 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../backend/live_backend.dart';
+import '../backend/sync_store.dart';
+import '../services/category_backend_service.dart';
+import '../services/user_backend_service.dart';
+
 // Catalogue, cart, wishlist, coupons, addresses and orders for the shop.
-// Everything is kept on the phone (SharedPreferences) so the whole flow
-// works without the backend: add to cart, check out, and track the order.
+// Products and coupons come from the admin panel (NeuroFit API); orders and
+// addresses are saved to the user's account. Everything is also kept on the
+// phone, so the shop opens instantly and works offline (orders placed
+// offline are sent when the phone is back online).
 
 const shopImg = 'assets/images/';
 
 class Product {
-  final String name, brand, image, cat;
+  final String id, name, brand, image, cat;
   final int price, old;
   final double rating;
   final int reviews;
   final bool cover; // photo fills the card instead of sitting on white
-  const Product(this.name, this.brand, this.image, this.cat, this.price, this.old, this.rating, this.reviews, {this.cover = false});
+  final String description;
+  final List<String> variants;
+  final List<(String, String)> extraSpecs;
+  final int? stock;
+  final List<String> gallery;
+  final DateTime? createdAt;
+  const Product(this.name, this.brand, this.image, this.cat, this.price, this.old, this.rating, this.reviews,
+      {this.cover = false, this.id = '', this.description = '', this.variants = const [], this.extraSpecs = const [], this.stock, this.gallery = const [], this.createdAt});
+  static const placeholder = Product('', '', '', '', 0, 0, 0, 0);
+
   int get off => old <= price ? 0 : ((old - price) / old * 100).round();
 
-  List<String> get options => switch (cat) {
-        'Protein' => ['Chocolate', 'Vanilla', 'Strawberry'],
-        'Apparel' => ['UK 7', 'UK 8', 'UK 9', 'UK 10'],
-        'Equipment' => ['Standard', 'Pro'],
-        _ => ['Black', 'Green', 'Orange'],
+  /// From the API (admin product form).
+  factory Product.fromJson(Map<String, dynamic> j) {
+    String img(Object? v) => CategoryBackendService.getDisplayableImageUrl((v ?? '').toString());
+    final images = [for (final x in (j['additionalImages'] ?? j['images'] ?? const []) as List) img(x)].where((x) => x.isNotEmpty).toList();
+    final main = img(j['mainImageUrl'] ?? j['imageUrl'] ?? j['image'] ?? (images.isEmpty ? '' : images.first));
+    final price = ((j['price'] as num?) ?? num.tryParse('${j['price']}') ?? 0).round();
+    final old = ((j['regularPrice'] ?? j['mrp'] ?? j['originalPrice'] ?? j['comparePrice']) as num?)?.round() ?? price;
+    final variants = [
+      for (final v in (j['variants'] is List ? j['variants'] as List : const []))
+        if (v is Map && (v['name'] ?? '').toString().isNotEmpty) v['name'].toString(),
+    ];
+    final specs = <(String, String)>[];
+    final rawSpecs = j['specs'] ?? j['specifications'];
+    if (rawSpecs is Map) {
+      rawSpecs.forEach((k, v) => specs.add((k.toString(), v.toString())));
+    } else if (rawSpecs is List) {
+      for (final x in rawSpecs) {
+        if (x is Map) specs.add(((x['label'] ?? x['key'] ?? x['name'] ?? '').toString(), (x['value'] ?? '').toString()));
+      }
+    }
+    return Product(
+      (j['title'] ?? j['name'] ?? 'Product').toString(),
+      (j['brand'] ?? j['vendor'] ?? 'NeuroFit').toString(),
+      main,
+      (j['categoryName'] ?? j['category'] ?? 'Accessories').toString(),
+      price,
+      math.max(old, price),
+      ((j['rating'] as num?) ?? 0).toDouble(),
+      ((j['reviewCount'] ?? j['reviews']) as num?)?.toInt() ?? 0,
+      cover: j['cover'] == true || !main.toLowerCase().contains('.png'),
+      id: (j['id'] ?? j['_id'] ?? '').toString(),
+      description: (j['description'] ?? '').toString(),
+      variants: variants,
+      extraSpecs: specs,
+      stock: (j['stock'] as num?)?.toInt(),
+      gallery: images,
+      createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString()),
+    );
+  }
+
+  /// Small copy kept with cart lines and orders, so they show even before the catalogue loads.
+  Map<String, dynamic> toJson() => {
+        'id': id, 'title': name, 'brand': brand, 'mainImageUrl': image, 'categoryName': cat, 'price': price, 'regularPrice': old,
+        'rating': rating, 'reviewCount': reviews, 'cover': cover, if (variants.isNotEmpty) 'variants': [for (final v in variants) {'name': v}],
       };
 
-  String get optionLabel => switch (cat) {
-        'Protein' => 'Flavour',
-        'Apparel' => 'Size',
-        'Equipment' => 'Model',
-        _ => 'Colour',
-      };
+  List<String> get options => variants.isNotEmpty ? variants : const ['Standard'];
 
-  String get blurb => switch (cat) {
-        'Protein' =>
-          '24 g of fast-absorbing protein per scoop with 5.5 g BCAAs. Mixes smooth in water or milk, with no added sugar and third-party lab testing on every batch.',
-        'Equipment' =>
-          'Built from powder-coated steel for daily home training. Knurled grips, a stable base and a 2-year warranty.',
-        'Apparel' => 'Light knit upper, a soft foam midsole and a grippy rubber outsole for runs, gym sessions and everyday wear.',
-        'Wearables' => 'Tracks heart rate, sleep, steps and workouts, and syncs with NeuroFit. Up to 7 days of battery on one charge.',
-        'Yoga' => 'A 6 mm non-slip mat with alignment lines. Sweat-resistant and easy to wipe clean, with a carry strap.',
-        _ => 'Everyday training kit made to last, picked by the NeuroFit team.',
-      };
+  String get optionLabel => variants.isEmpty
+      ? 'Option'
+      : switch (cat) {
+          'Protein' => 'Flavour',
+          'Apparel' => 'Size',
+          'Equipment' => 'Model',
+          _ => 'Variant',
+        };
 
-  List<(String, String)> get specs => switch (cat) {
-        'Protein' => [('Protein / scoop', '24 g'), ('Servings', '30'), ('Sugar', '1 g'), ('Type', 'Whey isolate blend')],
-        'Equipment' => [('Material', 'Steel'), ('Warranty', '2 years'), ('Assembly', 'Not needed'), ('Use', 'Home and gym')],
-        'Apparel' => [('Upper', 'Knit'), ('Sole', 'Rubber'), ('Weight', '240 g'), ('Fit', 'True to size')],
-        'Wearables' => [('Battery', 'Up to 7 days'), ('Water', '5 ATM'), ('Sensors', 'HR, SpO2, GPS'), ('Display', '1.4" AMOLED')],
-        _ => [('Material', 'Premium'), ('Warranty', '1 year'), ('Care', 'Wipe clean'), ('In the box', '1 item')],
-      };
+  String get blurb => description.isNotEmpty
+      ? description
+      : switch (cat) {
+          'Protein' => 'Protein to support your training, picked by the NeuroFit team.',
+          'Equipment' => 'Training equipment for home and gym, picked by the NeuroFit team.',
+          'Apparel' => 'Training wear for runs, gym sessions and everyday use.',
+          _ => 'Everyday training kit, picked by the NeuroFit team.',
+        };
+
+  List<(String, String)> get specs => extraSpecs.isNotEmpty
+      ? extraSpecs
+      : [
+          ('Brand', brand),
+          ('Category', cat),
+          if (stock != null) ('Availability', stock! > 0 ? 'In stock' : 'Out of stock'),
+          ('Rating', reviews > 0 ? '${rating.toStringAsFixed(1)} ($reviews)' : 'New'),
+        ];
+
+  @override
+  bool operator ==(Object other) => other is Product && (id.isNotEmpty ? other.id == id : other.name == name);
+  @override
+  int get hashCode => id.isNotEmpty ? id.hashCode : name.hashCode;
 }
 
-const shopProducts = [
-  Product('Gold Standard Whey + Creatine', 'Optimum Nutrition', '${shopImg}product_1.png', 'Protein', 6499, 8299, 4.8, 12840),
-  Product('Performance Whey 2 kg', 'Optimum Nutrition', '${shopImg}product_2.png', 'Protein', 4299, 5199, 4.6, 6420),
-  Product('NutriFit Premium Whey', 'NutriFit', '${shopImg}nutrifit_whey_protein.jpg', 'Protein', 2899, 3999, 4.7, 2210),
-  Product('Air Bike Pro', 'NeuroFit Gear', '${shopImg}product_3.png', 'Equipment', 24999, 32999, 4.5, 640),
-  Product('Home Gym Station', 'NeuroFit Gear', '${shopImg}product_5.png', 'Equipment', 38999, 49999, 4.4, 312),
-  Product('Hex Dumbbell 10 kg', 'NeuroFit Gear', '${shopImg}neon_green_dumbbell_1787819274202.jpg', 'Equipment', 1899, 2499, 4.7, 3110, cover: true),
-  Product('Cloud Run Shoes', 'Stride', '${shopImg}neon_green_shoe_1787819288631.jpg', 'Apparel', 5499, 7999, 4.6, 1980, cover: true),
-  Product('Pulse Smartwatch', 'NeuroFit', '${shopImg}neon_green_smartwatch_1787819302325.jpg', 'Wearables', 8999, 12999, 4.5, 2740, cover: true),
-  Product('Steel Bottle 1 L', 'NeuroFit', '${shopImg}neon_green_waterbottle_1787819315145.jpg', 'Accessories', 699, 999, 4.8, 5320, cover: true),
-  Product('Grip Yoga Mat', 'Zen Flow', '${shopImg}neon_green_yogamat_1787819327380.jpg', 'Yoga', 1299, 1899, 4.7, 2860, cover: true),
-  Product('Duffle Gym Bag', 'NeuroFit', '${shopImg}neon_orange_gymbag_1787819375587.jpg', 'Accessories', 1799, 2599, 4.6, 1420, cover: true),
-  Product('Heart Rate Strap', 'Pulse', '${shopImg}neon_orange_heartrate_1787819363247.jpg', 'Wearables', 3299, 4499, 4.4, 880, cover: true),
-  Product('Cast Kettlebell 12 kg', 'NeuroFit Gear', '${shopImg}neon_orange_kettlebell_1787819340750.jpg', 'Equipment', 2199, 2999, 4.8, 1760, cover: true),
-  Product('Leakproof Shaker', 'NeuroFit', '${shopImg}neon_orange_proteinshaker_1787819387813.jpg', 'Accessories', 399, 599, 4.6, 6210, cover: true),
-  Product('Speed Rope', 'NeuroFit', '${shopImg}neon_orange_skippingrope_1787819351491.jpg', 'Accessories', 549, 799, 4.5, 2390, cover: true),
-];
+/// Live catalogue (filled from the API, then kept up to date). Empty until the
+/// admin adds products.
+final List<Product> shopProducts = [];
 
-Product productNamed(String n) => shopProducts.firstWhere((p) => p.name == n, orElse: () => shopProducts.first);
+/// Wrap-around pick so fixed layouts work with any number of products.
+Product shopPick(int i) => shopProducts.isEmpty ? Product.placeholder : shopProducts[i % shopProducts.length];
+
+/// Product picture: a web URL (uploaded to R2 from the admin panel) or a
+/// bundled asset path. Network images are cached on the device.
+Widget productImage(String src, {BoxFit fit = BoxFit.cover, Alignment alignment = Alignment.center, int? cacheWidth}) {
+  if (src.startsWith('http')) {
+    return Image.network(src, fit: fit, alignment: alignment, cacheWidth: cacheWidth, gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F1F4)));
+  }
+  if (src.isEmpty) return const ColoredBox(color: Color(0xFFF1F1F4));
+  return Image.asset(src, fit: fit, alignment: alignment, cacheWidth: cacheWidth,
+      errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F1F4)));
+}
+
+final Map<String, Product> _known = {};
+Product productNamed(String n, [Map<String, dynamic>? snapshot]) {
+  for (final p in shopProducts) {
+    if (p.name == n || p.id == n) return p;
+  }
+  if (_known[n] != null) return _known[n]!;
+  if (snapshot != null) return _known[n] = Product.fromJson(snapshot);
+  return Product(n, 'NeuroFit', '', 'Accessories', 0, 0, 0, 0);
+}
 
 String rs(int v) {
   final neg = v < 0;
@@ -123,13 +196,30 @@ class Coupon {
   }
 }
 
-const coupons = [
-  Coupon('FIT10', '10% off everything', 'Up to ₹500 off on any order', Color(0xFFF97316), percent: 10, cap: 500),
-  Coupon('NEURO200', 'Flat ₹200 off', 'On orders above ₹1,499', Color(0xFF8B5CF6), flat: 200, minOrder: 1499),
-  Coupon('PROTEIN15', '15% off protein', 'Up to ₹750 off whey and supplements', Color(0xFF16A34A), percent: 15, cap: 750, onlyCat: 'Protein'),
-  Coupon('FIRST300', '₹300 off your first order', 'On orders above ₹1,999', Color(0xFF3B82F6), flat: 300, minOrder: 1999),
-  Coupon('FREESHIP', 'Free express delivery', 'Express delivery at no cost', Color(0xFF14B8A6), freeShip: true),
-];
+/// Live coupons from the admin panel (Discounts).
+final List<Coupon> coupons = [];
+
+const _couponColors = [Color(0xFFF97316), Color(0xFF8B5CF6), Color(0xFF16A34A), Color(0xFF3B82F6), Color(0xFF14B8A6), Color(0xFFEF4444)];
+
+Coupon couponFromJson(Map<String, dynamic> j, int i) {
+  final type = (j['type'] ?? j['discountType'] ?? 'percentage').toString().toLowerCase();
+  final value = ((j['value'] ?? j['amount']) as num?) ?? 0;
+  final min = ((j['minOrderValue'] ?? j['minOrder']) as num?)?.round() ?? 0;
+  final cap = ((j['maxDiscount'] ?? j['maxDiscountAmount']) as num?)?.round() ?? 0;
+  final freeShip = type.contains('ship');
+  final percent = type.startsWith('perc') ? value.round() : 0;
+  final flat = !freeShip && percent == 0 ? value.round() : 0;
+  final code = (j['code'] ?? '').toString().toUpperCase();
+  final title = (j['title'] ?? '').toString().isNotEmpty
+      ? j['title'].toString()
+      : freeShip ? 'Free delivery' : percent > 0 ? '$percent% off' : 'Flat ${rs(flat)} off';
+  final detail = (j['description'] ?? '').toString().isNotEmpty
+      ? j['description'].toString()
+      : [if (cap > 0) 'Up to ${rs(cap)} off', if (min > 0) 'On orders above ${rs(min)}'].join(' · ');
+  final cat = (j['categoryName'] ?? j['category'] ?? '').toString();
+  return Coupon(code, title, detail.isEmpty ? 'Use code $code at checkout' : detail, _couponColors[i % _couponColors.length],
+      minOrder: min, flat: flat, percent: percent, cap: cap, onlyCat: cat.isEmpty ? null : cat, freeShip: freeShip);
+}
 
 // ---------------------------------------------------------------- cart
 
@@ -138,8 +228,9 @@ class CartLine {
   final String option;
   int qty;
   CartLine(this.product, this.option, this.qty);
-  Map<String, dynamic> toJson() => {'p': product.name, 'o': option, 'q': qty};
-  static CartLine fromJson(Map<String, dynamic> j) => CartLine(productNamed(j['p']), j['o'], j['q']);
+  Map<String, dynamic> toJson() => {'p': product.id.isNotEmpty ? product.id : product.name, 'o': option, 'q': qty, 's': product.toJson()};
+  static CartLine fromJson(Map<String, dynamic> j) =>
+      CartLine(productNamed(j['p'].toString(), j['s'] is Map ? Map<String, dynamic>.from(j['s'] as Map) : null), (j['o'] ?? 'Standard').toString(), (j['q'] as num?)?.toInt() ?? 1);
 }
 
 class Address {
@@ -151,6 +242,36 @@ class Address {
       {'id': id, 'l': label, 'n': name, 'ph': phone, 'a1': line1, 'a2': line2, 'c': city, 's': state, 'pin': pin};
   static Address fromJson(Map<String, dynamic> j) =>
       Address(j['id'], j['l'], j['n'], j['ph'], j['a1'], j['a2'], j['c'], j['s'], j['pin']);
+
+  /// Shape saved on the user's account (shared with the profile's address screen).
+  Map<String, dynamic> toServer({bool isDefault = false}) => {
+        'id': id, 'label': label, 'type': label, 'name': name, 'fullName': name, 'phone': phone, 'phoneNumber': phone,
+        'line1': line1, 'line2': line2, 'flat': line1, 'area': line2, 'streetAddress': '$line1, $line2',
+        'city': city, 'state': state, 'pincode': pin, 'isDefault': isDefault,
+      };
+
+  static Address fromServer(Map<String, dynamic> a) {
+    String v(List<String> keys) {
+      for (final k in keys) {
+        final x = (a[k] ?? '').toString();
+        if (x.isNotEmpty) return x;
+      }
+      return '';
+    }
+
+    final street = v(['streetAddress']);
+    return Address(
+      v(['id', '_id']).isEmpty ? 'addr_${a.hashCode}' : v(['id', '_id']),
+      v(['label', 'type', 'tag']).isEmpty ? 'Home' : v(['label', 'type', 'tag']),
+      v(['name', 'fullName']),
+      v(['phone', 'phoneNumber']),
+      v(['line1', 'flat', 'houseNo']).isNotEmpty ? v(['line1', 'flat', 'houseNo']) : street,
+      v(['line2', 'area', 'building', 'landmark']),
+      v(['city']),
+      v(['state']),
+      v(['pincode', 'pin', 'zip']),
+    );
+  }
 }
 
 enum Speed { standard, express }
@@ -174,19 +295,19 @@ class Order {
   final Bill bill;
   final String? coupon;
   bool cancelled;
-  Order(this.id, this.at, this.lines, this.address, this.payment, this.speed, this.bill, this.coupon, {this.cancelled = false});
+  String status;
+  Order(this.id, this.at, this.lines, this.address, this.payment, this.speed, this.bill, this.coupon, {this.cancelled = false, this.status = 'Placed'});
 
   int get items => lines.fold(0, (a, l) => a + l.qty);
 
-  /// Orders move along on the clock so tracking works without a backend.
+  /// Tracking step from the status the admin sets on the order.
   int get step {
-    if (cancelled) return -1;
-    final m = DateTime.now().difference(at).inMinutes;
-    final scale = speed == Speed.express ? 1 : 2;
-    if (m >= 24 * 60 * scale) return 4;
-    if (m >= 8 * 60 * scale) return 3;
-    if (m >= 20 * scale) return 2;
-    if (m >= 2) return 1;
+    final s = status.toLowerCase();
+    if (cancelled || s.contains('cancel') || s.contains('return')) return -1;
+    if (s.contains('deliver') && !s.contains('out for')) return 4;
+    if (s.contains('out for')) return 3;
+    if (s.contains('ship')) return 2;
+    if (s.contains('pack') || s.contains('process') || s.contains('confirm')) return 1;
     return 0;
   }
 
@@ -208,6 +329,7 @@ class Order {
         'bill': [bill.mrp, bill.subtotal, bill.savings, bill.coupon, bill.delivery, bill.handling],
         'coupon': coupon,
         'x': cancelled,
+        'st': status,
       };
 
   static Order fromJson(Map<String, dynamic> j) {
@@ -222,7 +344,75 @@ class Order {
       Bill(b[0], b[1], b[2], b[3], b[4], b[5]),
       j['coupon'],
       cancelled: j['x'] ?? false,
+      status: (j['st'] ?? 'Placed').toString(),
     );
+  }
+
+  /// Body for POST /api/orders (the admin panel reads the same fields).
+  Map<String, dynamic> toServer() => {
+        'orderId': id,
+        'customerName': address.name,
+        'userName': address.name,
+        'shippingAddress': address.toServer(),
+        'items': [
+          for (final l in lines)
+            {
+              'productId': l.product.id, 'title': l.product.name, 'name': l.product.name, 'variant': l.option, 'price': l.product.price,
+              'quantity': l.qty, 'imageUrl': l.product.image, 'image': l.product.image, 'brand': l.product.brand, 'categoryName': l.product.cat,
+            },
+        ],
+        'subtotal': bill.subtotal,
+        'discount': bill.coupon,
+        'shippingFee': bill.delivery,
+        'handlingFee': bill.handling,
+        'totalAmount': bill.total,
+        'paymentMethod': payment,
+        'paymentStatus': payment.toLowerCase().contains('cash') || payment.toLowerCase() == 'cod' ? 'Pending' : 'Paid',
+        'orderStatus': 'Placed',
+        'deliverySpeed': speed.name,
+        if (coupon != null) 'couponCode': coupon,
+        'app': toJson(),
+      };
+
+  static Order? fromServer(Map<String, dynamic> j) {
+    try {
+      if (j['app'] is Map) {
+        final o = fromJson(Map<String, dynamic>.from(j['app'] as Map));
+        o.status = (j['orderStatus'] ?? o.status).toString();
+        o.cancelled = o.status.toLowerCase().contains('cancel');
+        return o;
+      }
+      // Orders created elsewhere (older app versions, admin): rebuild from the plain fields.
+      final items = j['items'] is List ? j['items'] as List : const [];
+      final lines = [
+        for (final it in items)
+          if (it is Map)
+            CartLine(
+              productNamed((it['productId'] ?? it['title'] ?? it['name'] ?? '').toString(), {
+                'id': it['productId'], 'title': it['title'] ?? it['name'], 'mainImageUrl': it['imageUrl'] ?? it['image'], 'price': it['price'], 'brand': it['brand'],
+              }),
+              (it['variant'] ?? 'Standard').toString(),
+              ((it['quantity'] as num?) ?? 1).toInt(),
+            ),
+      ];
+      final total = ((j['totalAmount'] as num?) ?? 0).round();
+      final sub = ((j['subtotal'] as num?) ?? total).round();
+      final status = (j['orderStatus'] ?? 'Placed').toString();
+      return Order(
+        (j['orderId'] ?? j['id']).toString(),
+        DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal() ?? DateTime.now(),
+        lines,
+        Address.fromServer(j['shippingAddress'] is Map ? Map<String, dynamic>.from(j['shippingAddress'] as Map) : const {}),
+        (j['paymentMethod'] ?? 'UPI').toString(),
+        j['deliverySpeed'] == 'express' ? Speed.express : Speed.standard,
+        Bill(sub, sub, 0, ((j['discount'] as num?) ?? 0).round(), ((j['shippingFee'] as num?) ?? 0).round(), ((j['handlingFee'] as num?) ?? 0).round()),
+        j['couponCode']?.toString(),
+        cancelled: status.toLowerCase().contains('cancel'),
+        status: status,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -244,7 +434,7 @@ class ShopStore extends ChangeNotifier {
     _load();
   }
   static final ShopStore I = ShopStore._();
-  static const _key = 'shop_store_v1';
+  static const _key = 'shop_store_v2';
 
   final List<CartLine> cart = [];
   final List<Address> addresses = [];
@@ -253,9 +443,18 @@ class ShopStore extends ChangeNotifier {
   String? couponCode;
   Speed speed = Speed.standard;
 
+  /// True once the catalogue has been read (from the API or the offline copy).
+  bool catalogReady = false;
+
+  /// Bumped when products or coupons change (shop sections listen to this, not the cart).
+  final catalog = ValueNotifier<int>(0);
+
   /// Cheap listenables for badges.
   final cartCount = ValueNotifier<int>(0);
   final saved = ValueNotifier<Set<String>>({});
+
+  /// Product names the user opened, newest first (for "Recently viewed").
+  final List<String> viewed = [];
 
   int get count => cart.fold(0, (a, l) => a + l.qty);
   Coupon? get coupon => couponCode == null ? null : coupons.where((c) => c.code == couponCode).firstOrNull;
@@ -273,6 +472,25 @@ class ShopStore extends ChangeNotifier {
     if (speed == Speed.express) delivery += 99;
     if (c?.freeShip == true) delivery = 0;
     return Bill(mrp, sub, mrp - sub, cd, delivery, sub == 0 ? 0 : 9);
+  }
+
+  // ------------------------------------------------------------ catalogue picks
+
+  List<Product> get bestSellers => [...shopProducts]..sort((a, b) => b.reviews.compareTo(a.reviews));
+  List<Product> get newArrivals => [...shopProducts]..sort((a, b) => (b.createdAt ?? DateTime(2000)).compareTo(a.createdAt ?? DateTime(2000)));
+  List<Product> get deals => [...shopProducts.where((p) => p.off > 0)]..sort((a, b) => b.off.compareTo(a.off));
+  List<Product> inCat(String c) => shopProducts.where((p) => p.cat.toLowerCase().contains(c.toLowerCase())).toList();
+  List<Product> get recentlyViewed => [for (final n in viewed) ...shopProducts.where((p) => p.name == n)];
+
+  void markViewed(Product p) {
+    viewed
+      ..remove(p.name)
+      ..insert(0, p.name);
+    if (viewed.length > 12) viewed.removeLast();
+    _save();
+    if (p.id.isNotEmpty) {
+      Api.send('POST', '/track', {'event': 'product_view', 'id': p.id}).catchError((_) => <String, dynamic>{});
+    }
   }
 
   /// Best coupon price for a single product, for the "get it for" hint.
@@ -360,9 +578,13 @@ class ShopStore extends ChangeNotifier {
     _changed();
   }
 
+  String? get _uid => UserBackendService.instance.currentUser?.uid;
+
   void selectAddress(String id) {
     addressId = id;
     _changed();
+    final uid = _uid;
+    if (uid != null) unawaited(UserBackendService.instance.setDefaultAddress(uid, id));
   }
 
   void saveAddress(Address a) {
@@ -374,18 +596,23 @@ class ShopStore extends ChangeNotifier {
     }
     addressId = a.id;
     _changed();
+    final uid = _uid;
+    if (uid != null) unawaited(UserBackendService.instance.saveUserAddress(uid, a.toServer(isDefault: true)));
   }
 
   void deleteAddress(Address a) {
     addresses.removeWhere((x) => x.id == a.id);
     if (addressId == a.id) addressId = addresses.isEmpty ? null : addresses.first.id;
     _changed();
+    final uid = _uid;
+    if (uid != null) unawaited(UserBackendService.instance.deleteUserAddress(uid, a.id));
   }
 
+  /// Places the order: shown at once, sent to the server (queued if offline).
   Order placeOrder(String payment) {
     final b = bill;
     final o = Order(
-      'NF${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+      'NF${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}${math.Random().nextInt(90) + 10}',
       DateTime.now(),
       [for (final l in cart) CartLine(l.product, l.option, l.qty)],
       address!,
@@ -399,12 +626,15 @@ class ShopStore extends ChangeNotifier {
     couponCode = null;
     speed = Speed.standard;
     _changed();
+    Api.send('POST', '/orders', o.toServer()).catchError((_) => <String, dynamic>{});
     return o;
   }
 
   void cancel(Order o) {
     o.cancelled = true;
+    o.status = 'Cancelled';
     _changed();
+    Api.send('PUT', '/orders/${o.id}/status', {'orderStatus': 'Cancelled', 'cancellationReason': 'Cancelled in app'}).catchError((_) => <String, dynamic>{});
   }
 
   void reorder(Order o) {
@@ -413,83 +643,142 @@ class ShopStore extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------------------ server
+
+  bool _listening = false;
+
+  /// Reads products, coupons, addresses and orders. Fast: the API caches,
+  /// and offline the last copy on the phone is used.
+  Future<void> refresh() async {
+    if (!_listening) {
+      _listening = true;
+      for (final ev in const ['products_updated', 'product_updated', 'discounts_updated', 'discount_updated']) {
+        SyncStore.I.on(ev, () => unawaited(refresh()));
+      }
+      for (final ev in const ['order:user_updated', 'order:user_created']) {
+        SyncStore.I.on(ev, () => unawaited(_refreshOrders()));
+      }
+      UserBackendService.instance.addListener(_syncAddresses);
+    }
+    await Future.wait([_refreshCatalog(), _refreshCoupons(), _refreshOrders()]);
+    _syncAddresses();
+  }
+
+  Future<void> _refreshCatalog() async {
+    try {
+      final j = await Api.get('/products?activeOnly=true&limit=500');
+      final list = [for (final x in Api.list(j)) Product.fromJson(x)];
+      shopProducts
+        ..clear()
+        ..addAll(list);
+      catalogReady = true;
+      // Cart lines point at the fresh product (new price, image).
+      for (var i = 0; i < cart.length; i++) {
+        final fresh = shopProducts.where((p) => p == cart[i].product).firstOrNull;
+        if (fresh != null) cart[i] = CartLine(fresh, cart[i].option, cart[i].qty);
+      }
+      catalog.value++;
+      _changed(save: false);
+    } catch (_) {}
+  }
+
+  Future<void> _refreshCoupons() async {
+    try {
+      final j = await Api.get('/discounts?activeOnly=true');
+      final list = Api.list(j);
+      coupons
+        ..clear()
+        ..addAll([for (var i = 0; i < list.length; i++) if ((list[i]['code'] ?? '').toString().isNotEmpty) couponFromJson(list[i], i)]);
+      catalog.value++;
+      _changed(save: false);
+    } catch (_) {}
+  }
+
+  Future<void> _refreshOrders() async {
+    if (_uid == null) return;
+    try {
+      final j = await Api.get('/orders/mine');
+      final server = [for (final x in Api.list(j)) Order.fromServer(x)].whereType<Order>().toList();
+      final ids = server.map((o) => o.id).toSet();
+      // Keep orders placed offline that the server hasn't seen yet.
+      final pending = orders.where((o) => !ids.contains(o.id) && DateTime.now().difference(o.at).inDays < 2);
+      orders
+        ..clear()
+        ..addAll([...pending, ...server]);
+      _changed();
+    } catch (_) {}
+  }
+
+  void _syncAddresses() {
+    final u = UserBackendService.instance.currentUser;
+    if (u == null) return;
+    final list = [for (final a in u.addresses) Address.fromServer(a)];
+    if (list.isEmpty && addresses.isEmpty) return;
+    addresses
+      ..clear()
+      ..addAll(list);
+    final def = u.addresses.where((a) => a['isDefault'] == true).firstOrNull;
+    if (def != null) addressId = (def['id'] ?? addressId)?.toString();
+    if (addressId != null && !addresses.any((a) => a.id == addressId)) addressId = addresses.isEmpty ? null : addresses.first.id;
+    _changed();
+  }
+
   // ------------------------------------------------------------ persist
 
-  void _changed() {
+  void _changed({bool save = true}) {
     if (coupon != null && coupon!.whyNot(cart) != null) couponCode = null;
     cartCount.value = count;
     notifyListeners();
-    _save();
+    if (save) _save();
   }
 
   Future<void> _load() async {
     try {
       final p = await SharedPreferences.getInstance();
+      p.remove('shop_store_v1'); // old demo data
       final raw = p.getString(_key);
-      if (raw == null) {
-        _seed();
-        return;
+      if (raw != null) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        cart
+          ..clear()
+          ..addAll([for (final l in j['cart'] ?? []) CartLine.fromJson(Map<String, dynamic>.from(l))]);
+        addresses
+          ..clear()
+          ..addAll([for (final a in j['addr'] ?? []) Address.fromJson(Map<String, dynamic>.from(a))]);
+        orders
+          ..clear()
+          ..addAll([for (final o in j['orders'] ?? []) Order.fromJson(Map<String, dynamic>.from(o))]);
+        saved.value = Set<String>.from(j['saved'] ?? []);
+        viewed
+          ..clear()
+          ..addAll(List<String>.from(j['viewed'] ?? const []));
+        addressId = j['addrId'];
+        couponCode = j['coupon'];
+        _changed(save: false);
       }
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      cart
-        ..clear()
-        ..addAll([for (final l in j['cart'] ?? []) CartLine.fromJson(Map<String, dynamic>.from(l))]);
-      addresses
-        ..clear()
-        ..addAll([for (final a in j['addr'] ?? []) Address.fromJson(Map<String, dynamic>.from(a))]);
-      orders
-        ..clear()
-        ..addAll([for (final o in j['orders'] ?? []) Order.fromJson(Map<String, dynamic>.from(o))]);
-      saved.value = Set<String>.from(j['saved'] ?? []);
-      addressId = j['addrId'];
-      couponCode = j['coupon'];
-      _changed();
-    } catch (_) {
-      _seed();
-    }
-  }
-
-  /// First run: two items in the cart, one saved address and one past
-  /// order, so every screen has something to show.
-  void _seed() {
-    cart
-      ..clear()
-      ..addAll([CartLine(shopProducts[0], 'Chocolate', 1), CartLine(shopProducts[8], 'Black', 1)]);
-    const home = Address('a1', 'Home', 'Rohit', '98765 43210', 'B-42, Green Park', 'Near Metro Gate 2', 'New Delhi', 'Delhi', '110016');
-    addresses
-      ..clear()
-      ..add(home);
-    addressId = home.id;
-    saved.value = {shopProducts[9].name, shopProducts[7].name};
-    orders
-      ..clear()
-      ..add(Order(
-        'NF20418873',
-        DateTime.now().subtract(const Duration(days: 9)),
-        [CartLine(shopProducts[13], 'Black', 2), CartLine(shopProducts[14], 'Orange', 1)],
-        home,
-        'UPI · Google Pay',
-        Speed.standard,
-        const Bill(1997, 1347, 650, 0, 0, 9),
-        null,
-      ));
-    _changed();
-  }
-
-  Future<void> _save() async {
-    try {
-      final p = await SharedPreferences.getInstance();
-      await p.setString(
-        _key,
-        jsonEncode({
-          'cart': cart.map((l) => l.toJson()).toList(),
-          'addr': addresses.map((a) => a.toJson()).toList(),
-          'orders': orders.map((o) => o.toJson()).toList(),
-          'saved': saved.value.toList(),
-          'addrId': addressId,
-          'coupon': couponCode,
-        }),
-      );
     } catch (_) {}
+    unawaited(refresh());
+  }
+
+  Timer? _saveTimer;
+  void _save() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 400), () async {
+      final body = {
+        'cart': cart.map((l) => l.toJson()).toList(),
+        'addr': addresses.map((a) => a.toJson()).toList(),
+        'orders': orders.take(50).map((o) => o.toJson()).toList(),
+        'saved': saved.value.toList(),
+        'viewed': viewed,
+        'addrId': addressId,
+        'coupon': couponCode,
+      };
+      try {
+        final p = await SharedPreferences.getInstance();
+        await p.setString(_key, jsonEncode(body));
+      } catch (_) {}
+      // Cart and wishlist follow the user to other devices.
+      unawaited(SyncStore.I.put('shop', 'bag', {'cart': body['cart'], 'saved': body['saved']}));
+    });
   }
 }

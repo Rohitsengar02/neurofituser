@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/staggered_slide_fade.dart';
+import '../backend/me.dart';
 
 class AiCoachScreen extends StatefulWidget {
   const AiCoachScreen({super.key});
@@ -327,7 +328,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> with TickerProviderStateM
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Good morning, Rohit! 👋',
+                      'Good morning, ${Me.first}! 👋',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,

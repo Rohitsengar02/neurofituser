@@ -9,6 +9,7 @@ import '../widgets/apple_kit.dart';
 import '../widgets/liquid_glass.dart';
 import '../widgets/net_img.dart';
 import 'community_data.dart';
+import '../backend/me.dart';
 
 // Community tab: stories, filters and a feed of photo, before/after,
 // workout, poll and text posts. Like (double tap too), comment, save,
@@ -125,15 +126,12 @@ class _Stories extends StatelessWidget {
   const _Stories();
   @override
   Widget build(BuildContext context) {
-    const people = [
-      ('Anjali', '1548690312-e3b507d8c110'),
-      ('Rahul', '1567013127542-490d757e51fc'),
-      ('Neha', '1518611012118-696072aa579a'),
-      ('Vikram', '1583454110551-21f2fa2afe61'),
-      ('Sara', '1534528741775-53994a69daeb'),
-      ('Arjun', '1571019613454-1cb2f99b2d8b'),
-      ('Isha', '1524504388940-b1c1722653e1'),
-    ];
+    // Recent posters (with a photo) from the live feed.
+    final seen = <String>{};
+    final people = <(String, String)>[
+      for (final p in CommunityStore.I.visible)
+        if (!p.mine && (p.avatar ?? '').isNotEmpty && seen.add(p.handle)) (p.name.split(' ').first, p.pics.isNotEmpty && p.pics.first.url.isNotEmpty ? p.pics.first.url : p.avatar!),
+    ].take(10).toList();
     return SizedBox(
       height: 96,
       child: ListView.separated(
@@ -268,7 +266,7 @@ class _Composer extends StatelessWidget {
           onTap: () => openComposer(context),
           child: Column(children: [
             Row(children: [
-              const CircleAvatar(radius: 19, backgroundColor: cBlue, child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+              CircleAvatar(radius: 19, backgroundColor: cBlue, child: Text(Me.initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
               const SizedBox(width: 10),
               Expanded(child: Text('Share a win, a workout or a question…', style: akT(14, w: FontWeight.w500, c: akFaint))),
             ]),
@@ -341,7 +339,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           padding: const EdgeInsets.fromLTRB(14, 14, 6, 8),
           child: Row(children: [
             p.avatar == null
-                ? const CircleAvatar(radius: 20, backgroundColor: cBlue, child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)))
+                ? CircleAvatar(radius: 20, backgroundColor: cBlue, child: Text(Me.initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)))
                 : ClipOval(child: NetImg(unsplash(p.avatar!, 120), width: 40, height: 40)),
             const SizedBox(width: 10),
             Expanded(
@@ -394,7 +392,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               HapticFeedback.lightImpact();
               s.like(p);
             }),
-            _act(Icons.chat_bubble_outline_rounded, '${p.comments.length}', () => showComments(context, p)),
+            _act(Icons.chat_bubble_outline_rounded, '${p.commentCount}', () => showComments(context, p)),
             _act(Icons.send_rounded, '', () {
               Clipboard.setData(ClipboardData(text: 'https://neurofit.app/p/${p.id}'));
               shopToast(context, 'Link copied', icon: Icons.link_rounded);
@@ -428,10 +426,10 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                   TextSpan(text: '${p.comments.last.name}  ', style: akT(13, w: FontWeight.w800)),
                   TextSpan(text: p.comments.last.text, style: akT(13, w: FontWeight.w500)),
                 ]), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (p.comments.length > 1)
+                if (p.commentCount > 1)
                   Padding(
                     padding: const EdgeInsets.only(top: 3),
-                    child: Text('View all ${p.comments.length} comments', style: akT(12.5, w: FontWeight.w600, c: akFaint)),
+                    child: Text('View all ${p.commentCount} comments', style: akT(12.5, w: FontWeight.w600, c: akFaint)),
                   ),
               ]),
             ),
@@ -833,6 +831,15 @@ class _Comments extends StatefulWidget {
 
 class _CommentsState extends State<_Comments> {
   final _c = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    CommunityStore.I.loadComments(widget.p).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
     _c.dispose();
@@ -874,7 +881,7 @@ class _CommentsState extends State<_Comments> {
                           dy: 10,
                           child: ListTile(
                             leading: c.avatar == null
-                                ? const CircleAvatar(backgroundColor: cBlue, child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)))
+                                ? CircleAvatar(backgroundColor: cBlue, child: Text(Me.initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)))
                                 : ClipOval(child: NetImg(unsplash(c.avatar!, 100), width: 40, height: 40)),
                             title: Text.rich(TextSpan(children: [
                               TextSpan(text: '${c.name}  ', style: akT(13.5, w: FontWeight.w800)),
@@ -898,7 +905,7 @@ class _CommentsState extends State<_Comments> {
             padding: EdgeInsets.fromLTRB(12, 8, 12, 10 + MediaQuery.paddingOf(context).bottom),
             decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFF1F2F4)))),
             child: Row(children: [
-              const CircleAvatar(radius: 18, backgroundColor: cBlue, child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+              CircleAvatar(radius: 18, backgroundColor: cBlue, child: Text(Me.initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(
@@ -1021,8 +1028,8 @@ class _ComposerPageState extends State<ComposerPage> {
     final p = switch (kind) {
       0 => Post(
           id: id,
-          name: 'Rohit',
-          handle: '@rohit',
+          name: Me.name,
+          handle: Me.handle,
           text: text,
           at: DateTime.now(),
           kind: photos.isEmpty ? PostKind.text : PostKind.photo,
@@ -1031,8 +1038,8 @@ class _ComposerPageState extends State<ComposerPage> {
           tags: tags),
       1 => Post(
           id: id,
-          name: 'Rohit',
-          handle: '@rohit',
+          name: Me.name,
+          handle: Me.handle,
           text: text,
           at: DateTime.now(),
           kind: PostKind.beforeAfter,
@@ -1042,8 +1049,8 @@ class _ComposerPageState extends State<ComposerPage> {
           tags: tags),
       2 => Post(
           id: id,
-          name: 'Rohit',
-          handle: '@rohit',
+          name: Me.name,
+          handle: Me.handle,
           text: text,
           at: DateTime.now(),
           kind: PostKind.workout,
@@ -1053,8 +1060,8 @@ class _ComposerPageState extends State<ComposerPage> {
           tags: tags),
       _ => Post(
           id: id,
-          name: 'Rohit',
-          handle: '@rohit',
+          name: Me.name,
+          handle: Me.handle,
           text: text,
           at: DateTime.now(),
           kind: PostKind.poll,
@@ -1116,7 +1123,7 @@ class _ComposerPageState extends State<ComposerPage> {
           ShopCard(
             margin: EdgeInsets.zero,
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const CircleAvatar(radius: 19, backgroundColor: cBlue, child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+              CircleAvatar(radius: 19, backgroundColor: cBlue, child: Text(Me.initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(

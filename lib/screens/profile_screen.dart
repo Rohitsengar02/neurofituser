@@ -7,11 +7,10 @@ import '../services/user_backend_service.dart';
 import '../widgets/staggered_slide_fade.dart';
 import 'questionnaire_screen.dart';
 import 'rewards_screen.dart';
-import 'trainers_screen.dart';
-import 'social_screen.dart';
 import 'shop_screen.dart';
 import 'challenges_screen.dart';
 import 'vendor_registration_screen.dart';
+import '../widgets/live_page_route.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -328,8 +327,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   Widget _buildProfileHeroCard(UserModel? user, Map<String, dynamic> qData) {
     final String displayName = (user != null && user.name.trim().isNotEmpty)
         ? user.name.trim()
-        : 'Rohit Sengar';
-    final String email = user?.email ?? 'rohit@neurofit.com';
+        : 'Athlete';
+    final String email = user?.email ?? '';
     final String handle = '@${email.split('@').first}';
     final String photoUrl = (user != null && user.photoUrl.isNotEmpty)
         ? user.photoUrl
@@ -1427,7 +1426,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 subtitle: 'Find Pro Coaches',
                 color: const Color(0xFF10B981),
                 bgColor: const Color(0xFFD1FAE5),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TrainersScreen())),
+                onTap: () => Navigator.push(context, trainersRoute()),
               ),
               _buildNavCard(
                 icon: Icons.group_rounded,
@@ -1435,7 +1434,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 subtitle: 'Connect Athletes',
                 color: const Color(0xFF3B82F6),
                 bgColor: const Color(0xFFDBEAFE),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SocialScreen())),
+                onTap: () => Navigator.push(context, communityRoute()),
               ),
               _buildNavCard(
                 icon: Icons.storefront_rounded,

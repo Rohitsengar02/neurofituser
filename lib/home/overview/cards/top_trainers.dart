@@ -4,44 +4,25 @@ part of '../overview_home_cards.dart';
 //  4. TOP TRAINERS
 // =====================================================================
 
-const _trainers = [
-  (
-    'Rahul Sharma',
-    'Strength & Muscle',
-    '4.9',
-    '1.2K clients',
-    'https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=400&auto=format&fit=crop&q=80',
-    _green,
-    '98% match',
-  ),
-  (
-    'Anjali Mehta',
-    'Weight Loss',
-    '4.8',
-    '980 clients',
-    'https://images.unsplash.com/photo-1548690312-e3b507d8c110?w=400&auto=format&fit=crop&q=80',
-    _orange,
-    '94% match',
-  ),
-  (
-    'Vikram Singh',
-    'Muscle Gain',
-    '4.9',
-    '1.5K clients',
-    'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=400&auto=format&fit=crop&q=80',
-    _blue,
-    '91% match',
-  ),
-  (
-    'Neha Patel',
-    'Yoga & Wellness',
-    '4.7',
-    '760 clients',
-    'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&auto=format&fit=crop&q=80',
-    _purple,
-    '88% match',
-  ),
-];
+const _coachColors = [_green, _orange, _blue, _purple];
+
+/// Approved coaches from the API, best rated first:
+/// (name, speciality, rating, clients, photo, colour, category).
+List<(String, String, String, String, String, Color, String)> get _trainers {
+  final list = [...trainers]..sort((a, b) => b.rating.compareTo(a.rating));
+  return [
+    for (var i = 0; i < list.length && i < 8; i++)
+      (
+        list[i].name,
+        list[i].role,
+        list[i].rating > 0 ? list[i].rating.toStringAsFixed(1) : 'New',
+        '${list[i].clients} clients',
+        list[i].img,
+        _coachColors[i % _coachColors.length],
+        list[i].cat,
+      ),
+  ];
+}
 
 Widget _photo(String url, String name, Color c, {double radius = 18}) =>
     ClipRRect(
@@ -57,7 +38,7 @@ Widget _photo(String url, String name, Color c, {double radius = 18}) =>
           ),
           alignment: Alignment.center,
           child: Text(
-            name.split(' ').map((e) => e[0]).join(),
+            name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).join(),
             style: _t(20, w: FontWeight.w800, c: Colors.white),
           ),
         ),
@@ -69,6 +50,10 @@ class _TrainersCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(listenable: TrainerStore.I, builder: (context, _) => _trainers.isEmpty ? const SizedBox.shrink() : _build(context));
+  }
+
+  Widget _build(BuildContext context) {
     return _NeuCard(
       page: () => const _TrainersDetailPage(),
       padding: const EdgeInsets.fromLTRB(18, 18, 0, 18),
@@ -87,7 +72,7 @@ class _TrainersCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 44),
             child: Text(
-              'Picked for your Muscle Builder goal',
+              'Top rated coaches on NeuroFit',
               style: _t(11.5, w: FontWeight.w600, c: _faint),
             ),
           ),

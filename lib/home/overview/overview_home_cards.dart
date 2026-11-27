@@ -9,9 +9,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../screens/social_screen.dart';
+import '../../backend/live_backend.dart';
+import '../../community/community_data.dart';
 import '../../screens/steps_screen.dart';
-import '../../screens/trainers_screen.dart';
+import '../../trainer/trainer_data.dart' show trainers, TrainerStore, ago;
+import '../../widgets/live_page_route.dart';
 import '../../widgets/liquid_glass.dart';
 import '../../widgets/side_island.dart' show IslandStats, iosZoomRoute;
 

@@ -23,10 +23,10 @@ class _ProductCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
                 child: p.cover
-                    ? Image.asset(p.image, fit: BoxFit.cover)
+                    ? productImage(p.image, fit: BoxFit.cover)
                     : ColoredBox(
                         color: Colors.white,
-                        child: Padding(padding: const EdgeInsets.all(8), child: Image.asset(p.image, fit: BoxFit.contain)),
+                        child: Padding(padding: const EdgeInsets.all(8), child: productImage(p.image, fit: BoxFit.contain)),
                       ),
               ),
             ),

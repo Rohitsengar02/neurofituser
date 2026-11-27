@@ -10,9 +10,9 @@ class _KemoPicks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final picks = [
-      (_products[12], 'Fits your Day 13 strength plan'),
-      (_products[2], 'You are 34 g short on protein today'),
-      (_products[9], 'Pairs with your evening stretch'),
+      (_p(12), 'Fits your Day 13 strength plan'),
+      (_p(2), 'You are 34 g short on protein today'),
+      (_p(9), 'Pairs with your evening stretch'),
     ];
     return Column(children: [
       for (final (p, why) in picks)
@@ -29,8 +29,8 @@ class _KemoPicks extends StatelessWidget {
                     width: 72,
                     height: 72,
                     child: p.cover
-                        ? Image.asset(p.image, fit: BoxFit.cover)
-                        : ColoredBox(color: Colors.white, child: Image.asset(p.image, fit: BoxFit.contain)),
+                        ? productImage(p.image, fit: BoxFit.cover)
+                        : ColoredBox(color: Colors.white, child: productImage(p.image, fit: BoxFit.contain)),
                   ),
                 ),
                 const SizedBox(width: 12),

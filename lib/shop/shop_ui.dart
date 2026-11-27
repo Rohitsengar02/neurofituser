@@ -314,12 +314,12 @@ class ProductThumb extends StatelessWidget {
         width: size,
         height: size,
         child: p.cover
-            ? Image.asset(p.image, fit: BoxFit.cover, cacheWidth: (size * 2.5).round())
+            ? productImage(p.image, fit: BoxFit.cover, cacheWidth: (size * 2.5).round())
             : ColoredBox(
                 color: Colors.white,
                 child: Padding(
                   padding: EdgeInsets.all(size * 0.08),
-                  child: Image.asset(p.image, fit: BoxFit.contain, cacheWidth: (size * 2.5).round()),
+                  child: productImage(p.image, fit: BoxFit.contain, cacheWidth: (size * 2.5).round()),
                 ),
               ),
       ),

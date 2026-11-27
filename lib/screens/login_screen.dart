@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/user_backend_service.dart';
+import '../widgets/email_auth_sheet.dart';
 import '../widgets/animated_icon_marquee.dart';
 import '../widgets/fitness_staggered_headline.dart';
 import 'privacy_policy_screen.dart';
@@ -160,6 +161,11 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Future<void> _emailAuth() async {
+    final user = await showEmailAuthSheet(context, register: false);
+    if (user != null && mounted) goAfterSignIn(context, user);
+  }
+
   Widget _buildStaggeredButton({
     required Widget child,
     required double startInterval,
@@ -265,6 +271,21 @@ class _LoginScreenState extends State<LoginScreen>
                         textColor: const Color(0xFF141518),
                         borderColor: const Color(0xFFE5E7EB),
                         onTap: _signInWithRealGoogle,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Email sign-in form
+                    _buildStaggeredButton(
+                      startInterval: 0.27,
+                      endInterval: 0.77,
+                      child: _buildAuthButton(
+                        text: 'Continue with Email',
+                        icon: const Icon(Icons.mail_outline_rounded, color: Color(0xFF141518), size: 20),
+                        backgroundColor: Colors.white,
+                        textColor: const Color(0xFF141518),
+                        borderColor: const Color(0xFFE5E7EB),
+                        onTap: _emailAuth,
                       ),
                     ),
                     const SizedBox(height: 18),

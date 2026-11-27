@@ -3,11 +3,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../backend/live_backend.dart';
+import '../backend/sync_store.dart';
+
 // Trainers, plans and everything a subscriber gets from their trainer:
 // live sessions, workout plan, diet, chat, check-ins, bookings and
-// notifications. Kept on the phone so it works without the backend.
+// notifications. Loaded from the NeuroFit API and kept on the phone, so it
+// opens instantly and works offline.
 
-String unsplash(String id, [int w = 600]) => 'https://images.unsplash.com/photo-$id?w=$w&auto=format&fit=crop&q=80';
+String unsplash(String id, [int w = 600]) =>
+    id.startsWith('http') || id.startsWith('data:') || id.isEmpty ? id : 'https://images.unsplash.com/photo-$id?w=$w&auto=format&fit=crop&q=80';
 String exImg(String f) => 'assets/exercises/images/$f';
 
 class TrainerCat {
@@ -42,14 +47,53 @@ class Trainer {
   final int reviews, years, clients, price;
   final bool live, online, top;
   final List<String> tags;
-  const Trainer(this.id, this.name, this.role, this.cat, this.photo, this.city, this.bio, this.rating, this.reviews, this.years,
+  Trainer(this.id, this.name, this.role, this.cat, this.photo, this.city, this.bio, this.rating, this.reviews, this.years,
       this.clients, this.price,
       {this.live = false, this.online = true, this.top = false, this.tags = const []});
 
   String get first => name.split(' ').first;
   String get img => unsplash(photo);
 
-  List<Plan> get plans => [
+  Map<String, dynamic> toJson() => {
+        'id': id, 'name': name, 'role': role, 'cat': cat, 'photo': photo, 'city': city, 'bio': bio, 'rating': rating,
+        'reviews': reviews, 'years': years, 'clients': clients, 'price': price, 'live': live, 'online': online, 'top': top, 'tags': tags,
+        'plans': [for (final p in _plans ?? const <Plan>[]) {'name': p.name, 'months': p.months, 'price': p.price, 'perks': p.perks}],
+      };
+
+  /// From the API (coach profile approved by the admin).
+  factory Trainer.fromJson(Map<String, dynamic> j) {
+    num n(Object? v) => v is num ? v : num.tryParse('${v ?? ''}') ?? 0;
+    final t = Trainer(
+      (j['id'] ?? j['userId'] ?? '').toString(),
+      (j['name'] ?? 'Coach').toString(),
+      (j['role'] ?? j['headline'] ?? 'Fitness coach').toString(),
+      (j['cat'] ?? 'Strength').toString(),
+      (j['photo'] ?? j['photoUrl'] ?? '').toString(),
+      (j['city'] ?? '').toString(),
+      (j['bio'] ?? '').toString(),
+      n(j['rating']).toDouble(),
+      n(j['reviews']).toInt(),
+      n(j['years']).toInt(),
+      n(j['clients']).toInt(),
+      n(j['price'] ?? 999).toInt(),
+      live: j['live'] == true,
+      online: j['online'] != false,
+      top: j['top'] == true,
+      tags: [for (final x in (j['tags'] is List ? j['tags'] as List : const [])) x.toString()],
+    );
+    t._plans = [
+      for (final p in (j['plans'] is List ? j['plans'] as List : const []))
+        if (p is Map && p['active'] != false)
+          Plan((p['name'] ?? 'Plan').toString(), n(p['months'] ?? 1).toInt().clamp(1, 36), n(p['price']).toInt(),
+              [for (final x in (p['perks'] is List ? p['perks'] as List : const [])) x.toString()]),
+    ];
+    return t;
+  }
+
+  // ignore: prefer_final_fields
+  List<Plan>? _plans;
+  List<Plan> get plans => _plans != null && _plans!.isNotEmpty ? _plans! : _defaultPlans;
+  List<Plan> get _defaultPlans => [
         Plan('Monthly', 1, price, const ['Personal workout plan', 'Weekly check-ins', 'Chat with your coach', '2 live sessions']),
         Plan('Quarterly', 3, (price * 2.6).round(), const [
           'Everything in Monthly',
@@ -66,42 +110,14 @@ class Trainer {
       ];
 }
 
-const trainers = [
-  Trainer('t1', 'Rahul Sharma', 'Strength & muscle coach', 'Strength', '1567013127542-490d757e51fc', 'Delhi',
-      'Former national-level powerlifter. I build simple, progressive plans that get you strong without burning out.',
-      4.9, 1240, 8, 1200, 999,
-      live: true, top: true, tags: ['Powerlifting', 'Hypertrophy', 'Beginners']),
-  Trainer('t2', 'Anjali Mehta', 'Weight loss specialist', 'Weight loss', '1548690312-e3b507d8c110', 'Mumbai',
-      'Certified nutrition coach. Sustainable fat loss with food you actually enjoy and workouts that fit a busy day.',
-      4.8, 980, 6, 980, 899,
-      top: true, tags: ['Fat loss', 'Home workouts', 'Nutrition']),
-  Trainer('t3', 'Vikram Singh', 'Muscle gain coach', 'Muscle gain', '1583454110551-21f2fa2afe61', 'Bengaluru',
-      'Physique competitor and coach. Lean bulking, smart volume and recovery for steady size gains.',
-      4.9, 1530, 7, 1500, 1099,
-      live: true, top: true, tags: ['Bulking', 'Physique', 'Recovery']),
-  Trainer('t4', 'Neha Patel', 'Yoga & wellness coach', 'Yoga', '1518611012118-696072aa579a', 'Pune',
-      'RYT-500 yoga teacher. Flexibility, breath work and calm strength for body and mind.',
-      4.7, 760, 5, 760, 799,
-      tags: ['Hatha', 'Vinyasa', 'Breathwork']),
-  Trainer('t5', 'Arjun Kapoor', 'HIIT & conditioning', 'HIIT', '1571019613454-1cb2f99b2d8b', 'Hyderabad',
-      'Short, intense sessions that build engine and burn fat. Perfect when you only have 20 minutes.',
-      4.8, 640, 6, 820, 849,
-      live: true, tags: ['HIIT', 'Conditioning', 'Athletes']),
-  Trainer('t6', 'Sara Khan', 'Mobility & rehab', 'Mobility', '1534528741775-53994a69daeb', 'Chennai',
-      'Physiotherapist. Fix stiff hips, cranky shoulders and back pain with guided mobility and strength.',
-      4.9, 520, 9, 600, 1199,
-      top: true, tags: ['Rehab', 'Posture', 'Pain-free']),
-  Trainer('t7', 'Kabir Rao', 'Boxing coach', 'Boxing', '1517838277536-f5f99be501cd', 'Delhi',
-      'Amateur boxing champion. Footwork, combos and serious cardio in every session.',
-      4.6, 410, 4, 380, 749,
-      tags: ['Boxing', 'Cardio', 'Footwork']),
-  Trainer('t8', 'Isha Verma', 'Nutrition coach', 'Nutrition', '1524504388940-b1c1722653e1', 'Jaipur',
-      'Sports dietitian. Indian meal plans for performance, fat loss and better energy.',
-      4.8, 690, 7, 900, 699,
-      tags: ['Indian diet', 'Macros', 'Vegetarian']),
-];
+/// Approved coaches from the API (admin approves them). Empty until loaded.
+final List<Trainer> trainers = [];
 
-Trainer trainerById(String id) => trainers.firstWhere((t) => t.id == id, orElse: () => trainers.first);
+/// The coach a subscription points to, even before the list has loaded.
+final Map<String, Trainer> _trainerCache = {};
+
+Trainer trainerById(String id) =>
+    trainers.where((t) => t.id == id).firstOrNull ?? _trainerCache[id] ?? Trainer(id, 'Coach', 'Fitness coach', 'Strength', '', '', '', 0, 0, 0, 0, 999);
 
 class Ex {
   final String name, img, sets, muscle;
@@ -109,7 +125,11 @@ class Ex {
 }
 
 /// Workout plan the trainer assigns, one day per entry.
-const planDays = [
+/// The subscriber's workout plan, one day per entry. Starts as NeuroFit's
+/// default program; the coach's published workouts are put first.
+final List<(String, String, List<Ex>)> planDays = [...defaultPlanDays];
+
+const defaultPlanDays = [
   ('Push day', 'Chest · shoulders · triceps', [
     Ex('Barbell bench press', '0025-EIeI8Vf.jpg', '4 × 8', 'Chest'),
     Ex('Incline dumbbell press', '0314-ns0SIbU.jpg', '3 × 10', 'Upper chest'),
@@ -137,7 +157,10 @@ const planDays = [
   ]),
 ];
 
-const dietPlan = [
+/// The subscriber's meal plan: the coach's diet when one is assigned.
+final List<(String, String, String, int, IconData, Color)> dietPlan = [...defaultDietPlan];
+
+const defaultDietPlan = [
   ('Breakfast', '8:00 AM', 'Oats with whey, banana and peanut butter', 520, Icons.free_breakfast_rounded, Color(0xFFF59E0B)),
   ('Mid-morning', '11:00 AM', 'Greek yogurt with berries and almonds', 260, Icons.icecream_rounded, Color(0xFFEC4899)),
   ('Lunch', '1:30 PM', 'Brown rice, dal, paneer tikka and salad', 680, Icons.lunch_dining_rounded, Color(0xFF16A34A)),
@@ -158,6 +181,7 @@ class Note {
   final String title, body, kind; // kind: live, plan, chat, checkin, diet, booking
   final DateTime at;
   bool read;
+  String? _id; // server notification id
   Note(this.title, this.body, this.kind, this.at, {this.read = false});
   Map<String, dynamic> toJson() => {'t': title, 'b': body, 'k': kind, 'a': at.millisecondsSinceEpoch, 'r': read};
   static Note fromJson(Map<String, dynamic> j) =>
@@ -178,9 +202,10 @@ class CheckIn {
 class Booking {
   final DateTime at;
   final String type;
-  const Booking(this.at, this.type);
-  Map<String, dynamic> toJson() => {'a': at.millisecondsSinceEpoch, 't': type};
-  static Booking fromJson(Map<String, dynamic> j) => Booking(DateTime.fromMillisecondsSinceEpoch(j['a']), j['t']);
+  final String id;
+  Booking(this.at, this.type, [String? id]) : id = id ?? 'bkg_${DateTime.now().microsecondsSinceEpoch}';
+  Map<String, dynamic> toJson() => {'a': at.millisecondsSinceEpoch, 't': type, 'i': id};
+  static Booking fromJson(Map<String, dynamic> j) => Booking(DateTime.fromMillisecondsSinceEpoch(j['a']), j['t'], j['i']);
 }
 
 String hhmm(DateTime t) {
@@ -223,9 +248,11 @@ String inr(int v) {
 class TrainerStore extends ChangeNotifier {
   TrainerStore._() {
     _load();
+    SyncStore.I.on('trainers_updated', refresh);
+    SyncStore.I.on('notification:new', _onNotification);
   }
   static final TrainerStore I = TrainerStore._();
-  static const _key = 'trainer_sub_v1';
+  static const _key = 'trainer_sub_v2';
 
   String? trainerId;
   String? planName;
@@ -237,12 +264,15 @@ class TrainerStore extends ChangeNotifier {
   final List<Note> notes = [];
   final List<CheckIn> checkins = [];
   final List<Booking> bookings = [];
+  final List<DateTime> _sessions = []; // coach's upcoming live sessions
   String _doneDay = '';
+  bool loaded = false;
+  Future<void>? _refreshing;
 
   Trainer? get trainer => trainerId == null ? null : trainerById(trainerId!);
   bool get active => trainer != null && (until?.isAfter(DateTime.now()) ?? false);
   int get unread => notes.where((n) => !n.read).length;
-  int get planIndex => (DateTime.now().weekday - 1) % planDays.length;
+  int get planIndex => planDays.isEmpty ? 0 : (DateTime.now().weekday - 1) % planDays.length;
   int get streak {
     var n = 0;
     var d = DateTime.now();
@@ -255,44 +285,209 @@ class TrainerStore extends ChangeNotifier {
 
   static String _k(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
+  /// Next live class of the coach (from their schedule), else this evening.
   DateTime get nextLive {
     final now = DateTime.now();
+    final next = _sessions.where((t) => t.isAfter(now.subtract(const Duration(minutes: 45)))).toList()..sort();
+    if (next.isNotEmpty) return next.first;
     var t = DateTime(now.year, now.month, now.day, 18, 30);
     if (t.isBefore(now.subtract(const Duration(minutes: 45)))) t = t.add(const Duration(days: 1));
     return t;
   }
 
   bool get liveNow {
+    if (trainer?.live == true) return true;
+    if (_sessions.isEmpty) return false;
     final d = DateTime.now().difference(nextLive).inMinutes;
     return d >= -10 && d <= 45;
   }
 
+  // ------------------------------------------------------------------
+  // Server
+  // ------------------------------------------------------------------
+
+  /// Loads coaches and this user's coaching data. Safe to call often.
+  Future<void> refresh() => _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
+
+  Future<void> _refresh() async {
+    try {
+      final j = await Api.get('/trainers?limit=200');
+      final list = [for (final t in Api.list(j)) Trainer.fromJson(t)];
+      trainers
+        ..clear()
+        ..addAll(list);
+      for (final t in list) {
+        _trainerCache[t.id] = t;
+      }
+      loaded = true;
+      notifyListeners();
+    } catch (_) {}
+    if (!AppSession.isSignedIn) return;
+    try {
+      final sub = (await Api.get('/trainers/me/subscription'))['data'];
+      if (sub is Map) {
+        final m = Map<String, dynamic>.from(sub);
+        if (m['trainer'] is Map) {
+          final t = Trainer.fromJson(Map<String, dynamic>.from(m['trainer'] as Map));
+          _trainerCache[t.id] = t;
+        }
+        trainerId = (m['trainerId'] ?? '').toString();
+        planName = m['planName']?.toString();
+        since = DateTime.tryParse('${m['since']}')?.toLocal();
+        until = DateTime.tryParse('${m['until']}')?.toLocal();
+        _applyPlan(m['workout'] is Map ? Map<String, dynamic>.from(m['workout'] as Map) : null,
+            m['diet'] is Map ? Map<String, dynamic>.from(m['diet'] as Map) : null);
+      } else {
+        trainerId = null;
+        planName = null;
+        until = null;
+        _applyPlan(null, null);
+      }
+      final res = await Future.wait([
+        Api.get('/trainers/me/following'),
+        Api.get('/trainers/me/checkins'),
+        Api.get('/trainers/me/bookings'),
+        Api.get('/notifications'),
+      ]);
+      following
+        ..clear()
+        ..addAll([for (final x in (res[0]['data'] as List? ?? const [])) x.toString()]);
+      checkins
+        ..clear()
+        ..addAll([
+          for (final c in Api.list(res[1]))
+            CheckIn(DateTime.tryParse('${c['at'] ?? c['createdAt']}')?.toLocal() ?? DateTime.now(), ((c['weight'] as num?) ?? 0).toDouble(),
+                ((c['energy'] as num?) ?? 3).toInt(), ((c['sleep'] as num?) ?? 3).toInt(), (c['note'] ?? '').toString()),
+        ]);
+      bookings
+        ..clear()
+        ..addAll([
+          for (final b in Api.list(res[2]))
+            if (b['status'] != 'cancelled')
+              Booking(DateTime.tryParse('${b['at']}')?.toLocal() ?? DateTime.now(), (b['type'] ?? 'Session').toString(), b['id']?.toString()),
+        ]..sort((a, c) => a.at.compareTo(c.at)));
+      notes
+        ..clear()
+        ..addAll([
+          for (final n in Api.list(res[3]))
+            if (const {'live', 'plan', 'chat', 'checkin', 'diet', 'booking', 'trainer'}.contains(n['type']))
+              Note((n['title'] ?? '').toString(), (n['body'] ?? n['message'] ?? '').toString(), n['type'] == 'trainer' ? 'plan' : n['type'].toString(),
+                  DateTime.tryParse('${n['createdAt']}')?.toLocal() ?? DateTime.now(),
+                  read: n['isRead'] == true)
+              .._id = n['id']?.toString(),
+        ]);
+      if (trainerId != null && trainerId!.isNotEmpty) await Future.wait([_loadChat(), _loadSessions()]);
+      notifyListeners();
+      _save();
+    } catch (_) {}
+  }
+
+  Future<void> _loadChat() async {
+    try {
+      final j = await Api.get('/trainers/$trainerId/chat');
+      chat
+        ..clear()
+        ..addAll([
+          for (final m in Api.list(j))
+            ChatMsg(m['me'] == true, (m['text'] ?? '').toString(), DateTime.tryParse('${m['createdAt']}')?.toLocal() ?? DateTime.now()),
+        ]);
+    } catch (_) {}
+  }
+
+  Future<void> _loadSessions() async {
+    try {
+      final j = await Api.get('/live/sessions?status=all&trainerId=$trainerId');
+      _sessions
+        ..clear()
+        ..addAll([
+          for (final x in Api.list(j))
+            if (x['status'] != 'ended') ?DateTime.tryParse('${x['startsAt']}')?.toLocal(),
+        ]);
+    } catch (_) {}
+  }
+
+  void _onNotification() {
+    if (trainerId != null) {
+      _loadChat().then((_) => notifyListeners());
+    }
+    refresh();
+  }
+
+  /// Coach's workout and diet replace the default plan.
+  void _applyPlan(Map<String, dynamic>? w, Map<String, dynamic>? d) {
+    planDays
+      ..clear()
+      ..addAll(defaultPlanDays);
+    if (w != null) {
+      final ex = [
+        for (final e in (w['exercises'] is List ? w['exercises'] as List : const []))
+          if (e is Map)
+            Ex((e['name'] ?? '').toString(), (e['img'] ?? e['image'] ?? '').toString(), (e['sets'] ?? '3 × 12').toString(), (e['muscle'] ?? '').toString())
+          else
+            Ex(e.toString(), _exImgFor(e.toString()), '3 × 12', ''),
+      ];
+      if (ex.isNotEmpty) {
+        planDays.insert(0, ((w['title'] ?? 'Coach plan').toString(), '${w['level'] ?? 'All levels'} · ${w['minutes'] ?? 30} min', ex));
+      }
+    }
+    dietPlan
+      ..clear()
+      ..addAll(defaultDietPlan);
+    if (d != null) {
+      final meals = [for (final m in (d['meals'] is List ? d['meals'] as List : const [])) m.toString()];
+      final kcal = ((d['kcal'] as num?) ?? 0).toInt();
+      if (meals.isNotEmpty) {
+        final out = <(String, String, String, int, IconData, Color)>[];
+        for (var i = 0; i < meals.length; i++) {
+          final t = defaultDietPlan[i % defaultDietPlan.length];
+          out.add((t.$1, t.$2, meals[i], kcal > 0 ? kcal ~/ meals.length : t.$4, t.$5, t.$6));
+        }
+        dietPlan
+          ..clear()
+          ..addAll(out);
+      }
+    }
+  }
+
+  /// A matching picture from the default program, if the coach used the same exercise.
+  static String _exImgFor(String name) {
+    final n = name.toLowerCase();
+    for (final d in defaultPlanDays) {
+      for (final e in d.$3) {
+        if (e.name.toLowerCase() == n) return e.img;
+      }
+    }
+    return defaultPlanDays.first.$3.first.img;
+  }
+
+  // ------------------------------------------------------------------
+  // Actions (saved on the phone at once, sent to the server)
+  // ------------------------------------------------------------------
+
   void subscribe(Trainer t, Plan p) {
     trainerId = t.id;
+    _trainerCache[t.id] = t;
     planName = p.name;
     since = DateTime.now();
     until = DateTime.now().add(Duration(days: 30 * p.months));
-    chat
-      ..clear()
-      ..add(ChatMsg(false, 'Hey Rohit! Welcome aboard 🎉 I am ${t.first}, your coach. Tell me your main goal for the next 12 weeks?', DateTime.now()));
-    notes.insertAll(0, [
-      Note('Welcome to ${t.first}\'s team', 'Your ${p.name.toLowerCase()} plan is active. Your first workout is ready.', 'plan', DateTime.now()),
-      Note('Live session today', '${t.first} goes live at ${hhmm(nextLive)}. Tap to join.', 'live', DateTime.now()),
-      Note('Diet plan ready', 'Your 1,950 kcal meal plan has been shared.', 'diet', DateTime.now()),
-    ]);
+    chat.clear();
     _changed();
+    Api.send('POST', '/trainers/${t.id}/subscribe', {'planName': p.name}).then((_) => refresh()).catchError((_) => <String, dynamic>{});
   }
 
   void cancel() {
     trainerId = null;
     planName = null;
     until = null;
+    _applyPlan(null, null);
     _changed();
+    Api.send('DELETE', '/trainers/me/subscription').catchError((_) => <String, dynamic>{});
   }
 
   void toggleFollow(Trainer t) {
     following.contains(t.id) ? following.remove(t.id) : following.add(t.id);
     _changed();
+    Api.send('POST', '/trainers/${t.id}/follow').catchError((_) => <String, dynamic>{});
   }
 
   bool isDone(String ex) {
@@ -309,6 +504,7 @@ class TrainerStore extends ChangeNotifier {
       daysDone.remove(_k(DateTime.now()));
     }
     _changed();
+    SyncStore.I.put('coach_progress', 'me', {'day': _doneDay, 'done': doneToday.toList(), 'days': daysDone});
   }
 
   void _rollDay() {
@@ -319,48 +515,43 @@ class TrainerStore extends ChangeNotifier {
     }
   }
 
+  /// Sends a message to the coach. Their reply arrives live.
   void send(String text) {
     chat.add(ChatMsg(true, text, DateTime.now()));
     _changed();
-    final t = trainer;
-    if (t == null) return;
-    final l = text.toLowerCase();
-    final reply = l.contains('diet') || l.contains('eat') || l.contains('food')
-        ? 'Stick to the meal plan, and keep protein around 120 g a day. Swap any meal with something similar in calories.'
-        : l.contains('pain') || l.contains('hurt') || l.contains('injur')
-            ? 'Stop that exercise for today. Send me a short video of the movement and I will adjust your plan.'
-            : l.contains('skip') || l.contains('miss') || l.contains('busy')
-                ? 'No stress. Do the 20-minute conditioning day instead, and we will catch up tomorrow.'
-                : 'Great question! I have noted it and will cover it in tonight\'s live session too. Keep going 💪';
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      chat.add(ChatMsg(false, reply, DateTime.now()));
-      notes.insert(0, Note('${t.first} replied', reply, 'chat', DateTime.now()));
-      _changed();
-    });
+    final id = trainerId;
+    if (id == null) return;
+    Api.send('POST', '/trainers/$id/chat', {'text': text}).catchError((_) => <String, dynamic>{});
   }
 
   void addCheckIn(CheckIn c) {
     checkins.insert(0, c);
-    final t = trainer;
-    if (t != null) notes.insert(0, Note('Check-in received', '${t.first} will review your check-in within 24 hours.', 'checkin', DateTime.now()));
     _changed();
+    final id = trainerId;
+    if (id == null) return;
+    Api.send('POST', '/trainers/$id/checkins',
+        {'at': c.at.toUtc().toIso8601String(), 'weight': c.weight, 'energy': c.energy, 'sleep': c.sleep, 'note': c.note}).catchError((_) => <String, dynamic>{});
   }
 
   void book(Booking b) {
     bookings.add(b);
     bookings.sort((a, c) => a.at.compareTo(c.at));
-    notes.insert(0, Note('Session booked', '${b.type} on ${dayName(b.at)} at ${hhmm(b.at)}', 'booking', DateTime.now()));
     _changed();
+    final id = trainerId;
+    if (id == null) return;
+    Api.send('POST', '/trainers/$id/bookings', {'id': b.id, 'at': b.at.toUtc().toIso8601String(), 'type': b.type}).catchError((_) => <String, dynamic>{});
   }
 
   void cancelBooking(Booking b) {
     bookings.remove(b);
     _changed();
+    Api.send('DELETE', '/trainers/me/bookings/${b.id}').catchError((_) => <String, dynamic>{});
   }
 
   void markRead(Note n) {
     n.read = true;
     _changed();
+    if (n._id != null) Api.send('POST', '/notifications/${n._id}/read').catchError((_) => <String, dynamic>{});
   }
 
   void readAll() {
@@ -368,6 +559,7 @@ class TrainerStore extends ChangeNotifier {
       n.read = true;
     }
     _changed();
+    Api.send('POST', '/notifications/read-all').catchError((_) => <String, dynamic>{});
   }
 
   void _changed() {
@@ -379,35 +571,37 @@ class TrainerStore extends ChangeNotifier {
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_key);
-      if (raw == null) {
-        _seed();
-        return;
+      if (raw != null) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        trainerId = j['tid'];
+        planName = j['plan'];
+        since = j['since'] == null ? null : DateTime.fromMillisecondsSinceEpoch(j['since']);
+        until = j['until'] == null ? null : DateTime.fromMillisecondsSinceEpoch(j['until']);
+        following.addAll(List<String>.from(j['fol'] ?? []));
+        _doneDay = j['dd'] ?? '';
+        doneToday.addAll(List<String>.from(j['done'] ?? []));
+        (j['days'] as Map<String, dynamic>? ?? {}).forEach((k, v) => daysDone[k] = v as int);
+        chat.addAll([for (final m in j['chat'] ?? []) ChatMsg.fromJson(Map<String, dynamic>.from(m))]);
+        notes.addAll([for (final m in j['notes'] ?? []) Note.fromJson(Map<String, dynamic>.from(m))]);
+        checkins.addAll([for (final m in j['ci'] ?? []) CheckIn.fromJson(Map<String, dynamic>.from(m))]);
+        bookings.addAll([for (final m in j['bk'] ?? []) Booking.fromJson(Map<String, dynamic>.from(m))]);
+        for (final t in (j['trainers'] as List? ?? const [])) {
+          final tr = Trainer.fromJson(Map<String, dynamic>.from(t as Map));
+          _trainerCache[tr.id] = tr;
+          trainers.add(tr);
+        }
+        notifyListeners();
       }
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      trainerId = j['tid'];
-      planName = j['plan'];
-      since = j['since'] == null ? null : DateTime.fromMillisecondsSinceEpoch(j['since']);
-      until = j['until'] == null ? null : DateTime.fromMillisecondsSinceEpoch(j['until']);
-      following.addAll(List<String>.from(j['fol'] ?? []));
-      _doneDay = j['dd'] ?? '';
-      doneToday.addAll(List<String>.from(j['done'] ?? []));
-      (j['days'] as Map<String, dynamic>? ?? {}).forEach((k, v) => daysDone[k] = v as int);
-      chat.addAll([for (final m in j['chat'] ?? []) ChatMsg.fromJson(Map<String, dynamic>.from(m))]);
-      notes.addAll([for (final m in j['notes'] ?? []) Note.fromJson(Map<String, dynamic>.from(m))]);
-      checkins.addAll([for (final m in j['ci'] ?? []) CheckIn.fromJson(Map<String, dynamic>.from(m))]);
-      bookings.addAll([for (final m in j['bk'] ?? []) Booking.fromJson(Map<String, dynamic>.from(m))]);
-      notifyListeners();
-    } catch (_) {
-      _seed();
-    }
-  }
-
-  void _seed() {
-    following.addAll(['t1', 't3']);
-    final now = DateTime.now();
-    checkins.add(CheckIn(now.subtract(const Duration(days: 7)), 74.2, 4, 3, 'Felt strong this week'));
-    checkins.add(CheckIn(now.subtract(const Duration(days: 14)), 75.1, 3, 3, 'Busy week at work'));
-    _changed();
+      final prog = await SyncStore.I.get('coach_progress', 'me');
+      if (prog != null && prog['day'] == _k(DateTime.now())) {
+        _doneDay = prog['day'];
+        doneToday
+          ..clear()
+          ..addAll(List<String>.from(prog['done'] ?? const []));
+      }
+      (prog?['days'] as Map? ?? const {}).forEach((k, v) => daysDone[k.toString()] = (v as num).toInt());
+    } catch (_) {}
+    refresh();
   }
 
   Future<void> _save() async {
@@ -428,6 +622,8 @@ class TrainerStore extends ChangeNotifier {
           'notes': notes.take(40).map((m) => m.toJson()).toList(),
           'ci': checkins.map((m) => m.toJson()).toList(),
           'bk': bookings.map((m) => m.toJson()).toList(),
+          // Coaches shown offline on the next start.
+          'trainers': [for (final t in trainers.take(60)) t.toJson()],
         }),
       );
     } catch (_) {}

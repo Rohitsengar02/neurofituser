@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../backend/live_backend.dart';
+import '../backend/sync_store.dart';
 import '../widgets/side_island.dart' show IslandStats;
 
 /// One drink type the user can log. [hydration] is how much of the volume
@@ -49,18 +52,18 @@ class HydrationStore extends ChangeNotifier {
     _load();
   }
   static final HydrationStore I = HydrationStore._();
-  static const _key = 'hydration_v1';
+  static const _key = 'hydration_v2';
 
   int goal = IslandStats.waterGoal;
   bool reminders = true;
   int reminderEveryMin = 90;
-  int streak = 12;
+  int streak = 0;
   final List<DrinkEntry> today = [];
   final Map<String, int> history = {};
   DrinkEntry? _lastRemoved;
   bool _syncing = false;
 
-  static String _k(DateTime d) => '${d.year}-${d.month}-${d.day}';
+  static String _k(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   int get total => today.fold(0, (a, e) => a + e.counted);
   double get progress => goal == 0 ? 0 : (total / goal).clamp(0.0, 1.0);
@@ -119,74 +122,92 @@ class HydrationStore extends ChangeNotifier {
     }
   }
 
-  void _changed({bool sync = true}) {
+  void _changed({bool sync = true, bool push = true}) {
     history[_k(DateTime.now())] = total;
+    _streak();
     if (sync) {
       _syncing = true;
       IslandStats.waterMl.value = total;
       _syncing = false;
     }
     notifyListeners();
-    _save();
+    _save(push: push);
   }
 
   Future<void> _load() async {
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_key);
-      if (raw == null) {
-        _seed();
-        return;
-      }
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      goal = j['goal'] ?? goal;
-      reminders = j['rem'] ?? true;
-      reminderEveryMin = j['every'] ?? 90;
-      streak = j['streak'] ?? streak;
-      (j['history'] as Map<String, dynamic>? ?? {}).forEach((k, v) => history[k] = v as int);
-      today.clear();
-      if (j['day'] == _k(DateTime.now())) {
-        for (final e in (j['today'] as List? ?? [])) {
-          today.add(DrinkEntry.fromJson(Map<String, dynamic>.from(e)));
+      if (raw != null) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        goal = j['goal'] ?? goal;
+        reminders = j['rem'] ?? true;
+        reminderEveryMin = j['every'] ?? 90;
+        (j['history'] as Map<String, dynamic>? ?? {}).forEach((k, v) => history[k] = v as int);
+        today.clear();
+        if (j['day'] == _k(DateTime.now())) {
+          for (final e in (j['today'] as List? ?? [])) {
+            today.add(DrinkEntry.fromJson(Map<String, dynamic>.from(e)));
+          }
         }
-      } else {
-        streak = (history[j['day']] ?? 0) >= goal ? streak + 1 : 0;
       }
-      _changed();
-    } catch (_) {
-      _seed();
-    }
+    } catch (_) {}
+    await _fromAccount();
+    SyncStore.I.addListener(() {
+      if (SyncStore.I.changed.contains('water_day') || SyncStore.I.changed.contains('water_settings')) _fromAccount();
+    });
+    _changed(push: false);
   }
 
-  /// First run: start today's log from the demo total the rest of the app
-  /// already shows, so every screen agrees.
-  void _seed() {
-    final now = DateTime.now();
-    var back = 0;
-    DateTime at(int h, int m) {
-      final t = DateTime(now.year, now.month, now.day, h, m);
-      if (!t.isAfter(now)) return t;
-      back += 40;
-      return now.subtract(Duration(minutes: 200 - back));
-    }
-
-    today
-      ..clear()
-      ..addAll([
-        DrinkEntry('water', 250, at(8, 10)),
-        DrinkEntry('tea', 200, at(10, 30)),
-        DrinkEntry('water', 500, at(12, 45)),
-        DrinkEntry('water', 310, at(15, 20)),
-      ]);
-    today.sort((a, b) => a.at.compareTo(b.at));
-    const past = [2300, 2650, 1900, 2500, 2750, 2150];
-    for (var i = 1; i <= past.length; i++) {
-      history[_k(now.subtract(Duration(days: i)))] = past[i - 1];
-    }
-    _changed();
+  /// Merges what the account holds (logged on another phone, or before a
+  /// reinstall): settings, past days and today's drinks.
+  Future<void> _fromAccount() async {
+    try {
+      final set = await SyncStore.I.get('water_settings', 'me');
+      if (set != null) {
+        goal = (set['goal'] as num?)?.toInt() ?? goal;
+        reminders = set['rem'] as bool? ?? reminders;
+        reminderEveryMin = (set['every'] as num?)?.toInt() ?? reminderEveryMin;
+      }
+      final days = await SyncStore.I.all('water_day');
+      final todayKey = _k(DateTime.now());
+      days.forEach((k, v) {
+        final ml = (v['ml'] as num?)?.toInt() ?? 0;
+        if (k != todayKey) history[k] = ml;
+      });
+      final t = days[todayKey];
+      if (t != null) {
+        final remote = [
+          for (final e in (t['entries'] as List? ?? const []))
+            if (e is Map) DrinkEntry.fromJson(Map<String, dynamic>.from(e)),
+        ];
+        final mine = {for (final e in today) e.at.millisecondsSinceEpoch};
+        final added = remote.where((e) => !mine.contains(e.at.millisecondsSinceEpoch)).toList();
+        if (added.isNotEmpty) {
+          today
+            ..addAll(added)
+            ..sort((a, b) => a.at.compareTo(b.at));
+          _changed(push: false);
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
   }
 
-  Future<void> _save() async {
+  /// Days in a row (up to yesterday, plus today once reached) at the goal.
+  void _streak() {
+    var n = 0;
+    var d = DateTime.now().subtract(const Duration(days: 1));
+    while ((history[_k(d)] ?? 0) >= goal && goal > 0) {
+      n++;
+      d = d.subtract(const Duration(days: 1));
+    }
+    streak = n + (total >= goal && goal > 0 ? 1 : 0);
+  }
+
+  Timer? _pushTimer;
+
+  Future<void> _save({bool push = true}) async {
     try {
       final p = await SharedPreferences.getInstance();
       await p.setString(
@@ -195,12 +216,23 @@ class HydrationStore extends ChangeNotifier {
           'goal': goal,
           'rem': reminders,
           'every': reminderEveryMin,
-          'streak': streak,
           'day': _k(DateTime.now()),
           'today': today.map((e) => e.toJson()).toList(),
           'history': history,
         }),
       );
     } catch (_) {}
+    if (!push) return;
+    // Account copy (works offline, synced later) and the day's nutrition
+    // record the admin analytics read.
+    final day = _k(DateTime.now());
+    final ml = total;
+    await SyncStore.I.put('water_day', day, {'ml': ml, 'goal': goal, 'entries': today.map((e) => e.toJson()).toList()});
+    await SyncStore.I.put('water_settings', 'me', {'goal': goal, 'rem': reminders, 'every': reminderEveryMin});
+    _pushTimer?.cancel();
+    _pushTimer = Timer(const Duration(seconds: 3), () {
+      Api.send('POST', '/user-nutrition/water', {'date': day, 'milliliters': ml, 'targetGlasses': (goal / 250).round()})
+          .catchError((_) => <String, dynamic>{});
+    });
   }
 }

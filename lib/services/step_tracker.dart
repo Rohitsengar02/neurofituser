@@ -8,6 +8,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../backend/sync_store.dart';
+
 /// Real step counting, the way Google Fit does it on the phone:
 ///
 /// * The hardware step counter (Android TYPE_STEP_COUNTER, iOS CMPedometer)
@@ -180,6 +182,13 @@ class StepTracker extends ChangeNotifier {
         history[j['day']] = j['today'] ?? 0;
       }
     } catch (_) {}
+    try {
+      // Days counted on the user's other phone.
+      (await SyncStore.I.all('steps_day')).forEach((k, v) {
+        final n = (v['steps'] as num?)?.toInt() ?? 0;
+        if (k != _day && n > (history[k] ?? 0)) history[k] = n;
+      });
+    } catch (_) {}
   }
 
   Future<void> _save() async {
@@ -196,6 +205,8 @@ class StepTracker extends ChangeNotifier {
           'history': history,
         }),
       );
+      // Synced to the account (other devices + admin analytics).
+      await SyncStore.I.put('steps_day', _day, {'steps': today, 'goal': goal, 'km': double.parse(km.toStringAsFixed(2)), 'kcal': kcal});
     } catch (_) {}
   }
 

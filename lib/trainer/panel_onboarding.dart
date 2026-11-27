@@ -10,6 +10,7 @@ import '../widgets/apple_kit.dart';
 import '../widgets/liquid_glass.dart';
 import 'panel_data.dart';
 import 'trainer_data.dart';
+import '../backend/me.dart';
 
 // Become-a-coach onboarding: a dark aurora with floating fitness objects and
 // liquid glass cards. Seven steps (welcome, profile, specialties,
@@ -101,17 +102,16 @@ class _PanelOnboardingState extends State<PanelOnboarding> {
   int step = 0;
   static const steps = 7;
 
-  final _name = TextEditingController(text: 'Rohit Sengar');
-  final _headline = TextEditingController(text: 'Strength and fat-loss coach');
-  final _city = TextEditingController(text: 'Delhi');
-  final _bio = TextEditingController(
-      text: 'I help busy people get strong, lean and consistent with simple plans that fit real life. Certified, science based, no fads.');
+  final _name = TextEditingController(text: Me.name);
+  final _headline = TextEditingController();
+  final _city = TextEditingController();
+  final _bio = TextEditingController();
   final _cert = TextEditingController();
   String? photo;
   final spec = <String>{'Strength', 'Fat loss'};
   String mode = 'Online';
   double years = 3;
-  final certs = <String>['ACE Certified Personal Trainer'];
+  final certs = <String>[];
   final prices = [1499.0, 3899.0, 12999.0];
   final on = [true, true, true];
   bool agree = false;
@@ -729,9 +729,12 @@ class PanelAvatar extends StatelessWidget {
           gradient: LinearGradient(colors: [pViolet, pPink]),
         ),
         clipBehavior: Clip.antiAlias,
-        child: photo != null
-            ? Image.memory(base64Decode(photo!), fit: BoxFit.cover, gaplessPlayback: true)
-            : Center(child: Text(_initials(name), style: akN(size * 0.36, c: Colors.white))),
+        child: photo == null || photo!.isEmpty
+            ? Center(child: Text(_initials(name), style: akN(size * 0.36, c: Colors.white)))
+            : photo!.startsWith('http')
+                ? Image.network(photo!, fit: BoxFit.cover, gaplessPlayback: true,
+                    errorBuilder: (_, _, _) => Center(child: Text(_initials(name), style: akN(size * 0.36, c: Colors.white))))
+                : Image.memory(base64Decode(photo!), fit: BoxFit.cover, gaplessPlayback: true),
       );
 }
 

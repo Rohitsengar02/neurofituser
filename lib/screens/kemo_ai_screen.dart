@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../widgets/kemo_avatar.dart';
+import '../backend/me.dart';
 
 const _green = Color(0xFF12A37F);
 const _greenDeep = Color(0xFF0B7A5F);
@@ -279,7 +280,7 @@ class _KemoAiScreenState extends State<KemoAiScreen>
                   const KemoAvatar(size: 118),
                 ],
               ),
-              Text('Hey, Rohit!', style: _f(22, w: FontWeight.w700)),
+              Text('Hey, ${Me.first}!', style: _f(22, w: FontWeight.w700)),
               const SizedBox(height: 2),
               Text.rich(
                 TextSpan(children: [
@@ -742,8 +743,8 @@ class _KemoVoiceScreenState extends State<_KemoVoiceScreen>
   bool _paused = false;
   int _line = 0;
   Timer? _timer;
-  static const _lines = [
-    'Hi Rohit, I am listening.',
+  static List<String> get _lines => [
+    'Hi ${Me.first}, I am listening.',
     'You walked 8,542 steps today.',
     'That is 85% of your goal.',
     'A 15 minute evening walk will close it.',

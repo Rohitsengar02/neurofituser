@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../screens/trainers_screen.dart';
 import '../screens/ai_coach_screen.dart';
 import '../screens/steps_screen.dart';
 import '../screens/date_nutrition_detail_screen.dart';
+import 'live_page_route.dart';
 
 class NeuroDynamicIsland extends StatefulWidget {
   final Color? themeColor;
@@ -875,10 +875,7 @@ class _NeuroDynamicIslandState extends State<NeuroDynamicIsland>
               label: 'Trainer',
               sub: 'Get guidance',
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const TrainersScreen()),
-                );
+                Navigator.push(context, trainersRoute());
               },
             ),
             const SizedBox(width: 12),

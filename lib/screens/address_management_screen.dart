@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import '../backend/me.dart';
 
 class AddressModel {
   final String id;
@@ -1144,7 +1145,7 @@ class _AddressDetailsFormSliderState extends State<_AddressDetailsFormSlider> {
                   final newAddr = AddressModel(
                     id: 'addr_${DateTime.now().millisecondsSinceEpoch}',
                     tag: _selectedTag,
-                    name: _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : 'Rohit Sengar',
+                    name: _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : Me.name,
                     phone: _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : '+91 98765 43210',
                     flat: _flatCtrl.text.trim(),
                     building: _buildingCtrl.text.trim().isNotEmpty ? _buildingCtrl.text.trim() : 'Residential Block',

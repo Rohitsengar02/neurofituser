@@ -13,6 +13,7 @@ import 'panel_data.dart';
 import 'panel_onboarding.dart';
 import 'trainer_data.dart';
 import 'trainer_panel.dart';
+import '../backend/live_room.dart';
 
 // The coach tools behind the dashboard grid: subscriptions, go live (setup
 // and broadcast), upload workout, client detail, schedule, messages,
@@ -417,42 +418,48 @@ class BroadcastPage extends StatefulWidget {
 
 class _BroadcastPageState extends State<BroadcastPage> {
   Timer? _t;
-  int viewers = 3, peak = 3, tipsIn = 0, hearts = 0;
+  final room = LiveRoom();
+  int peak = 0;
   bool mic = true, cam = true;
-  final msgs = <(String, String)>[];
-  final _r = math.Random(4);
-  static const _lines = [
-    'Let’s gooo 🔥',
-    'Ready coach!',
-    'Can you show the form again?',
-    'Joined from Mumbai 👋',
-    'This is tough 😅',
-    'Love these classes',
-    'How many rounds?',
-    'Sent a tip 💜',
-  ];
+  int get viewers => room.viewers;
+  int get hearts => room.hearts;
+  int get tipsIn => room.tips;
+  List<(String, String)> get msgs => room.messages.length > 6 ? room.messages.sublist(room.messages.length - 6) : room.messages;
 
   @override
   void initState() {
     super.initState();
-    _t = Timer.periodic(const Duration(milliseconds: 1600), (_) {
-      if (!mounted) return;
-      setState(() {
-        viewers = math.max(1, viewers + _r.nextInt(5) - 1);
-        peak = math.max(peak, viewers);
-        hearts += _r.nextInt(4);
-        final c = PanelStore.I.clients[_r.nextInt(PanelStore.I.clients.length)];
-        final line = _lines[_r.nextInt(_lines.length)];
-        if (line.contains('tip')) tipsIn += 50 * (1 + _r.nextInt(4));
-        msgs.add((c.name.split(' ').first, line));
-        if (msgs.length > 6) msgs.removeAt(0);
-      });
+    room.addListener(_changed);
+    // Clock tick for the timer pill.
+    _t = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
     });
+    _connect();
+  }
+
+  void _changed() {
+    if (!mounted) return;
+    setState(() => peak = math.max(peak, room.viewers));
+    if (room.error != null && !room.connected) shopToast(context, room.error!);
+  }
+
+  /// Waits for the session the panel just created, then streams the camera.
+  Future<void> _connect() async {
+    final s = PanelStore.I;
+    for (var i = 0; i < 30 && s.liveToken == null; i++) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+    }
+    final id = s.liveId;
+    if (id == null) return;
+    await room.host(id, url: s.liveUrl, token: s.liveToken);
   }
 
   @override
   void dispose() {
     _t?.cancel();
+    room.removeListener(_changed);
+    room.dispose();
     super.dispose();
   }
 
@@ -473,7 +480,8 @@ class _BroadcastPageState extends State<BroadcastPage> {
     if (ok != true || !mounted) return;
     final since = PanelStore.I.liveSince;
     final secs = since == null ? 0 : DateTime.now().difference(since).inSeconds;
-    PanelStore.I.endLive(viewers: peak * 9, tips: tipsIn);
+    PanelStore.I.endLive(viewers: peak, tips: tipsIn);
+    unawaited(room.leave());
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
@@ -508,7 +516,10 @@ class _BroadcastPageState extends State<BroadcastPage> {
               gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF312E81), Color(0xFF581C87), Color(0xFF0B0A1A)]),
             ),
             child: cam
-                ? Center(child: Opacity(opacity: 0.9, child: PanelAvatar(photo: s.photo, name: s.name, size: 170)))
+                ? LiveRoomVideo(
+                    room: room,
+                    placeholder: Center(child: Opacity(opacity: 0.9, child: PanelAvatar(photo: s.photo, name: s.name, size: 170))),
+                  )
                 : Center(child: Icon(Icons.videocam_off_rounded, color: Colors.white.withValues(alpha: 0.4), size: 64)),
           ),
         ),
@@ -573,9 +584,15 @@ class _BroadcastPageState extends State<BroadcastPage> {
           right: 16,
           bottom: pad.bottom + 24,
           child: Row(children: [
-            _round(mic ? Icons.mic_rounded : Icons.mic_off_rounded, () => setState(() => mic = !mic)),
+            _round(mic ? Icons.mic_rounded : Icons.mic_off_rounded, () {
+              setState(() => mic = !mic);
+              room.setMic(mic);
+            }),
             const SizedBox(width: 10),
-            _round(cam ? Icons.videocam_rounded : Icons.videocam_off_rounded, () => setState(() => cam = !cam)),
+            _round(cam ? Icons.videocam_rounded : Icons.videocam_off_rounded, () {
+              setState(() => cam = !cam);
+              room.setCam(cam);
+            }),
             const SizedBox(width: 10),
             _round(Icons.cameraswitch_rounded, () => HapticFeedback.selectionClick()),
             const SizedBox(width: 10),
