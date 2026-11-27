@@ -11,7 +11,7 @@ class ApiConstants {
   static const bool useLocalBackend = false;
 
   /// Live Render Production Base URL
-  static const String liveRenderUrl = String.fromEnvironment('API_URL', defaultValue: 'https://neurofit-api.onrender.com');
+  static const String liveRenderUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.bitechez.com');
 
   /// Local Backend Configuration
   static const int serverPort = 5000;
