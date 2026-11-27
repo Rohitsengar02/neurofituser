@@ -139,7 +139,7 @@ class LiveBackendClient extends http.BaseClient {
   final http.Client _inner;
 
   static final Uri _base = Uri.parse(ApiConstants.baseUrl);
-  static const _legacyHosts = {'neurofit-full.onrender.com', 'localhost', '127.0.0.1', '10.0.2.2', '192.168.1.34', '192.168.1.36'};
+  static const _legacyHosts = {'neurofit-full.onrender.com', 'neurofit-api.onrender.com', 'localhost', '127.0.0.1', '10.0.2.2', '192.168.1.34', '192.168.1.36'};
   // Never queued: they need an answer now (sign-in, uploads, live calls, payments).
   static const _noQueue = ['/api/auth/', '/api/media/', '/api/live/', '/api/track', '/api/sync/'];
 

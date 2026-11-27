@@ -4,15 +4,14 @@ import 'package:flutter/foundation.dart';
 /// Centralized API & Server Configuration with instant Local vs Live Render toggle
 class ApiConstants {
   /// The app talks to the live NeuroFit API by default.
-  /// Build with --dart-define=DEMO_MODE=true for the old on-device demo data
-  /// (lib/demo/demo_backend.dart), e.g. for screenshots.
-  static const bool demoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: false);
+  /// Demo mode was removed: the app always uses the live API.
+  static const bool demoMode = false;
 
   /// 🔘 SWITCH HERE: Set to `true` for Local Backend, or `false` for Live Render Backend
   static const bool useLocalBackend = false;
 
   /// Live Render Production Base URL
-  static const String liveRenderUrl = String.fromEnvironment('API_URL', defaultValue: 'https://neurofit-api.onrender.com');
+  static const String liveRenderUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.bitechez.com');
 
   /// Local Backend Configuration
   static const int serverPort = 5000;
